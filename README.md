@@ -16,6 +16,8 @@ The menu bar uses the ChatGPT and Claude app icons, each followed by **5h: 93% W
 
 Installed providers appear side by side in the popup. An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
 
+The Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage). Both destinations were checked in a signed-in browser.
+
 ## Connect Codex
 
 QuotaBar locates the Codex CLI bundled in ChatGPT/Codex or a standalone installation and reads `account/rateLimits/read` through its local app server. This reuses the existing ChatGPT subscription sign-in. Choose **Options → Locate Codex CLI** if needed. API-key-only authentication does not provide subscription limits.

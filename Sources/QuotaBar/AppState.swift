@@ -120,7 +120,7 @@ import QuotaCore
         } catch { settingsError = "Login item could not be changed: \(error.localizedDescription)" }
     }
     func openCodex() {
-        NSWorkspace.shared.open(URL(string: "https://chatgpt.com/codex/settings/usage")!)
+        NSWorkspace.shared.open(URL(string: "https://chatgpt.com/settings/usage")!)
     }
     func updateInstallation() {
         let detected = ProviderInstallation.detect()
