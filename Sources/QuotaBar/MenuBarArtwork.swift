@@ -26,21 +26,23 @@ struct MenuBarEntry {
         let slotWidth = ceil(("100%/100%" as NSString).size(withAttributes: [.font: font]).width)
         let widths: [CGFloat] = entries.map { _ in slotWidth }
         let textWidth = widths.reduce(CGFloat.zero, +)
-        let iconWidth = CGFloat(entries.count) * 23
-        let gapWidth = CGFloat(max(0, entries.count - 1)) * 12
+        let iconSize: CGFloat = 18
+        let iconTextGap: CGFloat = 2
+        let providerGap: CGFloat = 8
+        let iconWidth = CGFloat(entries.count) * (iconSize + iconTextGap)
+        let gapWidth = CGFloat(max(0, entries.count - 1)) * providerGap
         let size = NSSize(width: textWidth + iconWidth + gapWidth, height: 22)
         return NSImage(size: size, flipped: false) { _ in
             appearance.performAsCurrentDrawingAppearance {
                 var x: CGFloat = 0
                 for (index, entry) in entries.enumerated() {
-                    if index > 0 { x += 12 }
+                    if index > 0 { x += providerGap }
                     ProviderArtwork.menuImage(for: entry.name, appearance: appearance)
-                        .draw(in: NSRect(x: x, y: 2, width: 18, height: 18))
-                    x += 23
+                        .draw(in: NSRect(x: x, y: 2, width: iconSize, height: iconSize))
+                    x += iconSize + iconTextGap
                     let label = labels[index] as NSString
                     let height = label.size(withAttributes: [.font: font]).height
-                    let labelWidth = label.size(withAttributes: [.font: font]).width
-                    label.draw(at: NSPoint(x: x + (widths[index] - labelWidth) / 2, y: (22 - height) / 2),
+                    label.draw(at: NSPoint(x: x, y: (22 - height) / 2),
                                withAttributes: [.font: font, .foregroundColor: NSColor.labelColor])
                     x += widths[index]
                 }
