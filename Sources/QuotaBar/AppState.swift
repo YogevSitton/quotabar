@@ -4,6 +4,7 @@ import ServiceManagement
 import QuotaCore
 
 @MainActor final class AppState: ObservableObject {
+    @Published var installation = ProviderInstallation.detect()
     @Published var codex: UsageSnapshot?
     @Published var claude: UsageSnapshot?
     @Published var codexError: String?
@@ -29,6 +30,7 @@ import QuotaCore
         }
     }
     private func checkStatusLineFile() {
+        guard installation.claude else { return }
         let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/QuotaBar/claude-statusline.json")
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let modified = attrs[.modificationDate] as? Date, modified != statusLineModified else { return }
@@ -46,8 +48,9 @@ import QuotaCore
         }
     }
     func refresh() {
-        refreshClaude()
-        guard !refreshingCodex else { return }; refreshingCodex = true
+        updateInstallation()
+        if installation.claude { refreshClaude() }
+        guard installation.codex, !refreshingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
             let result = Result { try CodexProvider.read() }
             DispatchQueue.main.async {
@@ -63,7 +66,7 @@ import QuotaCore
         }
     }
     func refreshClaude(allowInteraction: Bool = false) {
-        guard !refreshingClaude else { return }; refreshingClaude = true
+        guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
             let result = await claudeProvider.read(allowInteraction: allowInteraction)
             self.claude = result.snapshot; self.claudeError = result.error
@@ -115,15 +118,26 @@ import QuotaCore
     func openCodex() {
         NSWorkspace.shared.open(URL(string: "https://chatgpt.com/codex/settings/usage")!)
     }
-    var menuTitle: String {
-        func pair(_ snapshot: UsageSnapshot?, error: String?) -> String {
-            guard let snapshot, snapshot.isCurrent(at: Date(), maximumAge: max(600, interval * 120), hasConnectionError: error != nil) else { return "—/—" }
-            func text(_ window: UsageWindow?) -> String {
-                guard let remaining = window?.currentRemaining(at: Date()) else { return "—" }
-                return "\(remaining)"
+    func updateInstallation() {
+        let detected = ProviderInstallation.detect()
+        let changed = installation.codex != detected.codex || installation.claude != detected.claude
+        if changed { installation = detected; onChange?() }
+    }
+    var menuEntries: [(name: String, symbol: String, text: String)] {
+        func label(_ snapshot: UsageSnapshot?, error: String?) -> String {
+            let now = Date()
+            let current = snapshot?.isCurrent(at: now, maximumAge: max(600, interval * 120), hasConnectionError: error != nil) == true
+            func percentage(_ window: UsageWindow?) -> String {
+                guard current, let remaining = window?.currentRemaining(at: now) else { return "—" }
+                return "\(remaining)%"
             }
-            return "\(text(snapshot.session))/\(text(snapshot.weekly))"
+            return "5h: \(percentage(snapshot?.session)) Weekly: \(percentage(snapshot?.weekly))"
         }
-        return "C \(pair(codex, error: codexError))  ·  A \(pair(claude, error: claudeError))"
+        var entries: [(name: String, symbol: String, text: String)] = []
+        if installation.codex { entries.append(("Codex", "terminal", label(codex, error: codexError))) }
+        if installation.claude && !needsClaudeConnection {
+            entries.append(("Claude", "asterisk", label(claude, error: claudeError)))
+        }
+        return entries
     }
 }

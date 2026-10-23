@@ -31,12 +31,12 @@ import QuotaCore
     }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var state: AppState!
     private var timer: Timer?
-    private var dashboardWindow: NSWindow?
+    private var outsideClickMonitor: Any?
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance prevents duplicate menu items and unnecessary polling.
         if let id = Bundle.main.bundleIdentifier,
@@ -48,43 +48,67 @@ import QuotaCore
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         statusItem.button?.target = self; statusItem.button?.action = #selector(toggle)
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: Dashboard(state: state))
         state.onChange = { [weak self] in self?.updateLabel() }
         updateLabel(); state.start()
         if !UserDefaults.standard.bool(forKey: "hasLaunched") || CommandLine.arguments.contains("--show") {
             UserDefaults.standard.set(true, forKey: "hasLaunched")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showDashboard() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showPopover() }
         }
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateLabel() }
+            Task { @MainActor in self?.state.updateInstallation(); self?.updateLabel() }
         }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke), name: NSWorkspace.didWakeNotification, object: nil)
     }
     private func updateLabel() {
-        statusItem.button?.title = state.menuTitle
-        statusItem.button?.toolTip = "QuotaBar · percentages remaining · C: Codex 5h/week · A: Claude 5h/week"
-        statusItem.button?.setAccessibilityLabel("QuotaBar. \(state.menuTitle). Percent remaining, five hours then week.")
+        guard let button = statusItem.button else { return }
+        let title = NSMutableAttributedString()
+        let entries = state.menuEntries
+        for (index, entry) in entries.enumerated() {
+            if index > 0 { title.append(NSAttributedString(string: "   ·   ")) }
+            if let image = NSImage(systemSymbolName: entry.symbol, accessibilityDescription: entry.name) {
+                let attachment = NSTextAttachment()
+                image.size = NSSize(width: 15, height: 15)
+                attachment.image = image
+                attachment.bounds = NSRect(x: 0, y: -3, width: 15, height: 15)
+                title.append(NSAttributedString(attachment: attachment))
+            }
+            title.append(NSAttributedString(string: " \(entry.text)"))
+        }
+        let description = entries.map { "\($0.name): \($0.text)" }.joined(separator: "; ")
+        if entries.isEmpty {
+            button.attributedTitle = NSAttributedString(string: "")
+            button.image = NSImage(systemSymbolName: "gauge.with.dots.needle.67percent", accessibilityDescription: "QuotaBar")
+        } else {
+            button.image = nil
+            title.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), range: NSRange(location: 0, length: title.length))
+            button.attributedTitle = title
+        }
+        button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · \(description)"
+        button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
     }
     @objc private func woke() { state.refresh() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showDashboard()
+        showPopover()
         return true
     }
-    private func showDashboard() {
-        if dashboardWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 690),
-                styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            window.title = "QuotaBar"
-            window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: Dashboard(state: state))
-            window.center(); dashboardWindow = window
+    private func showPopover() {
+        guard !popover.isShown, let button = statusItem.button else { return }
+        state.updateInstallation()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            Task { @MainActor in self?.popover.performClose(nil) }
         }
-        NSApp.activate(ignoringOtherApps: true); dashboardWindow?.makeKeyAndOrderFront(nil)
+    }
+    func popoverDidClose(_ notification: Notification) {
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
     }
     @objc private func toggle() {
         if popover.isShown { popover.performClose(nil) }
-        else if let button = statusItem.button {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
+        else { showPopover() }
     }
 }

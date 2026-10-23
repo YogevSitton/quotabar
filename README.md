@@ -10,9 +10,11 @@ For development with either Claude or Codex, read [AGENTS.md](AGENTS.md). No pub
 
 ## Run
 
-Open `dist/QuotaBar.app`. The first launch opens a dashboard; closing that window leaves the menu bar item running. Opening the app again shows the dashboard.
+Open `dist/QuotaBar.app`. Click its menu bar item to open the usage popup. Clicking outside closes it; reopening the app shows the same popup instead of a separate persistent window.
 
-The menu label is **C 93/91 · A 82/72**, for example: Codex and Claude, each showing 5-hour / weekly percentage remaining. A dash means there is no current live reading. If a provider is disconnected or its reading has expired, the panel says Live usage unavailable and hides percentages from the current-usage area. Saved values are available only in a collapsed Last saved reading section, with their sample time and age; they are explicitly historical. Open the panel to see percent used, percent remaining, scheduled reset times, countdowns, and available reset grants. Every reading is labelled **Live** or **Cached** with its sample time. Dates follow the Mac's timezone, including daylight-saving changes.
+The menu bar uses provider icons (a terminal for Codex and an asterisk for Claude), each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
+
+An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
 
 ## Connect Codex
 

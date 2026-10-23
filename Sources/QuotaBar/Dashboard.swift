@@ -3,6 +3,14 @@ import QuotaCore
 
 struct Dashboard: View {
     @ObservedObject var state: AppState
+    private var contentHeight: CGFloat {
+        if state.installation.codex {
+            if state.installation.claude { return state.needsClaudeConnection ? 480 : 540 }
+            return 440
+        }
+        if state.installation.claude { return state.needsClaudeConnection ? 80 : 420 }
+        return 100
+    }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
@@ -19,19 +27,30 @@ struct Dashboard: View {
                 Divider()
                 ScrollView {
                     VStack(spacing: 14) {
-                        ProviderCard(name: "Codex", symbol: "terminal", color: .teal, snapshot: state.codex,
-                                     error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex)
-                        ProviderCard(name: "Claude", symbol: "asterisk", color: .orange, snapshot: state.claude,
-                                     error: state.claudeError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openClaude)
-                        if state.needsClaudeConnection {
-                            Button("Connect Claude…", action: state.connectClaude)
+                        if state.installation.codex {
+                            ProviderCard(name: "Codex", symbol: "terminal", color: .teal, snapshot: state.codex,
+                                         error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex)
+                        }
+                        if state.installation.claude && !state.needsClaudeConnection {
+                            ProviderCard(name: "Claude", symbol: "asterisk", color: .orange, snapshot: state.claude,
+                                         error: state.claudeError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openClaude)
+                        }
+                        if state.installation.claude && state.needsClaudeConnection {
+                            Button(action: state.connectClaude) {
+                                Label("Connect Claude…", systemImage: "asterisk")
+                            }.controlSize(.large).frame(maxWidth: .infinity)
+                        }
+                        if !state.installation.codex && !state.installation.claude {
+                            Text("Install Codex or Claude to see your usage here.")
+                                .font(.callout).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange) }
                     }.padding(16)
-                }.frame(height: 540)
+                }.frame(height: contentHeight)
                 Divider()
                 HStack {
-                    Text("Menu: C Codex · A Claude · 5h / week % left").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text("5h and Weekly · % remaining").font(.system(size: 10)).foregroundStyle(.secondary)
                     Spacer()
                     Menu("Options") {
                         Picker("Refresh", selection: $state.interval) {
@@ -41,8 +60,10 @@ struct Dashboard: View {
                         }.onChange(of: state.interval) { state.schedule() }
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Locate Codex CLI…", action: state.chooseCodex)
-                        Button("Connect Claude…", action: state.connectClaude)
-                        Button("Open Claude Usage…", action: state.openClaude)
+                        if state.installation.claude {
+                            Button("Connect Claude…", action: state.connectClaude)
+                            Button("Open Claude Usage…", action: state.openClaude)
+                        }
                         Divider()
                         Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
                     }.fixedSize()
