@@ -5,6 +5,15 @@ struct MenuBarQuota {
     let resetsAt: Date?
     var percentage: String { remaining.map { "\($0)%" } ?? "—" }
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "—" }
+
+    func tooltipLine(_ label: String) -> String {
+        guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
+        let value = remaining.map { "\($0)% left" } ?? "Unavailable"
+        let reset = resetsAt.map {
+            $0.formatted(.dateTime.weekday(.abbreviated).hour().minute().timeZone(.specificName(.short)))
+        } ?? "not reported"
+        return "\(label): \(value) · resets \(reset)"
+    }
 }
 
 struct MenuBarEntry {
@@ -13,6 +22,9 @@ struct MenuBarEntry {
     let weekly: MenuBarQuota
     var description: String {
         "\(name): 5h: \(session.percentage), automatic reset \(session.resetTime); Weekly: \(weekly.percentage), automatic reset \(weekly.resetTime)"
+    }
+    var tooltipSection: String {
+        [name, session.tooltipLine("5h"), weekly.tooltipLine("Weekly")].joined(separator: "\n")
     }
 }
 

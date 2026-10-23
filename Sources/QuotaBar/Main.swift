@@ -95,7 +95,9 @@ import QuotaCore
             renderedMenuAppearance = appearance.name
             renderedMenuProviderCount = entries.count
         }
-        button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · automatic reset times in your Mac's timezone · \(description)"
+        button.toolTip = entries.isEmpty
+            ? "QuotaBar\nConnect an installed provider"
+            : (["QuotaBar — usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
     }
     @objc private func woke() { state.refresh() }
