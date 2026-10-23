@@ -44,7 +44,7 @@ struct Dashboard: View {
                             if state.installation.claude && !state.needsClaudeConnection {
                                 CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") })
+                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
                             if state.installation.claude && state.needsClaudeConnection {
@@ -78,7 +78,7 @@ struct Dashboard: View {
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Locate Codex CLI…", action: state.chooseCodex)
                         if state.installation.claude {
-                            Button("Connect Claude…", action: state.connectClaude)
+                            Button("Claude connection…", action: state.connectClaude)
                             Button("Open Claude Usage…", action: state.openClaude)
                         }
                         Divider()
@@ -103,6 +103,7 @@ private struct CompactProviderCard: View {
     var resetNotice: String? = nil
     var canReset: ((ResetOffer) -> Bool)? = nil
     var useReset: ((ResetOffer) -> Void)? = nil
+    var retry: (() -> Void)? = nil
     private var current: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -156,6 +157,7 @@ private struct CompactProviderCard: View {
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
                 Text(error ?? "Current usage cannot be verified.").font(.caption).foregroundStyle(.secondary)
                     .lineLimit(2).help(error ?? "Current usage cannot be verified.")
+                if let retry { Button("Retry usage", action: retry).font(.system(size: 11)).buttonStyle(.link) }
             }
             if let resetNotice {
                 Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)

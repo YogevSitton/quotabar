@@ -43,3 +43,11 @@ The documented [status-line payload](https://antigravity.google/docs/cli/statusl
 Neither Antigravity nor Gemini CLI was found in the checked standard app/executable paths on this Mac. No installation, Google sign-in, account query, or model request was performed. The exact JSON shape, account matching, sample freshness, five-hour/weekly bucket mappings, credit balance, and any credit expiry still need local verification after CLI installation and sign-in. `/credits` describes AI credits; it is not evidence of redeemable usage-reset credits.
 
 This establishes a documented route for Google's **coding quotas**. It does not establish access to the Gemini consumer chat application's limits or Gemini API project quotas, and Gemini is not yet implemented in QuotaBar.
+
+## Saved sign-in behavior (1.7.7)
+
+Both providers automatically reuse their official CLI’s saved subscription sign-in. Claude’s connection window now checks the saved login immediately; the separate “Use existing sign-in” action was removed. A missing helper can be prepared explicitly, then the saved login is checked before offering browser login. Switch-account remains an explicit optional action.
+
+Claude usage failures are not authentication evidence. A bounded, read-only `claude auth status` subprocess may classify a failed read: documented exit 1 plus `authMethod: none` means signed out, exit 0 plus `claude.ai` means saved subscription authentication, and known alternate methods require subscription authentication for these quotas. Unknown/malformed output is not treated as signed out. See [Anthropic’s CLI reference](https://code.claude.com/docs/en/cli-reference). Raw replies, account fields and credentials are never logged or persisted. Current CLI live usage still requires end-to-end acceptance; this change does not claim to verify the subscription or reset inventory.
+
+The 1.7.7 app and existing test targets compiled successfully; no tests or reset controls were executed. Opening the updated connection window automatically checked the saved login and the local official CLI reported signed out in the default profile. The window showed one Sign in with Claude action, with no Use existing sign-in choice. Browser authorization was not started during verification.

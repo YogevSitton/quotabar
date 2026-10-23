@@ -53,10 +53,10 @@ public extension UsageParser {
     static func claudeCLI(_ data: Data, now: Date = Date()) throws -> UsageSnapshot {
         let root = try ClaudeValue.object(data)
         guard ClaudeValue.bool(root["rate_limits_available"]) == true else {
-            throw UsageError.message("Claude Code has no eligible subscription sign-in. Choose Connect Claude and sign in with your Claude subscription.")
+            throw UsageError.message("Claude Code did not report eligible subscription usage. Check your plan or retry later.")
         }
         guard let limits = root["rate_limits"] as? [String: Any] else {
-            throw UsageError.message("Claude Code could not retrieve subscription usage. Check its sign-in and try again later.")
+            throw UsageError.message("Claude Code could not retrieve subscription usage. Try again later.")
         }
         var snapshot = try claudeOAuth(JSONSerialization.data(withJSONObject: limits), now: now)
         snapshot.plan = root["subscription_type"] as? String

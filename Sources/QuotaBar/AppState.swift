@@ -9,6 +9,7 @@ import QuotaCore
     @Published var claude: UsageSnapshot?
     @Published var codexError: String?
     @Published var claudeError: String?
+    @Published var claudeIssue: ClaudeConnectionIssue?
     @Published private(set) var redeemingCodex = false
     @Published private(set) var pendingCodexReset: CodexResetAttempt?
     @Published private(set) var codexResetMessage: String?
@@ -81,14 +82,16 @@ import QuotaCore
             }
         }
     }
-    func refreshClaude() {
+    func refreshClaude(reconnect: Bool = false) {
         guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
-            let result = await claudeProvider.read()
+            let result = await claudeProvider.read(reconnect: reconnect)
             self.claude = result.snapshot; self.claudeError = result.error
+            self.claudeIssue = result.issue
             self.refreshingClaude = false; self.onChange?()
         }
     }
+    func retryClaude() { refreshClaude(reconnect: true) }
     func canUseCodexReset(_ offer: ResetOffer) -> Bool {
         guard !redeemingCodex, !refreshingCodex, pendingCodexReset == nil, resetRecoveryError == nil,
               codexError == nil, let codex else { return false }
@@ -163,7 +166,7 @@ import QuotaCore
     func connectClaude() {
         if claudeConnection == nil {
             claudeConnection = ClaudeConnectionWindow { [weak self] in
-                guard let self else { return "The app is no longer running." }
+                guard let self else { return ClaudeReadResult(snapshot: nil, error: "The app is no longer running.", issue: .usageUnavailable) }
                 return await self.verifyClaudeConnection()
             }
         }
@@ -176,22 +179,22 @@ import QuotaCore
         if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
         providerDetails?.show(provider: provider)
     }
-    private func verifyClaudeConnection() async -> String? {
+    private func verifyClaudeConnection() async -> ClaudeReadResult {
         // Opening setup is immediate, even when a background CLI read is
         // underway. Its explicit verification waits instead of silently dropping.
         while refreshingClaude {
-            if Task.isCancelled { return "Connection check cancelled." }
+            if Task.isCancelled { return ClaudeReadResult(snapshot: nil, error: "Connection check cancelled.", issue: .usageUnavailable) }
             try? await Task.sleep(for: .milliseconds(200))
         }
-        guard !Task.isCancelled else { return "Connection check cancelled." }
+        guard !Task.isCancelled else { return ClaudeReadResult(snapshot: nil, error: "Connection check cancelled.", issue: .usageUnavailable) }
         refreshingClaude = true; defer { refreshingClaude = false }
         let result = await claudeProvider.read(reconnect: true)
-        claude = result.snapshot; claudeError = result.error; onChange?()
-        return result.error
+        claude = result.snapshot; claudeError = result.error; claudeIssue = result.issue; onChange?()
+        return result
     }
     var claudeMaximumAge: TimeInterval { 120 }
     var needsClaudeConnection: Bool {
-        claude?.isCurrent(at: Date(), maximumAge: claudeMaximumAge, hasConnectionError: claudeError != nil) != true
+        claudeIssue?.needsConnection == true
     }
     func openClaude() { NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!) }
     func chooseCodex() {

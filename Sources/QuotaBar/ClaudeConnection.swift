@@ -4,33 +4,53 @@ import QuotaCore
 
 @MainActor final class ClaudeConnectionModel: ObservableObject {
     @Published var busy = false
-    @Published var message = "Sign in with your Claude subscription to connect live usage."
+    @Published var message = "Checking your saved Claude Code sign-in…"
     @Published var error: String?
     @Published var waitingForBrowser = false
     @Published var loginURL: URL?
     @Published var manualCode = ""
     @Published var connected = false
+    @Published var issue: ClaudeConnectionIssue?
     private var operation: Task<Void, Never>?
     private var process: Process?
     private var input: Pipe?
     private var output: Pipe?
     private var outputBuffer = ""
     private var timeout: Task<Void, Never>?
-    private let verify: () async -> String?
-    init(verify: @escaping () async -> String?) { self.verify = verify }
+    private let verify: () async -> ClaudeReadResult
+    init(verify: @escaping () async -> ClaudeReadResult) { self.verify = verify }
 
     func prepareForPresentation() {
         guard !busy else { return }
-        connected = false; error = nil
-        message = "Claude Code manages your sign-in. QuotaBar asks its CLI for usage without reading your credentials."
+        checkExisting()
     }
     func checkExisting() {
         guard !busy else { return }
-        busy = true; error = nil; message = "Checking your existing Claude Code sign-in…"
+        busy = true; connected = false; error = nil; issue = nil
+        message = "Checking your saved Claude Code sign-in…"
         operation = Task {
             let problem = await verify()
             guard !Task.isCancelled else { return }
             finishVerification(problem)
+        }
+    }
+    func prepareHelper() {
+        guard !busy else { return }
+        busy = true; error = nil
+        operation = Task {
+            do {
+                _ = try await ClaudeHelper.prepare { [self] text in self.message = text }
+                try Task.checkCancellation()
+                message = "Checking your saved Claude Code sign-in…"
+                let result = await verify()
+                guard !Task.isCancelled else { return }
+                finishVerification(result)
+            } catch {
+                guard !Task.isCancelled else { return }
+                busy = false; issue = .helperMissing
+                self.error = (error as? UsageError)?.localizedDescription ?? "Claude Code could not be prepared. Try again later."
+                message = "Claude Code setup needs attention."
+            }
         }
     }
     func signIn() {
@@ -102,9 +122,12 @@ import QuotaCore
             finishVerification(problem)
         }
     }
-    private func finishVerification(_ problem: String?) {
-        busy = false; error = problem; connected = problem == nil
-        message = connected ? "Claude is connected. Live usage has been refreshed." : "The connection needs attention."
+    private func finishVerification(_ result: ClaudeReadResult) {
+        busy = false; error = result.error; issue = result.issue; connected = result.error == nil
+        if connected { message = "Claude is connected using its saved sign-in. Live usage has been refreshed." }
+        else if result.issue?.needsSignIn == true { message = "Claude Code needs a subscription sign-in." }
+        else if result.issue == .helperMissing { message = "Set up Claude Code to check your saved sign-in." }
+        else { message = "Usage is unavailable. This does not mean you need to sign in again." }
     }
     func openLogin() { if let loginURL { NSWorkspace.shared.open(loginURL) } }
     func submitCode() {
@@ -118,7 +141,7 @@ import QuotaCore
         let child = process; cleanupProcess()
         if child?.isRunning == true { child?.terminate() }
         outputBuffer = ""; manualCode = ""; loginURL = nil; waitingForBrowser = false
-        busy = false; message = "Sign-in cancelled. You can try again whenever you are ready."
+        busy = false; message = "Connection cancelled. You can try again whenever you are ready."
     }
     private func cleanupProcess() {
         timeout?.cancel(); timeout = nil
@@ -138,19 +161,25 @@ private struct ClaudeConnectionView: View {
                     .font(.system(size: 30)).foregroundStyle(model.connected ? .green : .orange)
                 Text("Connect Claude").font(.title2.weight(.semibold))
             }
-            Text("Use your Claude Pro or Max subscription. Sign-in opens in your browser; QuotaBar checks usage when you finish.")
+            Text("QuotaBar automatically uses your saved Claude Code subscription sign-in, just like Codex. Browser sign-in is only needed to connect an account or switch accounts.")
                 .font(.system(size: 13)).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 10) {
                 if model.busy { ProgressView().controlSize(.small) }
                 Text(model.message).font(.system(size: 13, weight: .medium)).fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.error { Text(error).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
-            if !model.busy && !model.connected {
-                Text("If needed, this downloads the official Claude Code helper into QuotaBar’s support folder (about 276 MB). No Terminal setup is required.")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack {
+            if !model.busy {
+                if model.issue == .helperMissing {
+                    Text("Set up downloads the official Claude Code helper into QuotaBar’s support folder if needed (about 276 MB), then checks your saved sign-in. No Terminal setup is required.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Set up Claude Code…", action: model.prepareHelper).buttonStyle(.borderedProminent)
+                } else if model.issue?.needsSignIn == true {
                     Button("Sign in with Claude", action: model.signIn).buttonStyle(.borderedProminent)
-                    Button("Use existing sign-in", action: model.checkExisting)
+                } else {
+                    HStack {
+                        if !model.connected { Button("Retry connection", action: model.checkExisting).buttonStyle(.borderedProminent) }
+                        Button("Switch Claude account…", action: model.signIn).buttonStyle(.link)
+                    }
                 }
             }
             if model.waitingForBrowser {
@@ -176,7 +205,7 @@ private struct ClaudeConnectionView: View {
 @MainActor final class ClaudeConnectionWindow {
     private let model: ClaudeConnectionModel
     private var window: NSWindow?
-    init(verify: @escaping () async -> String?) { model = ClaudeConnectionModel(verify: verify) }
+    init(verify: @escaping () async -> ClaudeReadResult) { model = ClaudeConnectionModel(verify: verify) }
     func show() {
         model.prepareForPresentation()
         if window == nil {

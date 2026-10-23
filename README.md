@@ -16,7 +16,7 @@ The popup does not scroll. It uses compact, side-by-side provider cards with the
 
 The menu bar uses transparent, monochrome vector ChatGPT and Claude marks without app-icon backgrounds. Each provider shows its logo followed by **93%/91%**: five-hour remaining first, weekly remaining second. Automatic reset dates, times and countdowns stay in the popup; hovering over the bar also describes the quotas and reset times. QuotaBar remembers its menu-bar position after you Command-drag it. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
 
-Installed providers appear side by side in the popup. An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its compact card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
+Installed providers appear side by side in the popup. A confirmed missing Claude sign-in or helper shows only **Connect Claude…** in the popup and no menu bar percentages. A usage-service, network, version or cache error instead shows **Live usage unavailable** with **Retry usage**, without treating it as a sign-in problem. Once live usage is available, its compact card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
 
 The Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage). Both destinations were checked in a signed-in browser.
 
@@ -26,7 +26,7 @@ QuotaBar locates the Codex CLI bundled in ChatGPT/Codex or a standalone installa
 
 ## Connect Claude
 
-Choose **Connect Claude** on the dashboard or in Options. The native setup window opens immediately. **Sign in with Claude** uses a trusted installed Claude Code CLI or downloads Anthropic's official helper into QuotaBar's support folder, verifying its release checksum and size. It runs only `auth login --claudeai`; finish the browser authorization yourself. **Use existing sign-in** asks the CLI to check the existing account. Both paths verify usage through the CLI after sign-in.
+Claude automatically reuses the official CLI’s saved subscription sign-in at startup and on refresh, just like Codex. There is no separate **Use existing sign-in** choice. **Connect Claude** (or **Options → Claude connection…**) opens a native window and automatically checks the saved sign-in. If a helper is missing, **Set up Claude Code…** prepares the official verified helper and checks the existing sign-in before offering browser login. A confirmed missing or incompatible authentication method offers **Sign in with Claude**, which runs only `auth login --claudeai`; finish the browser authorization yourself. **Switch Claude account…** is an optional explicit browser sign-in action. Nothing opens the browser automatically.
 
 **QuotaBar no longer reads Keychain credentials or calls Claude's authenticated usage endpoint itself.** Claude Code manages its own normal saved sign-in. macOS may still require Claude Code itself to unlock or access its credentials; QuotaBar does not request that access or alter any Keychain permissions.
 
@@ -35,6 +35,8 @@ The usage reader starts a bounded Claude Code subprocess and sends only these co
 - `initialize`
 - `get_binary_version`
 - `get_usage` with `skip_behaviors: true`
+
+When a usage read fails, a separate bounded `claude auth status` command checks the CLI’s reported authentication method and exit status. Only a confirmed signed-out or incompatible authentication method requests subscription sign-in. Unsupported status output, network/service failures, stale caches and version errors remain usage errors with a retry action. Raw status output stays in memory and is never displayed or logged.
 
 It sends no user prompt, model turn, reset action, or authentication token. Tools, hooks, external MCP servers, project settings, customizations, telemetry, automatic updates, and session persistence are disabled for this reader. Managed policies remain effective. API keys and custom credential environments are not inherited. Do not use `--bare`: it disables subscription OAuth too. The CLI is responsible for its own credential handling; QuotaBar never refreshes or writes credentials itself. Background discovery never downloads a helper or starts browser sign-in.
 

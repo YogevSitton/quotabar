@@ -4,6 +4,7 @@ import QuotaCore
 struct ClaudeReadResult {
     let snapshot: UsageSnapshot?
     let error: String?
+    var issue: ClaudeConnectionIssue? = nil
 }
 
 actor ClaudeProvider {
@@ -13,6 +14,7 @@ actor ClaudeProvider {
     private var nextRequestAt = Date.distantPast
     private var failureCount = 0
     private var lastError: String?
+    private var lastIssue: ClaudeConnectionIssue?
     private var inFlight = false
     private var checkedCLI: URL?
 
@@ -41,13 +43,13 @@ actor ClaudeProvider {
         if let data = try? Data(contentsOf: statusLine), let snapshot = try? UsageParser.claudeStatusLine(data, organizationID: organization) {
             candidates.append(snapshot)
         }
-        return ClaudeReadResult(snapshot: candidates.max { $0.observedAt < $1.observedAt }, error: error)
+        return ClaudeReadResult(snapshot: candidates.max { $0.observedAt < $1.observedAt }, error: error, issue: lastIssue)
     }
     func read(reconnect: Bool = false) async -> ClaudeReadResult {
         let current = account()
         let identity = [current.identity, current.organization].compactMap { $0 }.joined(separator: ":")
         if activeIdentity != identity {
-            latestLive = nil; nextRequestAt = .distantPast; lastError = nil
+            latestLive = nil; nextRequestAt = .distantPast; lastError = nil; lastIssue = nil; failureCount = 0
             activeIdentity = identity
         }
         guard !inFlight else { return fallback(organization: current.organization, error: lastError) }
@@ -57,10 +59,12 @@ actor ClaudeProvider {
             return fallback(organization: current.organization, error: lastError)
         }
         inFlight = true; defer { inFlight = false }
+        lastIssue = nil
         do {
             if checkedCLI == nil { checkedCLI = try ClaudeHelper.existing() }
             guard let binary = checkedCLI else {
-                throw UsageError.message("Choose Connect Claude to prepare the official Claude Code helper and sign in.")
+                lastIssue = .helperMissing
+                throw UsageError.message("Claude Code is not available. Choose Connect Claude to set up the official helper, then check your saved sign-in.")
             }
             let startedAt = Date()
             let data = try await Task.detached(priority: .utility) {
@@ -71,6 +75,7 @@ actor ClaudeProvider {
             guard updated.organization == current.organization, updated.identity == current.identity else {
                 latestLive = nil
                 lastError = "Claude account changed. Refresh to read the active account."
+                lastIssue = .usageUnavailable
                 nextRequestAt = .distantPast
                 return fallback(organization: updated.organization, error: lastError)
             }
@@ -85,18 +90,41 @@ actor ClaudeProvider {
                 snapshot.source = .cached; snapshot.sourceName = "Claude Code CLI cached reading"
                 latestLive = nil
                 lastError = "Claude Code returned an older cached reading. A fresh usage reading is unavailable."
+                lastIssue = .usageUnavailable
                 failureCount += 1
                 nextRequestAt = Date().addingTimeInterval(ClaudeBackoff.delay(status: 0, failureCount: failureCount, retryAfter: nil, now: Date()))
-                return ClaudeReadResult(snapshot: snapshot, error: lastError)
+                return ClaudeReadResult(snapshot: snapshot, error: lastError, issue: lastIssue)
             }
-            latestLive = snapshot; failureCount = 0; lastError = nil
+            latestLive = snapshot; failureCount = 0; lastError = nil; lastIssue = nil
             nextRequestAt = startedAt.addingTimeInterval(60)
             return ClaudeReadResult(snapshot: snapshot, error: nil)
         } catch {
             failureCount += 1
             nextRequestAt = Date().addingTimeInterval(ClaudeBackoff.delay(status: 0, failureCount: failureCount, retryAfter: nil, now: Date()))
             // Only our own fixed messages can reach the UI, never raw CLI output.
-            lastError = (error as? UsageError)?.localizedDescription ?? "Claude Code usage could not be read. Check your connection and Claude Code sign-in."
+            lastError = (error as? UsageError)?.localizedDescription ?? "Claude Code usage could not be read. Try again later."
+            if let binary = checkedCLI {
+                let auth = await Task.detached(priority: .utility) { ClaudeAuthStatus.read(binary: binary) }.value
+                switch auth {
+                case .signedOut:
+                    lastIssue = .signInRequired
+                    lastError = "Claude Code reports no saved sign-in. Connect your Claude subscription to see usage."
+                case .otherAuthentication:
+                    lastIssue = .subscriptionRequired
+                    lastError = "Claude Code is using a different authentication method. Connect a Claude subscription to see its plan usage."
+                case .signedIn, .unknown:
+                    // A usage, compatibility, cache or network failure is not
+                    // evidence that the saved login needs to be replaced.
+                    lastIssue = .usageUnavailable
+                }
+            } else if lastIssue != .helperMissing { lastIssue = .usageUnavailable }
+            let updated = account()
+            guard updated.organization == current.organization, updated.identity == current.identity else {
+                latestLive = nil; lastIssue = .usageUnavailable
+                lastError = "Claude account changed. Refresh to read the active account."
+                nextRequestAt = .distantPast
+                return fallback(organization: updated.organization, error: lastError)
+            }
             return fallback(organization: current.organization, error: lastError)
         }
     }

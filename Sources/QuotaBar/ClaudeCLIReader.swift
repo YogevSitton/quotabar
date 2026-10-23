@@ -73,13 +73,13 @@ final class ClaudeCLIReader {
                 guard message["type"] as? String == "control_response",
                       let response = message["response"] as? [String: Any], response["request_id"] as? String == id else { continue }
                 guard response["subtype"] as? String == "success", let result = response["response"] as? [String: Any] else {
-                    throw UsageError.message("Claude Code could not return usage through its experimental CLI interface. Check your sign-in and CLI version.")
+                    throw UsageError.message("Claude Code could not return usage through its experimental CLI interface. Check your connection or update Claude Code.")
                 }
                 return result
             }
             let chunk = output.fileHandleForReading.availableData
             guard !chunk.isEmpty else {
-                throw UsageError.message("Claude Code ended before returning usage. Update Claude Code and check its sign-in.")
+                throw UsageError.message("Claude Code ended before returning usage. Retry or update Claude Code.")
             }
             received += chunk.count
             guard received <= 2_000_000 else { throw UsageError.message("Claude Code returned an oversized quota response.") }
