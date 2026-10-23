@@ -33,6 +33,8 @@ import QuotaCore
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
+    private var hostingController: NSHostingController<Dashboard>?
+    private var maximumPopoverSize = NSSize.zero
     private var state: AppState!
     private var timer: Timer?
     private var outsideClickMonitor: Any?
@@ -49,17 +51,23 @@ import QuotaCore
         statusItem.button?.target = self; statusItem.button?.action = #selector(toggle)
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: Dashboard(state: state))
-        state.onChange = { [weak self] in self?.updateLabel() }
+        state.onChange = { [weak self] in
+            self?.updateLabel()
+            if self?.popover.isShown == true { self?.fitPopoverToDisplay() }
+        }
         updateLabel(); state.start()
         if !UserDefaults.standard.bool(forKey: "hasLaunched") || CommandLine.arguments.contains("--show") {
             UserDefaults.standard.set(true, forKey: "hasLaunched")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showPopover() }
         }
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.state.updateInstallation(); self?.updateLabel() }
+            Task { @MainActor in
+                self?.state.updateInstallation(); self?.updateLabel()
+                if self?.popover.isShown == true { self?.fitPopoverToDisplay() }
+            }
         }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke), name: NSWorkspace.didWakeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(displayChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
     private func updateLabel() {
         guard let button = statusItem.button else { return }
@@ -97,12 +105,53 @@ import QuotaCore
     private func showPopover() {
         guard !popover.isShown, let button = statusItem.button else { return }
         state.updateInstallation()
+        fitPopoverToDisplay()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.popover.performClose(nil) }
         }
+    }
+    private var anchorScreen: NSScreen? {
+        statusItem.button?.window?.screen
+            ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
+            ?? NSScreen.main
+    }
+    private func fitPopoverToDisplay() {
+        guard let screen = anchorScreen else { return }
+        // Reserve space for the popover arrow, border and a clear screen margin.
+        let available = NSSize(width: max(1, screen.visibleFrame.width - 64),
+                               height: max(1, screen.visibleFrame.height - 64))
+        let dashboard = Dashboard(state: state, maximumSize: available)
+        let size = dashboard.preferredSize
+        if let hostingController {
+            if maximumPopoverSize != available || popover.contentSize != size { hostingController.rootView = dashboard }
+            hostingController.preferredContentSize = size
+        } else {
+            let controller = NSHostingController(rootView: dashboard)
+            controller.preferredContentSize = size
+            hostingController = controller; popover.contentViewController = controller
+        }
+        maximumPopoverSize = available
+        popover.contentSize = size
+        if popover.isShown { constrainPopoverOrigin() }
+    }
+    private func constrainPopoverOrigin() {
+        guard let screen = anchorScreen, let window = hostingController?.view.window else { return }
+        let bounds = screen.visibleFrame.insetBy(dx: 8, dy: 8)
+        let frame = window.frame
+        let origin = NSPoint(x: max(bounds.minX, min(frame.minX, bounds.maxX - frame.width)),
+                             y: max(bounds.minY, min(frame.minY, bounds.maxY - frame.height)))
+        if frame.origin != origin { window.setFrameOrigin(origin) }
+    }
+    func popoverDidShow(_ notification: Notification) {
+        constrainPopoverOrigin()
+        // SwiftUI completes its first layout after the popover is attached.
+        DispatchQueue.main.async { [weak self] in self?.constrainPopoverOrigin() }
+    }
+    @objc private func displayChanged() {
+        if popover.isShown { fitPopoverToDisplay() }
     }
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }

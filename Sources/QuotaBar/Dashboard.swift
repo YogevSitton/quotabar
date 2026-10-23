@@ -3,6 +3,7 @@ import QuotaCore
 
 struct Dashboard: View {
     @ObservedObject var state: AppState
+    let maximumSize: NSSize
     private var contentHeight: CGFloat {
         if state.installation.codex {
             return 470
@@ -11,7 +12,10 @@ struct Dashboard: View {
         return 100
     }
     private var contentWidth: CGFloat {
-        state.installation.codex && state.installation.claude ? min(850, (NSScreen.main?.visibleFrame.width ?? 900) - 32) : 450
+        min(state.installation.codex && state.installation.claude ? 850 : 450, maximumSize.width)
+    }
+    var preferredSize: NSSize {
+        NSSize(width: contentWidth, height: min(contentHeight + 130, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -25,10 +29,14 @@ struct Dashboard: View {
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                }.padding(20)
+                }.padding(20).fixedSize(horizontal: false, vertical: true)
                 Divider()
                 ScrollView {
                     VStack(spacing: 14) {
+                        // Explicit columns prevent a long offer or button from
+                        // expanding the hosting view beyond the screen budget.
+                        let columnWidth = max(0, (contentWidth - 46) / 2)
+                        let paired = state.installation.codex && state.installation.claude
                         HStack(alignment: .top, spacing: 14) {
                             if state.installation.codex {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -36,12 +44,12 @@ struct Dashboard: View {
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
                                     CodexResetStatus(state: state)
-                                }.frame(maxWidth: .infinity, alignment: .topLeading)
+                                }.frame(width: paired ? columnWidth : max(0, contentWidth - 32), alignment: .topLeading)
                             }
                             if state.installation.claude && !state.needsClaudeConnection {
                                 ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude)
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 32), alignment: .topLeading)
                             }
                             if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
@@ -49,7 +57,8 @@ struct Dashboard: View {
                                         ProviderIcon(name: "Claude", size: 24)
                                         Text("Connect Claude…")
                                     }
-                                }.controlSize(.large).frame(maxWidth: .infinity).padding(.top, 16)
+                                }.controlSize(.large)
+                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 32)).padding(.top, 16)
                             }
                         }
                         if !state.installation.codex && !state.installation.claude {
@@ -59,7 +68,7 @@ struct Dashboard: View {
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange) }
                     }.padding(16)
-                }.frame(height: contentHeight)
+                }.frame(minHeight: 0, maxHeight: .infinity)
                 Divider()
                 HStack {
                     Text("5h and Weekly · % remaining").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -80,8 +89,8 @@ struct Dashboard: View {
                         Divider()
                         Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
                     }.fixedSize()
-                }.padding(12)
-            }.frame(width: contentWidth).background(.regularMaterial)
+                }.padding(12).fixedSize(horizontal: false, vertical: true)
+            }.frame(width: preferredSize.width, height: preferredSize.height).background(.regularMaterial)
         }
     }
 }
@@ -119,13 +128,16 @@ private struct ProviderCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
-            HStack {
-                ProviderIcon(name: name)
-                Text(name).font(.system(size: 17, weight: .semibold))
-                if let plan = snapshot?.plan { Text(plan.capitalized).font(.caption).foregroundStyle(.secondary) }
-                if isCurrent { Text("Live").font(.caption).foregroundStyle(color) }
-                Spacer()
-                Button(action: open) { Text("Usage ↗") }.font(.caption)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    providerHeading
+                    Spacer()
+                    Button(action: open) { Text("Usage ↗") }.font(.caption)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    providerHeading
+                    Button(action: open) { Text("Usage ↗") }.font(.caption)
+                }
             }
             if isCurrent, let snapshot {
                 windows(snapshot, historical: false)
@@ -157,6 +169,14 @@ private struct ProviderCard: View {
             }
         }.padding(16).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.06)))
+    }
+    private var providerHeading: some View {
+        HStack {
+            ProviderIcon(name: name)
+            Text(name).font(.system(size: 17, weight: .semibold)).lineLimit(1)
+            if let plan = snapshot?.plan { Text(plan.capitalized).font(.caption).foregroundStyle(.secondary) }
+            if isCurrent { Text("Live").font(.caption).foregroundStyle(color) }
+        }
     }
     private func sampleTime(_ snapshot: UsageSnapshot) -> String {
         "\(snapshot.observedAt.formatted(.dateTime.day().month(.abbreviated).hour().minute())) \(TimeZone.current.abbreviation(for: snapshot.observedAt) ?? "")"

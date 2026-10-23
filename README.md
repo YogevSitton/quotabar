@@ -12,6 +12,8 @@ For development with either Claude or Codex, read [AGENTS.md](AGENTS.md). No pub
 
 Open `dist/QuotaBar.app`. Click its menu bar item to open the usage popup. Clicking outside closes it; reopening the app shows the same popup instead of a separate persistent window.
 
+The popup sizes against the display containing its menu-bar button, reserving room for the screen edges and popover arrow. Its scroll area shrinks on shorter screens while the header and Options footer remain visible. Provider columns have explicit widths and compact headers to avoid horizontal overflow. The window position is constrained after layout and updated when display geometry changes.
+
 The menu bar uses locally rendered vector ChatGPT and Claude icons, each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
 
 Installed providers appear side by side in the popup. An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
