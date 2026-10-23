@@ -12,9 +12,9 @@ For development with either Claude or Codex, read [AGENTS.md](AGENTS.md). No pub
 
 Open `dist/QuotaBar.app`. Click its menu bar item to open the usage popup. Clicking outside closes it; reopening the app shows the same popup instead of a separate persistent window.
 
-The menu bar uses provider icons (a terminal for Codex and an asterisk for Claude), each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
+The menu bar uses the ChatGPT and Claude app icons, each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
 
-An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
+Installed providers appear side by side in the popup. An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
 
 ## Connect Codex
 
@@ -47,7 +47,7 @@ Optional model/surface limits appear under Additional plan limits. Extra-usage a
 
 ## Refresh and local fallbacks
 
-Network polling defaults to five minutes, with fifteen-minute and manual alternatives. Claude requests are limited to at most one per five minutes even when repeatedly refreshed. Failed calls use increasing backoff; 403 and 429 observe cooldowns, including Retry-After. A rejected token is not retried until the saved token changes. No token refresh is attempted. Both providers refresh after wake. The dashboard and menu share one freshness rule; a past reset time also suppresses that window’s current percentage until a fresh reading arrives.
+Network polling defaults to one minute, with five-minute, fifteen-minute, and manual alternatives. This is a client cadence, not a guaranteed provider-supported request quota. Claude successful usage reads are spaced at least one minute apart even when repeatedly refreshed. This sends up to 60 reads per provider per hour; no model inference requests are made. The former five-minute default migrates to one minute once; other saved cadences are preserved. Failed calls use increasing backoff; 403 and 429 observe cooldowns, including Retry-After. A rejected token is not retried until the saved token changes. No token refresh is attempted. Both providers refresh after wake. The dashboard and menu share one freshness rule; a past reset time also suppresses that window’s current percentage until a fresh reading arrives.
 
 When Claude's live request is unavailable, the app selects the newest account-matched reading from:
 
@@ -81,8 +81,14 @@ Set `QUOTABAR_BUILD_PATH` to keep build intermediates outside the source directo
 
 Tests also verify the helper release URL, manifest size/checksum validation, path-injection rejection, and strict official authorization-link handling. Tests cover the provider contracts, missing versus zero data, malformed values, grant counts and expiries, timestamp formats, account-matched caches, credential schema/expiry handling, read-only request construction, backoff, and exporter privacy. The test suite currently contains 23 Swift tests plus the exporter privacy test. Completing browser authorization and comparing both usage windows, reset times, and any reported reset grants against the provider account pages remain manual acceptance checks.
 
+## Reset activation feasibility
+
+Direct activation is not implemented. Codex documents `account/rateLimitResetCredit/consume` with a UUID idempotency key and optional credit ID, followed by a fresh `account/rateLimits/read`. A future redemption UI should show the exact credit and expiry, require an explicit confirmation, prevent duplicate submission, and reconcile uncertain outcomes using the same idempotency key. Claude documents confirmation on its own Usage page; its internal redemption route is not a supported public integration. No reset was consumed during development.
+
 ## Read-only scope
 
 No reset-redemption route is implemented. QuotaBar does not send prompts, purchase credits, change subscription settings, or perform background token refresh. Only the user-triggered official Claude Code sign-in helper creates or updates its own credentials; the monitoring client does not write Keychain entries or modify Claude settings. It reads neither conversation logs nor Claude Desktop credential stores. There are no analytics or hosted backend. Quota snapshots remain in memory except for the separately enabled local status-line exporter.
 
 References: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Claude credential management](https://code.claude.com/docs/en/authentication#credential-management), [Claude status-line usage fields](https://code.claude.com/docs/en/statusline#rate-limit-usage), [Claude reset offers](https://support.claude.com/en/articles/17007452-what-is-a-limit-reset). The internal OAuth usage/reset-grant contract comes from the user-supplied brief and is not presented as a documented public API.
+
+Provider icons are the respective providers’ artwork, included only to identify the integrations. Installed application artwork is preferred, with bundled icons as fallbacks.

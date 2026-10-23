@@ -11,7 +11,7 @@ import QuotaCore
     @Published var claudeError: String?
     @Published var refreshingCodex = false
     @Published var refreshingClaude = false
-    @Published var interval: Double = UserDefaults.standard.object(forKey: "refreshMinutes") as? Double ?? 5
+    @Published var interval: Double = UserDefaults.standard.object(forKey: "refreshMinutes") as? Double ?? 1
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var settingsError: String?
     private let claudeProvider = ClaudeProvider()
@@ -22,8 +22,12 @@ import QuotaCore
     var onChange: (() -> Void)?
 
     func start() {
-        // Migrate the former one-minute cadence to the provider's five-minute minimum.
-        if interval > 0 && interval < 5 { interval = 5 }
+        // Upgrade the old default once, preserving explicit manual/15-minute choices.
+        if !UserDefaults.standard.bool(forKey: "minutePollingEnabled") {
+            if interval == 5 { interval = 1 }
+            UserDefaults.standard.set(true, forKey: "minutePollingEnabled")
+        }
+        if interval > 0 && interval < 1 { interval = 1 }
         refresh(); schedule()
         localTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.checkStatusLineFile() }

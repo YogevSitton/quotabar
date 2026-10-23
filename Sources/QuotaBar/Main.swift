@@ -67,13 +67,12 @@ import QuotaCore
         let entries = state.menuEntries
         for (index, entry) in entries.enumerated() {
             if index > 0 { title.append(NSAttributedString(string: "   ·   ")) }
-            if let image = NSImage(systemSymbolName: entry.symbol, accessibilityDescription: entry.name) {
-                let attachment = NSTextAttachment()
-                image.size = NSSize(width: 15, height: 15)
-                attachment.image = image
-                attachment.bounds = NSRect(x: 0, y: -3, width: 15, height: 15)
-                title.append(NSAttributedString(attachment: attachment))
-            }
+            let image = ProviderArtwork.image(for: entry.name)
+            let attachment = NSTextAttachment()
+            image.size = NSSize(width: 20, height: 20)
+            attachment.image = image
+            attachment.bounds = NSRect(x: 0, y: -5, width: 20, height: 20)
+            title.append(NSAttributedString(attachment: attachment))
             title.append(NSAttributedString(string: " \(entry.text)"))
         }
         let description = entries.map { "\($0.name): \($0.text)" }.joined(separator: "; ")

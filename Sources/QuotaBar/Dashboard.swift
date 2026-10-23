@@ -5,11 +5,13 @@ struct Dashboard: View {
     @ObservedObject var state: AppState
     private var contentHeight: CGFloat {
         if state.installation.codex {
-            if state.installation.claude { return state.needsClaudeConnection ? 480 : 540 }
-            return 440
+            return 470
         }
         if state.installation.claude { return state.needsClaudeConnection ? 80 : 420 }
         return 100
+    }
+    private var contentWidth: CGFloat {
+        state.installation.codex && state.installation.claude ? min(850, (NSScreen.main?.visibleFrame.width ?? 900) - 32) : 450
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -27,18 +29,25 @@ struct Dashboard: View {
                 Divider()
                 ScrollView {
                     VStack(spacing: 14) {
-                        if state.installation.codex {
-                            ProviderCard(name: "Codex", symbol: "terminal", color: .teal, snapshot: state.codex,
-                                         error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex)
-                        }
-                        if state.installation.claude && !state.needsClaudeConnection {
-                            ProviderCard(name: "Claude", symbol: "asterisk", color: .orange, snapshot: state.claude,
-                                         error: state.claudeError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openClaude)
-                        }
-                        if state.installation.claude && state.needsClaudeConnection {
-                            Button(action: state.connectClaude) {
-                                Label("Connect Claude…", systemImage: "asterisk")
-                            }.controlSize(.large).frame(maxWidth: .infinity)
+                        HStack(alignment: .top, spacing: 14) {
+                            if state.installation.codex {
+                                ProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
+                                             error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            if state.installation.claude && !state.needsClaudeConnection {
+                                ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
+                                             error: state.claudeError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openClaude)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            if state.installation.claude && state.needsClaudeConnection {
+                                Button(action: state.connectClaude) {
+                                    HStack(spacing: 8) {
+                                        ProviderIcon(name: "Claude", size: 24)
+                                        Text("Connect Claude…")
+                                    }
+                                }.controlSize(.large).frame(maxWidth: .infinity).padding(.top, 16)
+                            }
                         }
                         if !state.installation.codex && !state.installation.claude {
                             Text("Install Codex or Claude to see your usage here.")
@@ -54,6 +63,7 @@ struct Dashboard: View {
                     Spacer()
                     Menu("Options") {
                         Picker("Refresh", selection: $state.interval) {
+                            Text("Every minute").tag(1.0)
                             Text("Every 5 minutes").tag(5.0)
                             Text("Every 15 minutes").tag(15.0)
                             Text("Manual only").tag(0.0)
@@ -68,14 +78,13 @@ struct Dashboard: View {
                         Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
                     }.fixedSize()
                 }.padding(12)
-            }.frame(width: 450).background(.regularMaterial)
+            }.frame(width: contentWidth).background(.regularMaterial)
         }
     }
 }
 
 private struct ProviderCard: View {
     let name: String
-    let symbol: String
     let color: Color
     let snapshot: UsageSnapshot?
     let error: String?
@@ -87,7 +96,7 @@ private struct ProviderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack {
-                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(color)
+                ProviderIcon(name: name)
                 Text(name).font(.system(size: 17, weight: .semibold))
                 if let plan = snapshot?.plan { Text(plan.capitalized).font(.caption).foregroundStyle(.secondary) }
                 if isCurrent { Text("Live").font(.caption).foregroundStyle(color) }

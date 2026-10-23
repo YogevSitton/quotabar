@@ -10,6 +10,7 @@ mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 # Remove the obsolete, app-generated browser reader from earlier local builds.
 rm -rf "$bundle/Contents/Resources/QuotaBar_QuotaBar.bundle"
 cp "$bin_path/QuotaBar" "$bundle/Contents/MacOS/QuotaBar"
+cp Sources/QuotaBar/Resources/*.icns "$bundle/Contents/Resources/"
 cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,8 +20,8 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.yogev.quotabar</string>
 <key>CFBundleExecutable</key><string>QuotaBar</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.3.0</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>1.4.0</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

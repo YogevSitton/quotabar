@@ -113,6 +113,7 @@ actor ClaudeProvider {
         if rejectedToken == fingerprint { return fallback(organization: current.organization, error: lastError) }
         if rejectedToken != nil { rejectedToken = nil; nextRequestAt = .distantPast }
         do {
+            let requestStartedAt = Date()
             let (data, response) = try await session.data(for: ClaudeUsageRequest.make(accessToken: credential.accessToken))
             guard let http = response as? HTTPURLResponse else { throw UsageError.message("Claude did not return an HTTP usage response.") }
             guard http.statusCode == 200 else {
@@ -138,7 +139,7 @@ actor ClaudeProvider {
                 return fallback(organization: updated.organization, error: lastError)
             }
             latestLive = snapshot; failureCount = 0; lastError = nil
-            nextRequestAt = Date().addingTimeInterval(300)
+            nextRequestAt = requestStartedAt.addingTimeInterval(60)
             return ClaudeReadResult(snapshot: snapshot, error: nil)
         } catch {
             failureCount += 1
