@@ -12,10 +12,10 @@ struct Dashboard: View {
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
-        return available >= 538 ? 2 : available >= 484 ? 1 : 0
+        return available >= 478 ? 2 : available >= 424 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 430 + CGFloat(resetRowLimit) * 54 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 270 : 210, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 370 + CGFloat(resetRowLimit) * 54 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 210 : 150, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -26,6 +26,7 @@ struct Dashboard: View {
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
+                    optionsMenu
                 }.padding(.horizontal, 16).padding(.vertical, 20)
                     .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()
@@ -69,34 +70,30 @@ struct Dashboard: View {
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
                     }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: .infinity, alignment: .top)
-                Divider()
-                HStack {
-                    Text("5h and Weekly · % remaining").font(.system(size: 10)).foregroundStyle(.secondary)
-                    Spacer()
-                    Menu("Options") {
-                        Picker("Refresh", selection: $state.interval) {
-                            Text("Every minute").tag(1.0)
-                            Text("Every 5 minutes").tag(5.0)
-                            Text("Every 15 minutes").tag(15.0)
-                            Text("Manual only").tag(0.0)
-                        }.onChange(of: state.interval) { state.schedule() }
-                        Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
-                        Button("Locate Codex CLI…", action: state.chooseCodex)
-                        if state.installation.claude {
-                            Button("Claude connection…", action: state.manageClaudeConnection)
-                            Button("Open Claude Usage…", action: state.openClaude)
-                        }
-                        Menu("Usage details") {
-                            if state.installation.codex { Button("Codex…") { state.showDetails(for: "Codex") } }
-                            if state.installation.claude { Button("Claude…") { state.showDetails(for: "Claude") } }
-                        }
-                        Divider()
-                        Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
-                    }.fixedSize()
-                }.padding(.horizontal, 16).padding(.vertical, 20)
-                    .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             }.frame(width: preferredSize.width, height: preferredSize.height).background(.regularMaterial)
         }
+    }
+    private var optionsMenu: some View {
+        Menu("Options") {
+            Picker("Refresh", selection: $state.interval) {
+                Text("Every minute").tag(1.0)
+                Text("Every 5 minutes").tag(5.0)
+                Text("Every 15 minutes").tag(15.0)
+                Text("Manual only").tag(0.0)
+            }.onChange(of: state.interval) { state.schedule() }
+            Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
+            Button("Locate Codex CLI…", action: state.chooseCodex)
+            if state.installation.claude {
+                Button("Claude connection…", action: state.manageClaudeConnection)
+                Button("Open Claude Usage…", action: state.openClaude)
+            }
+            Menu("Usage details") {
+                if state.installation.codex { Button("Codex…") { state.showDetails(for: "Codex") } }
+                if state.installation.claude { Button("Claude…") { state.showDetails(for: "Claude") } }
+            }
+            Divider()
+            Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
+        }.fixedSize()
     }
 }
 
