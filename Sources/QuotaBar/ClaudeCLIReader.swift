@@ -87,6 +87,15 @@ final class ClaudeCLIReader {
         }
     }
     func readUsage() throws -> Data {
-        try JSONSerialization.data(withJSONObject: request("get_usage", fields: ["skip_behaviors": true]))
+        let data = try JSONSerialization.data(withJSONObject: request("get_usage", fields: ["skip_behaviors": true]))
+        // EOF lets the official CLI finish its own pending cache/config writes.
+        // Killing it immediately can leave our provenance check reading old data.
+        try? input.fileHandleForWriting.close()
+        let child = process
+        let graceDeadline = DispatchWorkItem { if child.isRunning { child.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3, execute: graceDeadline)
+        process.waitUntilExit()
+        graceDeadline.cancel()
+        return data
     }
 }

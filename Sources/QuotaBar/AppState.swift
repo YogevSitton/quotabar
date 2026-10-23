@@ -28,6 +28,8 @@ import Combine
     private var providerDetails: ProviderDetailsWindow?
     private var timer: Timer?
     private var localTimer: Timer?
+    private var claudeRetryTimer: Timer?
+    @Published private(set) var claudeNextRequestAt: Date?
     private var statusLineModified: Date?
     var onChange: (() -> Void)?
 
@@ -60,7 +62,8 @@ import Combine
         }
     }
     func schedule() {
-        timer?.invalidate(); UserDefaults.standard.set(interval, forKey: "refreshMinutes")
+        timer?.invalidate(); claudeRetryTimer?.invalidate()
+        UserDefaults.standard.set(interval, forKey: "refreshMinutes")
         guard interval > 0 else { return }
         timer = Timer.scheduledTimer(withTimeInterval: interval * 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
@@ -87,13 +90,28 @@ import Combine
     func refreshClaude(reconnect: Bool = false) {
         guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
-            let result = await claudeProvider.read(reconnect: reconnect)
+            let result = await claudeProvider.read(reconnect: reconnect, minimumInterval: max(60, interval * 60))
             self.claude = result.snapshot; self.claudeError = result.error
             self.claudeIssue = result.issue
+            self.scheduleClaudeRead(result)
             self.refreshingClaude = false; self.onChange?()
         }
     }
     func retryClaude() { refreshClaude(reconnect: true) }
+    private func scheduleClaudeRead(_ result: ClaudeReadResult) {
+        claudeRetryTimer?.invalidate()
+        claudeNextRequestAt = nil
+        guard interval > 0, installation.claude, let next = result.nextRequestAt else { return }
+        let delay = next > Date() ? next.timeIntervalSinceNow : max(60, interval * 60)
+        claudeNextRequestAt = Date().addingTimeInterval(max(1, delay))
+        // The shared periodic timer can fire just before the provider's exact
+        // deadline. Schedule that deadline instead of skipping a whole minute.
+        let retryTimer = Timer(timeInterval: max(1, delay), repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.refreshClaude() }
+        }
+        claudeRetryTimer = retryTimer
+        RunLoop.main.add(retryTimer, forMode: .common)
+    }
     func canUseCodexReset(_ offer: ResetOffer) -> Bool {
         guard !redeemingCodex, !refreshingCodex, pendingCodexReset == nil, resetRecoveryError == nil,
               codexError == nil, let codex else { return false }
@@ -201,8 +219,9 @@ import Combine
         }
         guard !Task.isCancelled else { return ClaudeReadResult(snapshot: nil, error: "Connection check cancelled.", issue: .usageUnavailable) }
         refreshingClaude = true; defer { refreshingClaude = false }
-        let result = await claudeProvider.read(reconnect: true)
+        let result = await claudeProvider.read(reconnect: true, minimumInterval: max(60, interval * 60))
         claude = result.snapshot; claudeError = result.error; claudeIssue = result.issue; onChange?()
+        scheduleClaudeRead(result)
         return result
     }
     var claudeMaximumAge: TimeInterval { 120 }

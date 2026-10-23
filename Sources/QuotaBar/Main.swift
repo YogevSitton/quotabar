@@ -38,6 +38,9 @@ import QuotaCore
     private var state: AppState!
     private var timer: Timer?
     private var outsideClickMonitor: Any?
+    private var renderedMenuDescription: String?
+    private var renderedMenuAppearance: NSAppearance.Name?
+    private var renderedMenuProviderCount = 0
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance prevents duplicate menu items and unnecessary polling.
         if let id = Bundle.main.bundleIdentifier,
@@ -51,6 +54,7 @@ import QuotaCore
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         statusItem.button?.target = self; statusItem.button?.action = #selector(toggle)
         popover.behavior = .transient
+        popover.animates = false
         popover.delegate = self
         state.onChange = { [weak self] in
             self?.updateLabel()
@@ -74,13 +78,22 @@ import QuotaCore
         guard let button = statusItem.button else { return }
         let entries = state.menuEntries
         let description = entries.map(\.description).joined(separator: "; ")
-        button.attributedTitle = NSAttributedString(string: "")
-        if entries.isEmpty {
-            let image = AppArtwork.icon.copy() as! NSImage
-            image.size = NSSize(width: 20, height: 20)
-            button.image = image
-        } else {
-            button.image = MenuBarArtwork.image(entries: entries, appearance: button.effectiveAppearance)
+        let appearance = button.effectiveAppearance
+        // A provider connecting/disconnecting must not move the anchor while
+        // its popup is open. Apply that width change when the popup closes.
+        let canChangeImage = !popover.isShown || renderedMenuProviderCount == entries.count
+        if canChangeImage && (renderedMenuDescription != description || renderedMenuAppearance != appearance.name) {
+            button.attributedTitle = NSAttributedString(string: "")
+            if entries.isEmpty {
+                let image = AppArtwork.icon.copy() as! NSImage
+                image.size = NSSize(width: 20, height: 20)
+                button.image = image
+            } else {
+                button.image = MenuBarArtwork.image(entries: entries, appearance: appearance)
+            }
+            renderedMenuDescription = description
+            renderedMenuAppearance = appearance.name
+            renderedMenuProviderCount = entries.count
         }
         button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · automatic reset times in your Mac's timezone · \(description)"
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
@@ -94,6 +107,7 @@ import QuotaCore
         guard !popover.isShown, let button = statusItem.button else { return }
         state.updateInstallation()
         fitPopoverToDisplay()
+        hostingController?.view.layoutSubtreeIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -114,29 +128,24 @@ import QuotaCore
         let dashboard = Dashboard(state: state, maximumSize: available)
         let size = dashboard.preferredSize
         if let hostingController {
-            if maximumPopoverSize != available || popover.contentSize != size { hostingController.rootView = dashboard }
+            guard maximumPopoverSize != available || popover.contentSize != size else { return }
+            hostingController.rootView = dashboard
             hostingController.preferredContentSize = size
+            hostingController.view.setFrameSize(size)
         } else {
             let controller = NSHostingController(rootView: dashboard)
+            // The dashboard owns its screen-constrained size. Do not let a
+            // later intrinsic-size report trigger a second popover placement.
+            controller.sizingOptions = []
             controller.preferredContentSize = size
+            controller.view.setFrameSize(size)
             hostingController = controller; popover.contentViewController = controller
         }
         maximumPopoverSize = available
         popover.contentSize = size
-        if popover.isShown { constrainPopoverOrigin() }
-    }
-    private func constrainPopoverOrigin() {
-        guard let screen = anchorScreen, let window = hostingController?.view.window else { return }
-        let bounds = screen.visibleFrame.insetBy(dx: 8, dy: 8)
-        let frame = window.frame
-        let origin = NSPoint(x: max(bounds.minX, min(frame.minX, bounds.maxX - frame.width)),
-                             y: max(bounds.minY, min(frame.minY, bounds.maxY - frame.height)))
-        if frame.origin != origin { window.setFrameOrigin(origin) }
-    }
-    func popoverDidShow(_ notification: Notification) {
-        constrainPopoverOrigin()
-        // SwiftUI completes its first layout after the popover is attached.
-        DispatchQueue.main.async { [weak self] in self?.constrainPopoverOrigin() }
+        hostingController?.view.layoutSubtreeIfNeeded()
+        // AppKit alone positions the popover within the display. Moving its
+        // window manually after show fights its anchor and causes a side-step.
     }
     @objc private func displayChanged() {
         if popover.isShown { fitPopoverToDisplay() }
@@ -144,6 +153,7 @@ import QuotaCore
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         outsideClickMonitor = nil
+        updateLabel()
     }
     @objc private func toggle() {
         if popover.isShown { popover.performClose(nil) }

@@ -12,10 +12,10 @@ struct Dashboard: View {
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
-        return available >= 510 ? 2 : available >= 470 ? 1 : 0
+        return available >= 538 ? 2 : available >= 484 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 430 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 270 : 210, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 430 + CGFloat(resetRowLimit) * 54 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 270 : 210, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -49,7 +49,8 @@ struct Dashboard: View {
                             } else if state.installation.claude && !state.needsClaudeConnection {
                                 CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude)
+                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude,
+                                             nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             } else if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
@@ -113,6 +114,7 @@ private struct CompactProviderCard: View {
     var canReset: ((ResetOffer) -> Bool)? = nil
     var useReset: ((ResetOffer) -> Void)? = nil
     var retry: (() -> Void)? = nil
+    var nextRetry: Date? = nil
     private var current: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -133,11 +135,8 @@ private struct CompactProviderCard: View {
                     .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 if name != "Claude" || snapshot.showsResetCredits {
                     Divider()
-                    HStack {
-                        Label("Available resets", systemImage: "arrow.counterclockwise.circle").foregroundStyle(color)
-                        Spacer()
-                        Text(snapshot.resetCount.map(String.init) ?? "—").monospacedDigit()
-                    }.font(.system(size: 11, weight: .semibold))
+                    Label("Available resets", systemImage: "arrow.counterclockwise.circle")
+                        .foregroundStyle(color).font(.system(size: 11, weight: .semibold))
                     ForEach(Array(snapshot.offers.prefix(resetRowLimit))) { offer in
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
@@ -152,6 +151,10 @@ private struct CompactProviderCard: View {
                             }
                             Text(expiry(offer)).font(.system(size: 10)).foregroundStyle(.secondary)
                                 .lineLimit(1).help(expiry(offer))
+                            if let expiry = offer.expiresAt, expiry > now {
+                                Text("Expires in \(countdown(expiry, now: now))")
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
                         }
                     }
                     if snapshot.offers.isEmpty {
@@ -167,6 +170,16 @@ private struct CompactProviderCard: View {
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
                 Text(error ?? "Current usage cannot be verified.").font(.caption).foregroundStyle(.secondary)
                     .lineLimit(2).help(error ?? "Current usage cannot be verified.")
+                if name == "Claude", let snapshot {
+                    Text("Saved reading · \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange)
+                    UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true, compact: true)
+                    UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: true, compact: true)
+                }
+                if let nextRetry, nextRetry > now {
+                    Text("Retrying automatically in \(countdown(nextRetry, now: now))")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
                 if let retry { Button("Retry usage", action: retry).font(.system(size: 11)).buttonStyle(.link) }
             }
             if let resetNotice {
@@ -306,7 +319,6 @@ struct ProviderCard: View {
                 Image(systemName: "arrow.counterclockwise.circle").foregroundStyle(color)
                 Text(isCurrent ? "Available resets" : "Resets reported then").font(.system(size: 12, weight: .semibold))
                 Spacer()
-                if let count = snapshot?.resetCount { Text("\(count)").font(.system(size: 12, weight: .bold)).monospacedDigit() }
             }
             if let snapshot {
                 if !snapshot.offers.isEmpty {
@@ -360,7 +372,7 @@ struct ProviderCard: View {
             }
             if let expiry = offer.expiresAt {
                 Text(expiryText(expiry)).foregroundStyle(expiry.timeIntervalSince(now) < 86400 ? Color.orange : Color.secondary)
-                if expiry > now { Text("\(countdown(expiry, now: now)) left to use").foregroundStyle(.secondary) }
+                if expiry > now { Text("Expires in \(countdown(expiry, now: now))").foregroundStyle(.secondary) }
             } else if let expiryText = offer.expiryText {
                 Text(expiryText).foregroundStyle(.secondary)
             } else { Text("Expiry not reported").foregroundStyle(.secondary) }
