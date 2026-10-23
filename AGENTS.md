@@ -22,7 +22,9 @@ codesign --verify --deep --strict dist/QuotaBar.app
 
 The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed.
 
-## Popup layout
+## Menu bar and popup layout
+
+The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position.
 
 The human does not want scrolling inside the menu popup. Keep both provider summaries side by side, with compact usage windows and reset expiry rows. Long descriptions, additional/model limits, historical values, large inventories and reset-recovery status belong in the separate resizable Details window. Preserve access to every reported field and the existing reset confirmation safeguards.
 

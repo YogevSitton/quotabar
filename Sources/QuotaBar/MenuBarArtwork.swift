@@ -1,5 +1,4 @@
 import AppKit
-import QuotaCore
 
 struct MenuBarQuota {
     let remaining: Int?
@@ -19,41 +18,27 @@ struct MenuBarEntry {
 
 @MainActor enum MenuBarArtwork {
     static func image(entries: [MenuBarEntry], appearance: NSAppearance) -> NSImage {
-        // Two short rows preserve percentages AND automatic reset times without
-        // the width of a single-line label disappearing behind a camera notch.
-        let quotaFont = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
-        let resetFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular)
-        func width(_ text: String, font: NSFont) -> CGFloat {
-            ceil((text as NSString).size(withAttributes: [.font: font]).width)
-        }
-        let layouts = entries.map { entry in
-            [("5h: \(entry.session.percentage)", "↻ \(entry.session.resetTime)"),
-             ("Weekly: \(entry.weekly.percentage)", "↻ \(entry.weekly.resetTime)")].map { top, bottom in
-                (top: top, bottom: bottom, width: max(width(top, font: quotaFont), width(bottom, font: resetFont)))
-            }
-        }
-        let widths = layouts.map { 23 + $0.reduce(CGFloat.zero) { $0 + $1.width } + 9 }
-        let size = NSSize(width: widths.reduce(0, +) + CGFloat(max(0, entries.count - 1)) * 12, height: 24)
+        // Keep the bar to one logo and 5h%/weekly% per connected provider.
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        let labels = entries.map { "\($0.session.percentage)/\($0.weekly.percentage)" }
+        let widths: [CGFloat] = labels.map { ceil(($0 as NSString).size(withAttributes: [.font: font]).width) }
+        let textWidth = widths.reduce(CGFloat.zero, +)
+        let iconWidth = CGFloat(entries.count) * 23
+        let gapWidth = CGFloat(max(0, entries.count - 1)) * 12
+        let size = NSSize(width: textWidth + iconWidth + gapWidth, height: 22)
         return NSImage(size: size, flipped: false) { _ in
             appearance.performAsCurrentDrawingAppearance {
                 var x: CGFloat = 0
                 for (index, entry) in entries.enumerated() {
-                    if index > 0 {
-                        NSColor.separatorColor.setFill()
-                        NSRect(x: x + 5, y: 4, width: 1, height: 16).fill()
-                        x += 12
-                    }
+                    if index > 0 { x += 12 }
                     ProviderArtwork.menuImage(for: entry.name, appearance: appearance)
-                        .draw(in: NSRect(x: x, y: 3, width: 18, height: 18))
+                        .draw(in: NSRect(x: x, y: 2, width: 18, height: 18))
                     x += 23
-                    for (column, layout) in layouts[index].enumerated() {
-                        if column > 0 { x += 9 }
-                        (layout.top as NSString).draw(at: NSPoint(x: x, y: 12),
-                            withAttributes: [.font: quotaFont, .foregroundColor: NSColor.labelColor])
-                        (layout.bottom as NSString).draw(at: NSPoint(x: x, y: 1),
-                            withAttributes: [.font: resetFont, .foregroundColor: NSColor.labelColor])
-                        x += layout.width
-                    }
+                    let label = labels[index] as NSString
+                    let height = label.size(withAttributes: [.font: font]).height
+                    label.draw(at: NSPoint(x: x, y: (22 - height) / 2),
+                               withAttributes: [.font: font, .foregroundColor: NSColor.labelColor])
+                    x += widths[index]
                 }
             }
             return true
