@@ -43,6 +43,7 @@ import QuotaCore
            NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
             NSApp.terminate(nil); return
         }
+        NSApp.applicationIconImage = AppArtwork.icon
         state = AppState()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
@@ -78,7 +79,9 @@ import QuotaCore
         let description = entries.map { "\($0.name): \($0.text)" }.joined(separator: "; ")
         if entries.isEmpty {
             button.attributedTitle = NSAttributedString(string: "")
-            button.image = NSImage(systemSymbolName: "gauge.with.dots.needle.67percent", accessibilityDescription: "QuotaBar")
+            let image = AppArtwork.icon.copy() as! NSImage
+            image.size = NSSize(width: 20, height: 20)
+            button.image = image
         } else {
             button.image = nil
             title.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), range: NSRange(location: 0, length: title.length))

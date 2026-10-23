@@ -79,6 +79,8 @@ python3 scripts/test-statusline-export.py
 
 The Claude diagnostic is non-interactive by default. Add `--allow-keychain` only to request a system access prompt. Diagnostics print percentages, source/sample time, and safe status messages; never credentials or account identifiers. Exit 2 indicates a fallback or connection issue, not verified live usage.
 
+The original app icon lives in `Assets/QuotaBar.png`, with its generation prompt in `Assets/ICON.md`. The build script regenerates all standard macOS icon sizes with `scripts/build-icon.sh` and sets the bundle icon automatically.
+
 Set `QUOTABAR_BUILD_PATH` to keep build intermediates outside the source directory. The build script produces an ad-hoc signed personal app in `dist/`. For a stable launch-at-login installation, move the app into Applications before enabling that option. This local build is not notarized for distribution.
 
 Tests also verify the helper release URL, manifest size/checksum validation, path-injection rejection, and strict official authorization-link handling. Tests cover the provider contracts, missing versus zero data, malformed values, grant counts and expiries, timestamp formats, account-matched caches, credential schema/expiry handling, read-only request construction, backoff, and exporter privacy. The test suite currently contains 23 Swift tests plus the exporter privacy test. Completing browser authorization and comparing both usage windows, reset times, and any reported reset grants against the provider account pages remain manual acceptance checks.

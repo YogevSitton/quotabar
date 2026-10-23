@@ -17,7 +17,7 @@ struct Dashboard: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
                 HStack {
-                    Image(systemName: "gauge.with.dots.needle.67percent").font(.title2).foregroundStyle(.teal)
+                    QuotaBarIcon()
                     VStack(alignment: .leading, spacing: 2) {
                         Text("QuotaBar").font(.system(size: 19, weight: .semibold))
                         Text("Your AI subscriptions, at a glance").font(.caption).foregroundStyle(.secondary)

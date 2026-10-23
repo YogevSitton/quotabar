@@ -3,6 +3,7 @@ set -euo pipefail
 cd "${0:A:h}/.."
 build_root="${QUOTABAR_BUILD_PATH:-$PWD/.build}"
 export CLANG_MODULE_CACHE_PATH="$build_root/ModuleCache"
+./scripts/build-icon.sh
 swift build -c release --disable-sandbox --scratch-path "$build_root"
 bin_path="$(swift build -c release --disable-sandbox --scratch-path "$build_root" --show-bin-path)"
 bundle="$PWD/dist/QuotaBar.app"
@@ -19,13 +20,15 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>QuotaBar</string>
 <key>CFBundleIdentifier</key><string>com.yogev.quotabar</string>
 <key>CFBundleExecutable</key><string>QuotaBar</string>
+<key>CFBundleIconFile</key><string>QuotaBar.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.4.1</string>
-<key>CFBundleVersion</key><string>7</string>
+<key>CFBundleShortVersionString</key><string>1.5.0</string>
+<key>CFBundleVersion</key><string>8</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
 codesign --force --deep --sign - "$bundle"
+touch "$bundle"
 printf 'Built %s\n' "$bundle"

@@ -1,0 +1,7 @@
+# QuotaBar app icon
+
+Created with the built-in image-generation tool. `QuotaBar.png` is the transparent master. `scripts/build-icon.sh` creates the macOS ICNS file with 16–1024 pixel representations; `scripts/build.sh` packages it, sets CFBundleIconFile, and signs the app. The same artwork appears in the popup header and as the fallback menu icon when no connected provider can be displayed.
+
+Final generation prompt:
+
+> Use case: logo-brand. Asset type: finished macOS app icon for QuotaBar, a menu-bar app that tracks remaining AI subscription usage. Generate ONE square 1024 by 1024 icon, straight-on orthographic, not a mockup. A finely crafted dark midnight navy rounded-square macOS tile, centered with standard macOS icon safe margins and a genuinely transparent exterior. On the tile: a bold luminous teal circular quota-meter ring with a small clean gap at lower right and a short orange accent segment near that gap, suggesting a subtle Q silhouette. Inside the ring are exactly two simple horizontal rounded quota bars, the upper bar longer than the lower, in soft white/teal. Strong simple silhouette that reads at 32 px. Restrained premium native macOS depth: smooth ceramic/glass-like bevels and soft controlled lighting, crisp edges, no glitter or noise, no excessive bloom. Balanced centered composition, no perspective or tilt. No letters, words, numbers, text, wordmark, provider logos, watermark, background scenery, or extra objects. Outer canvas must be transparent, not a checkerboard drawing.
