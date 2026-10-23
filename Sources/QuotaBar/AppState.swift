@@ -80,10 +80,10 @@ import QuotaCore
             }
         }
     }
-    func refreshClaude(allowInteraction: Bool = false) {
+    func refreshClaude() {
         guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
-            let result = await claudeProvider.read(allowInteraction: allowInteraction)
+            let result = await claudeProvider.read()
             self.claude = result.snapshot; self.claudeError = result.error
             self.refreshingClaude = false; self.onChange?()
         }
@@ -161,14 +161,14 @@ import QuotaCore
     }
     func connectClaude() {
         if claudeConnection == nil {
-            claudeConnection = ClaudeConnectionWindow { [weak self] in
+            claudeConnection = ClaudeConnectionWindow { [weak self] allowInteraction in
                 guard let self else { return "The app is no longer running." }
-                return await self.verifyClaudeConnection()
+                return await self.verifyClaudeConnection(allowInteraction: allowInteraction)
             }
         }
         claudeConnection?.show()
     }
-    private func verifyClaudeConnection() async -> String? {
+    private func verifyClaudeConnection(allowInteraction: Bool) async -> String? {
         // Opening setup is immediate, even when a background Keychain read is
         // underway. Its explicit verification waits instead of silently dropping.
         while refreshingClaude {
@@ -177,7 +177,7 @@ import QuotaCore
         }
         guard !Task.isCancelled else { return "Connection check cancelled." }
         refreshingClaude = true; defer { refreshingClaude = false }
-        let result = await claudeProvider.read(allowInteraction: true)
+        let result = await claudeProvider.read(allowInteraction: allowInteraction, retryKeychain: true)
         claude = result.snapshot; claudeError = result.error; onChange?()
         return result.error
     }

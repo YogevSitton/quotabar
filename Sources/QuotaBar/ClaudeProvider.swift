@@ -10,11 +10,29 @@ struct ClaudeReadResult {
 }
 
 private enum ClaudeKeychain {
+    // The legacy login keychain has process-wide UI control. Serialize these
+    // synchronous queries, save its prior state, and restore it before returning.
+    private static let accessLock = NSLock()
     static func read(allowInteraction: Bool) throws -> ClaudeCredential {
+        accessLock.lock(); defer { accessLock.unlock() }
+        var previousInteraction: DarwinBoolean = false
+        var restoreInteraction = false
+        if !allowInteraction {
+            guard SecKeychainGetUserInteractionAllowed(&previousInteraction) == errSecSuccess,
+                  SecKeychainSetUserInteractionAllowed(false) == errSecSuccess else {
+                throw UsageError.message("Claude's Keychain could not be checked silently. Choose Connect Claude → Use existing sign-in.")
+            }
+            restoreInteraction = true
+        }
+        defer {
+            if restoreInteraction { _ = SecKeychainSetUserInteractionAllowed(previousInteraction.boolValue) }
+        }
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Code-credentials", kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne]
-        // Background polls cannot repeatedly summon a system permission dialog.
+        // LAContext protects modern authentication; the legacy guard above also
+        // suppresses login-keychain ACL/unlock dialogs for background access.
+        if !allowInteraction { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         let context = LAContext(); context.interactionNotAllowed = !allowInteraction
         query[kSecUseAuthenticationContext as String] = context
         var found: CFTypeRef?
@@ -24,7 +42,7 @@ private enum ClaudeKeychain {
             case errSecItemNotFound:
                 throw UsageError.message("Claude is not connected. Choose Connect Claude to sign in.")
             case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
-                throw UsageError.message("Choose Connect Claude, then Use existing sign-in to allow Keychain access.")
+                throw UsageError.message("Claude Keychain access needs approval. Background checks are paused. Choose Connect Claude → Use existing sign-in when you want to allow access.")
             default:
                 throw UsageError.message("Claude Code's Keychain sign-in is unavailable (\(status)).")
             }
@@ -50,6 +68,10 @@ actor ClaudeProvider {
     private var lastError: String?
     private var rejectedToken: String?
     private var inFlight = false
+    private var keychainReadsPaused = false
+    // Keep an approved access token only in memory until expiry/rejection.
+    // Minute-by-minute usage polling does not need minute-by-minute Keychain reads.
+    private var cachedCredential: ClaudeCredential?
 
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.home = home
@@ -84,14 +106,17 @@ actor ClaudeProvider {
         }
         return ClaudeReadResult(snapshot: candidates.max { $0.observedAt < $1.observedAt }, error: error)
     }
-    func read(allowInteraction: Bool = false) async -> ClaudeReadResult {
+    func read(allowInteraction: Bool = false, retryKeychain: Bool = false) async -> ClaudeReadResult {
         let current = account()
         let identity = [current.identity, current.organization].compactMap { $0 }.joined(separator: ":")
         if activeIdentity != identity {
             latestLive = nil; rejectedToken = nil; nextRequestAt = .distantPast; lastError = nil
+            cachedCredential = nil
             activeIdentity = identity
         }
         guard !inFlight else { return fallback(organization: current.organization, error: lastError) }
+        if allowInteraction || retryKeychain { keychainReadsPaused = false }
+        guard !keychainReadsPaused else { return fallback(organization: current.organization, error: lastError) }
         // Honor cooldowns even for manual refresh. No extra calls between polls.
         if Date() < nextRequestAt {
             if lastError == nil, let latestLive { return ClaudeReadResult(snapshot: latestLive, error: nil) }
@@ -100,17 +125,30 @@ actor ClaudeProvider {
         }
         inFlight = true; defer { inFlight = false }
         let credential: ClaudeCredential
-        do { credential = try ClaudeKeychain.read(allowInteraction: allowInteraction) }
-        catch {
-            lastError = error.localizedDescription
-            return fallback(organization: current.organization, error: lastError)
+        if let cachedCredential, !cachedCredential.isExpired(at: Date()), !allowInteraction, !retryKeychain {
+            credential = cachedCredential
+        } else {
+            do {
+                credential = try ClaudeKeychain.read(allowInteraction: allowInteraction)
+                cachedCredential = credential
+            } catch {
+                // A timer must not repeatedly revisit denied/unavailable credentials.
+                // Only explicit connection actions resume these queries this session.
+                cachedCredential = nil; keychainReadsPaused = true
+                lastError = error.localizedDescription
+                return fallback(organization: current.organization, error: lastError)
+            }
         }
         guard !credential.isExpired(at: Date()) else {
+            cachedCredential = nil
             lastError = "Your Claude Code sign-in has expired. Choose Connect Claude to sign in again."
             return fallback(organization: current.organization, error: lastError)
         }
         let fingerprint = SHA256.hash(data: Data(credential.accessToken.utf8)).map { String(format: "%02x", $0) }.joined()
-        if rejectedToken == fingerprint { return fallback(organization: current.organization, error: lastError) }
+        if rejectedToken == fingerprint {
+            cachedCredential = nil
+            return fallback(organization: current.organization, error: lastError)
+        }
         if rejectedToken != nil { rejectedToken = nil; nextRequestAt = .distantPast }
         do {
             let requestStartedAt = Date()
@@ -122,6 +160,7 @@ actor ClaudeProvider {
                     retryAfter: http.value(forHTTPHeaderField: "Retry-After"), now: Date()))
                 switch http.statusCode {
                 case 401:
+                    cachedCredential = nil
                     rejectedToken = fingerprint
                     lastError = "Claude's saved sign-in was rejected. Choose Connect Claude to sign in again."
                 case 403: lastError = "Claude denied usage access. Check the Claude Code sign-in. Retrying after \(nextRequestAt.formatted(date: .omitted, time: .shortened))."
@@ -135,6 +174,7 @@ actor ClaudeProvider {
             // Do not attribute a response to an account that changed in flight.
             let updated = account()
             guard updated.organization == current.organization, updated.identity == current.identity else {
+                cachedCredential = nil
                 latestLive = nil; lastError = "Claude account changed. Refresh to read the active account."
                 return fallback(organization: updated.organization, error: lastError)
             }

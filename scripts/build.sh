@@ -22,13 +22,15 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>QuotaBar</string>
 <key>CFBundleIconFile</key><string>QuotaBar.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.6.0</string>
-<key>CFBundleVersion</key><string>9</string>
+<key>CFBundleShortVersionString</key><string>1.6.1</string>
+<key>CFBundleVersion</key><string>10</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-codesign --force --deep --sign - "$bundle"
+# A configured certificate can preserve Keychain trust across updates. The
+# default remains an ad-hoc local build; never change Keychain ACLs to bypass it.
+codesign --force --deep --sign "${QUOTABAR_SIGN_IDENTITY:--}" "$bundle"
 touch "$bundle"
 printf 'Built %s\n' "$bundle"
