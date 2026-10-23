@@ -161,15 +161,15 @@ import QuotaCore
     }
     func connectClaude() {
         if claudeConnection == nil {
-            claudeConnection = ClaudeConnectionWindow { [weak self] allowInteraction in
+            claudeConnection = ClaudeConnectionWindow { [weak self] in
                 guard let self else { return "The app is no longer running." }
-                return await self.verifyClaudeConnection(allowInteraction: allowInteraction)
+                return await self.verifyClaudeConnection()
             }
         }
         claudeConnection?.show()
     }
-    private func verifyClaudeConnection(allowInteraction: Bool) async -> String? {
-        // Opening setup is immediate, even when a background Keychain read is
+    private func verifyClaudeConnection() async -> String? {
+        // Opening setup is immediate, even when a background CLI read is
         // underway. Its explicit verification waits instead of silently dropping.
         while refreshingClaude {
             if Task.isCancelled { return "Connection check cancelled." }
@@ -177,12 +177,13 @@ import QuotaCore
         }
         guard !Task.isCancelled else { return "Connection check cancelled." }
         refreshingClaude = true; defer { refreshingClaude = false }
-        let result = await claudeProvider.read(allowInteraction: allowInteraction, retryKeychain: true)
+        let result = await claudeProvider.read(reconnect: true)
         claude = result.snapshot; claudeError = result.error; onChange?()
         return result.error
     }
+    var claudeMaximumAge: TimeInterval { 120 }
     var needsClaudeConnection: Bool {
-        claude?.isCurrent(at: Date(), maximumAge: max(600, interval * 120), hasConnectionError: claudeError != nil) != true
+        claude?.isCurrent(at: Date(), maximumAge: claudeMaximumAge, hasConnectionError: claudeError != nil) != true
     }
     func openClaude() { NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!) }
     func chooseCodex() {

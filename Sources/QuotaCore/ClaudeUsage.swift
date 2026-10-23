@@ -33,40 +33,6 @@ enum ClaudeValue {
     }
 }
 
-public struct ClaudeCredential {
-    public let accessToken: String
-    public let expiresAt: Date?
-    public let subscriptionType: String?
-    public static func parse(_ data: Data) throws -> ClaudeCredential {
-        let root = try ClaudeValue.object(data)
-        guard let oauth = root["claudeAiOauth"] as? [String: Any] else {
-            throw UsageError.message("Claude is not connected. Choose Connect Claude to sign in.")
-        }
-        guard let token = oauth["accessToken"] as? String, !token.isEmpty else {
-            throw UsageError.message("The saved Claude Code OAuth login has no access token. Sign in to Claude Code again.")
-        }
-        guard !token.contains("\n"), !token.contains("\r") else {
-            throw UsageError.message("The saved Claude Code access token has an invalid format. Sign in to Claude Code again.")
-        }
-        // Deliberately do not read, retain, refresh, or write the refresh token.
-        return ClaudeCredential(accessToken: token, expiresAt: ClaudeValue.date(oauth["expiresAt"]),
-            subscriptionType: oauth["subscriptionType"] as? String)
-    }
-    public func isExpired(at now: Date) -> Bool { expiresAt.map { $0 <= now.addingTimeInterval(30) } ?? false }
-}
-
-public enum ClaudeUsageRequest {
-    public static func make(accessToken: String) -> URLRequest {
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1")!)
-        request.httpMethod = "GET"; request.timeoutInterval = 25
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("QuotaBar/1.1 (macOS; read-only usage monitor)", forHTTPHeaderField: "User-Agent")
-        return request
-    }
-}
-
 public enum ClaudeBackoff {
     public static func delay(status: Int, failureCount: Int, retryAfter: String?, now: Date) -> TimeInterval {
         let minimum: Double = status == 401 || status == 403 ? 900 : 300
@@ -84,6 +50,26 @@ public enum ClaudeBackoff {
 }
 
 public extension UsageParser {
+    static func claudeCLI(_ data: Data, now: Date = Date()) throws -> UsageSnapshot {
+        let root = try ClaudeValue.object(data)
+        guard ClaudeValue.bool(root["rate_limits_available"]) == true else {
+            throw UsageError.message("Claude Code has no eligible subscription sign-in. Choose Connect Claude and sign in with your Claude subscription.")
+        }
+        guard let limits = root["rate_limits"] as? [String: Any] else {
+            throw UsageError.message("Claude Code could not retrieve subscription usage. Check its sign-in and try again later.")
+        }
+        var snapshot = try claudeOAuth(JSONSerialization.data(withJSONObject: limits), now: now)
+        snapshot.plan = root["subscription_type"] as? String
+        snapshot.sourceName = "Claude Code CLI"
+        for (index, row) in (limits["model_scoped"] as? [[String: Any]] ?? []).enumerated() {
+            guard let used = ClaudeValue.percent(row["utilization"]), let title = row["display_name"] as? String, !title.isEmpty else { continue }
+            let window = UsageWindow(used: used, resetsAt: ClaudeValue.date(row["resets_at"]))
+            guard !snapshot.additionalWindows.contains(where: { ($0.title == title || $0.title == "\(title) · weekly") && $0.window == window }) else { continue }
+            snapshot.additionalWindows.append(NamedUsageWindow(id: "cli-model-\(index)", title: "\(title) · weekly", window: window))
+        }
+        return snapshot
+    }
+
     static func claudeOAuth(_ data: Data, now: Date = Date()) throws -> UsageSnapshot {
         let root = try ClaudeValue.object(data)
         func window(_ key: String) -> UsageWindow? {

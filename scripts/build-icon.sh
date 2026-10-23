@@ -16,3 +16,4 @@ for name in QuotaBar Codex Claude; do
     iconutil -c icns "$iconset" -o "$PWD/Sources/QuotaBar/Resources/$name.icns"
 done
 sips -z 256 256 "$PWD/Assets/QuotaBar.png" --out "$PWD/Assets/QuotaBar-preview.png" >/dev/null
+cp "$PWD/Assets/QuotaBar-preview.png" "$PWD/Assets/QuotaBar-gauge-preview.png"

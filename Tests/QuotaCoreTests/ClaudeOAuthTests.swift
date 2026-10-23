@@ -78,20 +78,27 @@ final class ClaudeOAuthTests: XCTestCase {
         XCTAssertNotNil(result.session?.resetsAt); XCTAssertNil(result.resetCount)
         XCTAssertThrowsError(try UsageParser.claudeStatusLine(raw, organizationID: "other", now: now))
     }
-    func testCredentialsValidateShapeAndNormalizeExpiryWithoutRefresh() throws {
-        let credential = try ClaudeCredential.parse(data("{\"claudeAiOauth\":{\"accessToken\":\"test-token\",\"expiresAt\":1792761243000,\"refreshToken\":\"never-used\"}}"))
-        XCTAssertEqual(credential.expiresAt, Date(timeIntervalSince1970: 1792761243))
-        XCTAssertTrue(credential.isExpired(at: Date(timeIntervalSince1970: 1792761243)))
-        XCTAssertFalse(credential.isExpired(at: now))
-        XCTAssertThrowsError(try ClaudeCredential.parse(data("{\"claudeAiOauth\":{\"accessToken\":\"\"}}")))
+    func testCLIUsagePreservesWindowsPlanAndModelLimits() throws {
+        let raw = data("""
+        {"rate_limits_available":true,"subscription_type":"pro","rate_limits":{
+          "five_hour":{"utilization":34,"resets_at":"2026-10-23T16:50:00Z"},
+          "seven_day":{"utilization":30,"resets_at":"2026-10-25T10:00:00Z"},
+          "model_scoped":[{"display_name":"Example model","utilization":12,"resets_at":"2026-10-25T10:00:00Z"}]
+        }}
+        """)
+        let result = try UsageParser.claudeCLI(raw, now: now)
+        XCTAssertEqual(result.session?.remaining, 66)
+        XCTAssertEqual(result.weekly?.remaining, 70)
+        XCTAssertNotNil(result.session?.resetsAt)
+        XCTAssertEqual(result.plan, "pro")
+        XCTAssertEqual(result.additionalWindows.first?.title, "Example model · weekly")
+        XCTAssertFalse(result.showsResetCredits)
+        XCTAssertNil(result.resetCount)
     }
-    func testRequestIsOnlyReadOnlyUsageEndpoint() {
-        let request = ClaudeUsageRequest.make(accessToken: "test-token")
-        XCTAssertEqual(request.httpMethod, "GET")
-        XCTAssertEqual(request.url?.host, "api.anthropic.com")
-        XCTAssertEqual(request.url?.path, "/api/oauth/usage")
-        XCTAssertEqual(request.url?.query, "cedar_ember=1&skip_spend=1")
-        XCTAssertNil(request.httpBody)
+    func testCLINoEligibleAccountOrMissingDataNeverMeansFullQuota() {
+        XCTAssertThrowsError(try UsageParser.claudeCLI(data("{\"rate_limits_available\":false,\"rate_limits\":null}")))
+        XCTAssertThrowsError(try UsageParser.claudeCLI(data("{\"rate_limits_available\":true,\"rate_limits\":null}")))
+        XCTAssertThrowsError(try UsageParser.claudeCLI(data("{\"rate_limits_available\":true,\"rate_limits\":{}}")))
     }
     func testBackoffHonorsRetryAfterAndAuthorizationDelays() {
         XCTAssertEqual(ClaudeBackoff.delay(status: 429, failureCount: 1, retryAfter: "1200", now: now), 1200)

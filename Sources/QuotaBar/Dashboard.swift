@@ -40,7 +40,7 @@ struct Dashboard: View {
                             }
                             if state.installation.claude && !state.needsClaudeConnection {
                                 ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
-                                             error: state.claudeError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openClaude)
+                                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude)
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
                             }
                             if state.installation.claude && state.needsClaudeConnection {

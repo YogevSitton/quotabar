@@ -5,9 +5,8 @@ import QuotaCore
 @main enum Main {
     @MainActor static func main() {
         if CommandLine.arguments.contains("--check-claude") {
-            let allow = CommandLine.arguments.contains("--allow-keychain")
             Task.detached {
-                let result = await ClaudeProvider().read(allowInteraction: allow)
+                let result = await ClaudeProvider().read()
                 if let value = result.snapshot {
                     print("Claude \(value.source.rawValue): 5h \(value.session?.remaining.description ?? "unavailable")% left; week \(value.weekly?.remaining.description ?? "unavailable")% left; resets \(value.resetCount?.description ?? "not reported"); sampled \(value.observedAt.ISO8601Format())")
                 }

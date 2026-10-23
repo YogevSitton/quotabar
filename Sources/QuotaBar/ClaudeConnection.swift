@@ -16,19 +16,19 @@ import QuotaCore
     private var output: Pipe?
     private var outputBuffer = ""
     private var timeout: Task<Void, Never>?
-    private let verify: (Bool) async -> String?
-    init(verify: @escaping (Bool) async -> String?) { self.verify = verify }
+    private let verify: () async -> String?
+    init(verify: @escaping () async -> String?) { self.verify = verify }
 
     func prepareForPresentation() {
         guard !busy else { return }
         connected = false; error = nil
-        message = "Choose how to connect. Keychain access is requested only by Use existing sign-in."
+        message = "Claude Code manages your sign-in. QuotaBar asks its CLI for usage without reading your credentials."
     }
     func checkExisting() {
         guard !busy else { return }
         busy = true; error = nil; message = "Checking your existing Claude Code sign-in…"
         operation = Task {
-            let problem = await verify(true)
+            let problem = await verify()
             guard !Task.isCancelled else { return }
             finishVerification(problem)
         }
@@ -96,9 +96,8 @@ import QuotaCore
         }
         message = "Signed in. Checking live Claude usage…"
         operation = Task {
-            // Completing browser sign-in is not permission to summon a second
-            // QuotaBar Keychain dialog. Offer Use existing sign-in if needed.
-            let problem = await verify(false)
+            // Credential handling stays in the official CLI after login too.
+            let problem = await verify()
             guard !Task.isCancelled else { return }
             finishVerification(problem)
         }
@@ -177,7 +176,7 @@ private struct ClaudeConnectionView: View {
 @MainActor final class ClaudeConnectionWindow {
     private let model: ClaudeConnectionModel
     private var window: NSWindow?
-    init(verify: @escaping (Bool) async -> String?) { model = ClaudeConnectionModel(verify: verify) }
+    init(verify: @escaping () async -> String?) { model = ClaudeConnectionModel(verify: verify) }
     func show() {
         model.prepareForPresentation()
         if window == nil {

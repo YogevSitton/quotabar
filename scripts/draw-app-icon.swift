@@ -80,7 +80,7 @@ final class ProviderIconDrawing: NSView {
 }
 
 // Original vector artwork. Coordinates use a top-left origin on a 1024pt canvas.
-// Keep the two meters and clock recognizable without tiny text or provider marks.
+// Keep the two meters and fuel gauge recognizable without tiny text or provider marks.
 final class QuotaIconDrawing: NSView {
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
@@ -110,15 +110,25 @@ final class QuotaIconDrawing: NSView {
         rounded(240, 470, 402, 86, 43, 0x4DE0B0)
         rounded(240, 632, 544, 86, 43, 0x425168)
         rounded(240, 632, 248, 86, 43, 0xFFBE66)
-        // The clock is deliberately large: quota availability also depends on time.
+        // A fuel-style gauge makes remaining capacity visible at small sizes.
         color(0xCFD6E0).setFill()
         NSBezierPath(ovalIn: NSRect(x: 550, y: 176, width: 304, height: 304)).fill()
         color(0xFFFFFF).setFill()
         NSBezierPath(ovalIn: NSRect(x: 550, y: 162, width: 304, height: 304)).fill()
-        let face = NSBezierPath(ovalIn: NSRect(x: 582, y: 194, width: 240, height: 240))
-        face.lineWidth = 16; color(0x202B3B).setStroke(); face.stroke()
-        line([NSPoint(x: 702, y: 238), NSPoint(x: 702, y: 314), NSPoint(x: 754, y: 344)],
-             width: 20, fill: 0x202B3B)
+        func dialPoint(_ degrees: CGFloat, radius: CGFloat) -> NSPoint {
+            let angle = degrees * .pi / 180
+            return NSPoint(x: 702 + cos(angle) * radius, y: 324 + sin(angle) * radius)
+        }
+        let arc = stride(from: CGFloat(150), through: CGFloat(390), by: 3).map { dialPoint($0, radius: 101) }
+        line(arc, width: 16, fill: 0x202B3B)
+        for degrees in stride(from: CGFloat(150), through: CGFloat(390), by: 40) {
+            line([dialPoint(degrees, radius: 74), dialPoint(degrees, radius: 86)],
+                 width: 10, fill: 0x202B3B)
+        }
+        // One needle, pivot and an open lower dial distinguish this from a clock.
+        line([NSPoint(x: 687, y: 342), dialPoint(310, radius: 72)], width: 20, fill: 0x202B3B)
+        color(0x202B3B).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 688, y: 310, width: 28, height: 28)).fill()
     }
 }
 

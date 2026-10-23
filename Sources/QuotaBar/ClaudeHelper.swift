@@ -39,9 +39,9 @@ enum ClaudeHelper {
             return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), requirement) == errSecSuccess
         }
     }
-    static func prepare(status: @escaping @MainActor @Sendable (String) -> Void) async throws -> URL {
-        if let installed = trustedInstalledCLI() { return installed }
-        // A previously downloaded helper is rechecked before every login.
+    // Read-only discovery never downloads or starts sign-in.
+    static func existing() throws -> URL? {
+        if let installed = trustedInstalledCLI() { return installed.resolvingSymlinksInPath() }
         let recordURL = support.appendingPathComponent("release.json")
         if let saved = try? Data(contentsOf: recordURL), let record = try? JSONSerialization.jsonObject(with: saved) as? [String: Any],
            let version = record["version"] as? String, let manifest = record["manifest"] as? [String: Any],
@@ -50,6 +50,10 @@ enum ClaudeHelper {
             let executable = support.appendingPathComponent(release.version).appendingPathComponent("claude")
             if FileManager.default.isExecutableFile(atPath: executable.path), try checksum(executable) == release.checksum { return executable }
         }
+        return nil
+    }
+    static func prepare(status: @escaping @MainActor @Sendable (String) -> Void) async throws -> URL {
+        if let existing = try existing() { return existing }
         await status("Checking the official Claude Code download…")
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30; config.timeoutIntervalForResource = 600
@@ -84,7 +88,7 @@ enum ClaudeHelper {
         try FileManager.default.copyItem(at: temporary, to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
         let record: [String: Any] = ["version": version, "manifest": try JSONSerialization.jsonObject(with: manifest)]
-        try JSONSerialization.data(withJSONObject: record).write(to: recordURL, options: [.atomic])
+        try JSONSerialization.data(withJSONObject: record).write(to: support.appendingPathComponent("release.json"), options: [.atomic])
         return executable
     }
 }
