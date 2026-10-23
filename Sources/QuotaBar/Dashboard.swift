@@ -11,10 +11,11 @@ struct Dashboard: View {
         state.installation.codex || (state.installation.claude && !state.needsClaudeConnection)
     }
     private var resetRowLimit: Int {
-        maximumSize.height >= 462 ? 2 : maximumSize.height >= 422 ? 1 : 0
+        let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
+        return available >= 510 ? 2 : available >= 470 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 382 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 230 : 170, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 430 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 270 : 210, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -25,7 +26,8 @@ struct Dashboard: View {
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                }.padding(12).fixedSize(horizontal: false, vertical: true)
+                }.padding(.horizontal, 16).padding(.vertical, 20)
+                    .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()
                     VStack(spacing: 10) {
                         // Explicit columns prevent a long offer or button from
@@ -65,7 +67,7 @@ struct Dashboard: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
-                    }.padding(12).frame(maxHeight: .infinity, alignment: .top)
+                    }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: .infinity, alignment: .top)
                 Divider()
                 HStack {
                     Text("5h and Weekly · % remaining").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -83,10 +85,15 @@ struct Dashboard: View {
                             Button("Claude connection…", action: state.manageClaudeConnection)
                             Button("Open Claude Usage…", action: state.openClaude)
                         }
+                        Menu("Usage details") {
+                            if state.installation.codex { Button("Codex…") { state.showDetails(for: "Codex") } }
+                            if state.installation.claude { Button("Claude…") { state.showDetails(for: "Claude") } }
+                        }
                         Divider()
                         Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
                     }.fixedSize()
-                }.padding(12).fixedSize(horizontal: false, vertical: true)
+                }.padding(.horizontal, 16).padding(.vertical, 20)
+                    .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             }.frame(width: preferredSize.width, height: preferredSize.height).background(.regularMaterial)
         }
     }
@@ -135,7 +142,8 @@ private struct CompactProviderCard: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
-                                    .lineLimit(1).help(offer.title).frame(maxWidth: .infinity, alignment: .leading)
+                                    .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 if name == "Codex", offer.supportsDirectRedemption, let useReset {
                                     Button("Use reset…") { useReset(offer) }
                                         .font(.system(size: 10)).controlSize(.small)
@@ -164,8 +172,13 @@ private struct CompactProviderCard: View {
             if let resetNotice {
                 Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)
             }
-            Button("Details…", action: details).font(.system(size: 11)).buttonStyle(.link)
-                .help("Open all usage, reset expiry and plan details in a separate window")
+            if current, let snapshot, !snapshot.additionalWindows.isEmpty || snapshot.extraUsage != nil {
+                Button("More usage limits…", action: details).font(.system(size: 11)).buttonStyle(.link)
+                    .help("Open additional model limits and extra usage")
+            } else if !current, snapshot != nil {
+                Button("Last saved reading…", action: details).font(.system(size: 11)).buttonStyle(.link)
+                    .help("View historical usage with its original sample time")
+            }
         }.padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))

@@ -26,6 +26,8 @@ The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a not
 
 The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position.
 
+Do not show a generic Details button when it only repeats the visible data. Use contextual links for extra/model limits, historical readings, reset overflow and recovery, and retain the full view under Options → Usage details. Give the header and footer clear top/bottom breathing room.
+
 The human does not want scrolling inside the menu popup. Keep both provider summaries side by side, with compact usage windows and reset expiry rows. Long descriptions, additional/model limits, historical values, large inventories and reset-recovery status belong in the separate resizable Details window. Preserve access to every reported field and the existing reset confirmation safeguards.
 
 ## Data and credential rules
