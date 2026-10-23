@@ -219,19 +219,20 @@ import QuotaCore
         if changed { installation = detected; onChange?() }
     }
     var menuEntries: [(name: String, symbol: String, text: String)] {
-        func label(_ snapshot: UsageSnapshot?, error: String?) -> String {
+        func label(_ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> String {
             let now = Date()
-            let current = snapshot?.isCurrent(at: now, maximumAge: max(600, interval * 120), hasConnectionError: error != nil) == true
-            func percentage(_ window: UsageWindow?) -> String {
-                guard current, let remaining = window?.currentRemaining(at: now) else { return "—" }
-                return "\(remaining)%"
+            let current = snapshot?.isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) == true
+            func quota(_ window: UsageWindow?) -> String {
+                guard current, let window, let remaining = window.currentRemaining(at: now) else { return "—" }
+                let reset = window.resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "—"
+                return "\(remaining)% ↻ \(reset)"
             }
-            return "5h: \(percentage(snapshot?.session)) Weekly: \(percentage(snapshot?.weekly))"
+            return "5h: \(quota(snapshot?.session)) Weekly: \(quota(snapshot?.weekly))"
         }
         var entries: [(name: String, symbol: String, text: String)] = []
-        if installation.codex { entries.append(("Codex", "terminal", label(codex, error: codexError))) }
+        if installation.codex { entries.append(("Codex", "terminal", label(codex, error: codexError, maximumAge: max(600, interval * 120)))) }
         if installation.claude && !needsClaudeConnection {
-            entries.append(("Claude", "asterisk", label(claude, error: claudeError)))
+            entries.append(("Claude", "asterisk", label(claude, error: claudeError, maximumAge: claudeMaximumAge)))
         }
         return entries
     }

@@ -83,7 +83,7 @@ import QuotaCore
             title.append(NSAttributedString(attachment: attachment))
             title.append(NSAttributedString(string: " \(entry.text)"))
         }
-        let description = entries.map { "\($0.name): \($0.text)" }.joined(separator: "; ")
+        let description = entries.map { "\($0.name): \($0.text.replacingOccurrences(of: "↻", with: "automatic reset"))" }.joined(separator: "; ")
         if entries.isEmpty {
             button.attributedTitle = NSAttributedString(string: "")
             let image = AppArtwork.icon.copy() as! NSImage
@@ -94,7 +94,7 @@ import QuotaCore
             title.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), range: NSRange(location: 0, length: title.length))
             button.attributedTitle = title
         }
-        button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · \(description)"
+        button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · automatic reset times in your Mac's timezone · \(description)"
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
     }
     @objc private func woke() { state.refresh() }
