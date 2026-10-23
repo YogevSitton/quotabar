@@ -218,21 +218,22 @@ import QuotaCore
         let changed = installation.codex != detected.codex || installation.claude != detected.claude
         if changed { installation = detected; onChange?() }
     }
-    var menuEntries: [(name: String, symbol: String, text: String)] {
-        func label(_ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> String {
+    var menuEntries: [MenuBarEntry] {
+        func entry(_ name: String, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
             let now = Date()
             let current = snapshot?.isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) == true
-            func quota(_ window: UsageWindow?) -> String {
-                guard current, let window, let remaining = window.currentRemaining(at: now) else { return "—" }
-                let reset = window.resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "—"
-                return "\(remaining)% ↻ \(reset)"
+            func quota(_ window: UsageWindow?) -> MenuBarQuota {
+                guard current, let window, let remaining = window.currentRemaining(at: now) else {
+                    return MenuBarQuota(remaining: nil, resetsAt: nil)
+                }
+                return MenuBarQuota(remaining: remaining, resetsAt: window.resetsAt)
             }
-            return "5h: \(quota(snapshot?.session)) Weekly: \(quota(snapshot?.weekly))"
+            return MenuBarEntry(name: name, session: quota(snapshot?.session), weekly: quota(snapshot?.weekly))
         }
-        var entries: [(name: String, symbol: String, text: String)] = []
-        if installation.codex { entries.append(("Codex", "terminal", label(codex, error: codexError, maximumAge: max(600, interval * 120)))) }
+        var entries: [MenuBarEntry] = []
+        if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }
         if installation.claude && !needsClaudeConnection {
-            entries.append(("Claude", "asterisk", label(claude, error: claudeError, maximumAge: claudeMaximumAge)))
+            entries.append(entry("Claude", claude, error: claudeError, maximumAge: claudeMaximumAge))
         }
         return entries
     }

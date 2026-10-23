@@ -47,6 +47,7 @@ import QuotaCore
         NSApp.applicationIconImage = AppArtwork.icon
         state = AppState()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "QuotaBar"
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         statusItem.button?.target = self; statusItem.button?.action = #selector(toggle)
         popover.behavior = .transient
@@ -71,28 +72,15 @@ import QuotaCore
     }
     private func updateLabel() {
         guard let button = statusItem.button else { return }
-        let title = NSMutableAttributedString()
         let entries = state.menuEntries
-        for (index, entry) in entries.enumerated() {
-            if index > 0 { title.append(NSAttributedString(string: "   ·   ")) }
-            let image = ProviderArtwork.menuImage(for: entry.name, appearance: button.effectiveAppearance)
-            let attachment = NSTextAttachment()
-            image.size = NSSize(width: 20, height: 20)
-            attachment.image = image
-            attachment.bounds = NSRect(x: 0, y: -5, width: 20, height: 20)
-            title.append(NSAttributedString(attachment: attachment))
-            title.append(NSAttributedString(string: " \(entry.text)"))
-        }
-        let description = entries.map { "\($0.name): \($0.text.replacingOccurrences(of: "↻", with: "automatic reset"))" }.joined(separator: "; ")
+        let description = entries.map(\.description).joined(separator: "; ")
+        button.attributedTitle = NSAttributedString(string: "")
         if entries.isEmpty {
-            button.attributedTitle = NSAttributedString(string: "")
             let image = AppArtwork.icon.copy() as! NSImage
             image.size = NSSize(width: 20, height: 20)
             button.image = image
         } else {
-            button.image = nil
-            title.addAttribute(.font, value: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), range: NSRange(location: 0, length: title.length))
-            button.attributedTitle = title
+            button.image = MenuBarArtwork.image(entries: entries, appearance: button.effectiveAppearance)
         }
         button.toolTip = description.isEmpty ? "QuotaBar · connect an installed provider" : "QuotaBar · percentages remaining · automatic reset times in your Mac's timezone · \(description)"
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
