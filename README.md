@@ -8,6 +8,8 @@ Private development preview. Codex live usage and the Claude sign-in launch have
 
 For development with either Claude or Codex, read [AGENTS.md](AGENTS.md). No public-release license has been selected.
 
+QuotaBar is registered with the locally installed personal-tool workflow as `quotabar`, based on `origin/main`, with a compile-only project check. Use personal-tool Plan in the lead app and personal-tool Review in the other app when requesting that workflow; Build follows the reviewed plan and its human approval. Local feature worktrees under `.personal-tool/worktrees/` are ignored by Git. personal-tool is development tooling, not an app dependency, and a fresh clone on another Mac needs its own personal-tool installation and project setup.
+
 ## Run
 
 Open `dist/QuotaBar.app`. Click its menu bar item to open the usage popup. Clicking outside closes it; reopening the app shows the same popup instead of a separate persistent window.

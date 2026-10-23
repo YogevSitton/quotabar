@@ -9,6 +9,12 @@ QuotaBar is a native macOS 14+ menu bar app. Both Codex and Claude are first-cla
 - `Sources/QuotaBar/` contains the SwiftUI/AppKit UI, provider clients, and official Claude helper integration.
 - `Tests/QuotaCoreTests/` uses synthetic fixtures. `scripts/` contains the app build and optional sanitized status-line exporter.
 
+## personal-tool workflow
+
+This repository is registered locally with personal-tool as `quotabar`, using GitHub's `origin/main` as its base. For work requested through personal-tool, use the installed personal-tool Plan, Review and Build skills in Codex or Claude. personal-tool owns its feature worktrees under the ignored `.personal-tool/worktrees/` directory; do not commit local coordinator state or copy the personal-tool runtime into the app.
+
+The saved project check is `swift build -c release --disable-sandbox` (compilation only). It does not authorize tests, live diagnostics, sign-in or reset actions. Keep the verification restrictions below in every feature plan. personal-tool project registration and app integration are local machine settings, not something a Git clone installs automatically.
+
 ## Build and verify
 
 Run from the repository root on macOS with Xcode/Swift 5.9+:
