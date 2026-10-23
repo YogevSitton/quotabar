@@ -11,10 +11,10 @@ struct Dashboard: View {
         state.installation.codex || (state.installation.claude && !state.needsClaudeConnection)
     }
     private var resetRowLimit: Int {
-        maximumSize.height >= 430 ? 2 : maximumSize.height >= 390 ? 1 : 0
+        maximumSize.height >= 462 ? 2 : maximumSize.height >= 422 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 350 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : 170, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 382 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : 170, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -394,10 +394,15 @@ private struct UsageRow: View {
                     .tint(stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color)
                     .accessibilityLabel("\(title), \(window.remaining) percent remaining\(stale ? " at the saved reading time" : "")")
                 if let reset = window.resetsAt {
-                    Text(stale ? "Reset reported for \(reset.formatted(.dateTime.day().month(.abbreviated).hour().minute()))" : "Resets in \(countdown(reset, now: now)) · \(reset.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
-                        .font(.system(size: compact ? 10 : 11)).foregroundStyle(.secondary).lineLimit(compact ? 1 : nil)
+                    Text(stale ? "Reset reported for \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))" : "Auto reset: \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(stale ? .secondary : .primary)
+                        .lineLimit(compact ? 1 : nil).minimumScaleFactor(0.85)
                         .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
-                } else { Text("Reset time not reported").font(.system(size: 11)).foregroundStyle(.secondary) }
+                    if !stale {
+                        Text("In \(countdown(reset, now: now)) · \(TimeZone.current.abbreviation(for: reset) ?? TimeZone.current.identifier)")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                } else { Text("Automatic reset time not reported").font(.system(size: 11)).foregroundStyle(.secondary) }
             }
         }
     }

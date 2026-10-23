@@ -52,8 +52,10 @@ final class VendorSVG: NSObject, XMLParserDelegate {
 final class ProviderIconDrawing: NSView {
     let paths: [NSBezierPath]
     let claude: Bool
-    init(root: URL, claude: Bool) throws {
+    let menuBar: Bool
+    init(root: URL, claude: Bool, menuBar: Bool = false) throws {
         self.claude = claude
+        self.menuBar = menuBar
         let source = root.appendingPathComponent("Assets/\(claude ? "Claude" : "ChatGPT")-mark.svg")
         let reader = VendorSVG(), parser = XMLParser(data: try Data(contentsOf: source))
         parser.delegate = reader
@@ -64,6 +66,17 @@ final class ProviderIconDrawing: NSView {
     required init?(coder: NSCoder) { fatalError("Not supported") }
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
+        if menuBar {
+            // A bare vector mark, with transparent negative space and no tile.
+            NSColor.black.setFill()
+            var position = AffineTransform(translationByX: 64, byY: 64)
+            position.scale(896 / (claude ? 125 : 20))
+            for original in paths {
+                let path = original.copy() as! NSBezierPath
+                path.transform(using: position); path.fill()
+            }
+            return
+        }
         color(claude ? 0xCB5938 : 0xCDD4DE).setFill()
         NSBezierPath(roundedRect: NSRect(x: 64, y: 72, width: 896, height: 888), xRadius: 200, yRadius: 200).fill()
         color(claude ? 0xEF6B45 : 0xFFFFFF).setFill()
@@ -158,3 +171,5 @@ func save(_ view: NSView, name: String) throws {
 try save(QuotaIconDrawing(frame: NSRect(x: 0, y: 0, width: 1024, height: 1024)), name: "QuotaBar")
 try save(ProviderIconDrawing(root: root, claude: false), name: "Codex")
 try save(ProviderIconDrawing(root: root, claude: true), name: "Claude")
+try save(ProviderIconDrawing(root: root, claude: false, menuBar: true), name: "CodexMenu")
+try save(ProviderIconDrawing(root: root, claude: true, menuBar: true), name: "ClaudeMenu")

@@ -75,7 +75,7 @@ import QuotaCore
         let entries = state.menuEntries
         for (index, entry) in entries.enumerated() {
             if index > 0 { title.append(NSAttributedString(string: "   ·   ")) }
-            let image = ProviderArtwork.image(for: entry.name)
+            let image = ProviderArtwork.menuImage(for: entry.name, appearance: button.effectiveAppearance)
             let attachment = NSTextAttachment()
             image.size = NSSize(width: 20, height: 20)
             attachment.image = image
