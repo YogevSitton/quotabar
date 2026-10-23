@@ -4,52 +4,48 @@ import QuotaCore
 struct Dashboard: View {
     @ObservedObject var state: AppState
     let maximumSize: NSSize
-    private var contentHeight: CGFloat {
-        if state.installation.codex {
-            return 470
-        }
-        if state.installation.claude { return state.needsClaudeConnection ? 80 : 420 }
-        return 100
-    }
     private var contentWidth: CGFloat {
-        min(state.installation.codex && state.installation.claude ? 850 : 450, maximumSize.width)
+        min(state.installation.codex && state.installation.claude ? 700 : 380, maximumSize.width)
+    }
+    private var hasUsage: Bool {
+        state.installation.codex || (state.installation.claude && !state.needsClaudeConnection)
+    }
+    private var resetRowLimit: Int {
+        maximumSize.height >= 430 ? 2 : maximumSize.height >= 390 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(contentHeight + 130, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 350 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : 170, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
                 HStack {
-                    QuotaBarIcon()
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("QuotaBar").font(.system(size: 19, weight: .semibold))
-                        Text("Your AI subscriptions, at a glance").font(.caption).foregroundStyle(.secondary)
-                    }
+                    QuotaBarIcon(size: 24)
+                    Text("QuotaBar").font(.system(size: 16, weight: .semibold))
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                }.padding(20).fixedSize(horizontal: false, vertical: true)
+                }.padding(12).fixedSize(horizontal: false, vertical: true)
                 Divider()
-                ScrollView {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 10) {
                         // Explicit columns prevent a long offer or button from
                         // expanding the hosting view beyond the screen budget.
-                        let columnWidth = max(0, (contentWidth - 46) / 2)
+                        let columnWidth = max(0, (contentWidth - 34) / 2)
                         let paired = state.installation.codex && state.installation.claude
-                        HStack(alignment: .top, spacing: 14) {
+                        HStack(alignment: .top, spacing: 10) {
                             if state.installation.codex {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    ProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
+                                    CompactProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
+                                                 resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Codex") },
+                                                 resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.hasCodexResetNotice ? "Reset request needs attention" : nil,
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
-                                    CodexResetStatus(state: state)
-                                }.frame(width: paired ? columnWidth : max(0, contentWidth - 32), alignment: .topLeading)
+                                        .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
                             if state.installation.claude && !state.needsClaudeConnection {
-                                ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
-                                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude)
-                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 32), alignment: .topLeading)
+                                CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
+                                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
+                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") })
+                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
                             if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
@@ -58,7 +54,7 @@ struct Dashboard: View {
                                         Text("Connect Claude…")
                                     }
                                 }.controlSize(.large)
-                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 32)).padding(.top, 16)
+                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
                             }
                         }
                         if !state.installation.codex && !state.installation.claude {
@@ -66,9 +62,8 @@ struct Dashboard: View {
                                 .font(.callout).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
-                        if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange) }
-                    }.padding(16)
-                }.frame(minHeight: 0, maxHeight: .infinity)
+                        if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
+                    }.padding(12).frame(maxHeight: .infinity, alignment: .top)
                 Divider()
                 HStack {
                     Text("5h and Weekly · % remaining").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -95,7 +90,92 @@ struct Dashboard: View {
     }
 }
 
-private struct CodexResetStatus: View {
+private struct CompactProviderCard: View {
+    let name: String
+    let color: Color
+    let snapshot: UsageSnapshot?
+    let error: String?
+    let now: Date
+    let staleAfter: TimeInterval
+    let open: () -> Void
+    let resetRowLimit: Int
+    let details: () -> Void
+    var resetNotice: String? = nil
+    var canReset: ((ResetOffer) -> Bool)? = nil
+    var useReset: ((ResetOffer) -> Void)? = nil
+    private var current: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ProviderIcon(name: name, size: 22)
+                Text(name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                if let plan = snapshot?.plan { Text(plan.capitalized).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1) }
+                Spacer(minLength: 2)
+                Button(action: open) { Image(systemName: "arrow.up.right.square") }
+                    .buttonStyle(.plain).help("Open \(name) usage").accessibilityLabel("Open \(name) usage")
+            }.padding(.bottom, 2)
+            if current, let snapshot {
+                UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false, compact: true)
+                UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false, compact: true)
+                Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
+                if name != "Claude" || snapshot.showsResetCredits {
+                    Divider()
+                    HStack {
+                        Label("Available resets", systemImage: "arrow.counterclockwise.circle").foregroundStyle(color)
+                        Spacer()
+                        Text(snapshot.resetCount.map(String.init) ?? "—").monospacedDigit()
+                    }.font(.system(size: 11, weight: .semibold))
+                    ForEach(Array(snapshot.offers.prefix(resetRowLimit))) { offer in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(offer.title).font(.system(size: 11, weight: .medium))
+                                    .lineLimit(1).help(offer.title).frame(maxWidth: .infinity, alignment: .leading)
+                                if name == "Codex", offer.supportsDirectRedemption, let useReset {
+                                    Button("Use reset…") { useReset(offer) }
+                                        .font(.system(size: 10)).controlSize(.small)
+                                        .disabled(canReset?(offer) != true)
+                                }
+                            }
+                            Text(expiry(offer)).font(.system(size: 10)).foregroundStyle(.secondary)
+                                .lineLimit(1).help(expiry(offer))
+                        }
+                    }
+                    if snapshot.offers.isEmpty {
+                        Text(snapshot.resetCount == 0 ? "No resets available" : "Expiry details not reported")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    } else if snapshot.offers.count > resetRowLimit {
+                        Button("View all \(snapshot.offers.count) reset offers…", action: details)
+                            .font(.system(size: 10)).buttonStyle(.link)
+                    }
+                }
+            } else {
+                Label("Live usage unavailable", systemImage: "wifi.exclamationmark")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
+                Text(error ?? "Current usage cannot be verified.").font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(2).help(error ?? "Current usage cannot be verified.")
+            }
+            if let resetNotice {
+                Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)
+            }
+            Button("Details…", action: details).font(.system(size: 11)).buttonStyle(.link)
+                .help("Open all usage, reset expiry and plan details in a separate window")
+        }.padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.06)))
+    }
+    private func expiry(_ offer: ResetOffer) -> String {
+        let count = name == "Claude" ? offer.remainingCount.map { "\($0) left · " } ?? "" : ""
+        guard let date = offer.expiresAt else { return count + (offer.expiryText ?? "Expiry not reported") }
+        let prefix = date <= now ? "Expired" : "Expires"
+        return "\(count)\(prefix) \(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))"
+    }
+}
+
+struct CodexResetStatus: View {
     @ObservedObject var state: AppState
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -114,7 +194,7 @@ private struct CodexResetStatus: View {
     }
 }
 
-private struct ProviderCard: View {
+struct ProviderCard: View {
     let name: String
     let color: Color
     let snapshot: UsageSnapshot?
@@ -295,6 +375,7 @@ private struct UsageRow: View {
     let color: Color
     let now: Date
     let stale: Bool
+    var compact = false
     var pending: Bool { window?.awaitingReset(at: now) == true }
     var visibleWindow: UsageWindow? { !stale && pending ? nil : window }
     var body: some View {
@@ -306,13 +387,15 @@ private struct UsageRow: View {
                     .font(.system(size: 13, weight: .semibold)).monospacedDigit()
             }
             if let window = visibleWindow {
-                Text("\(window.used.formatted(.number.precision(.fractionLength(0...1))))% used\(stale ? " then" : "")").font(.system(size: 10)).foregroundStyle(.secondary)
+                if !compact {
+                    Text("\(window.used.formatted(.number.precision(.fractionLength(0...1))))% used\(stale ? " then" : "")").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
                 ProgressView(value: Double(window.remaining), total: 100)
                     .tint(stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color)
                     .accessibilityLabel("\(title), \(window.remaining) percent remaining\(stale ? " at the saved reading time" : "")")
                 if let reset = window.resetsAt {
                     Text(stale ? "Reset reported for \(reset.formatted(.dateTime.day().month(.abbreviated).hour().minute()))" : "Resets in \(countdown(reset, now: now)) · \(reset.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .font(.system(size: compact ? 10 : 11)).foregroundStyle(.secondary).lineLimit(compact ? 1 : nil)
                         .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 } else { Text("Reset time not reported").font(.system(size: 11)).foregroundStyle(.secondary) }
             }

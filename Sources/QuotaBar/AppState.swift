@@ -22,6 +22,7 @@ import QuotaCore
     @Published var settingsError: String?
     private let claudeProvider = ClaudeProvider()
     private var claudeConnection: ClaudeConnectionWindow?
+    private var providerDetails: ProviderDetailsWindow?
     private var timer: Timer?
     private var localTimer: Timer?
     private var statusLineModified: Date?
@@ -167,6 +168,13 @@ import QuotaCore
             }
         }
         claudeConnection?.show()
+    }
+    var hasCodexResetNotice: Bool {
+        pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil
+    }
+    func showDetails(for provider: String) {
+        if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
+        providerDetails?.show(provider: provider)
     }
     private func verifyClaudeConnection() async -> String? {
         // Opening setup is immediate, even when a background CLI read is

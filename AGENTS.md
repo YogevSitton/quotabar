@@ -22,6 +22,10 @@ codesign --verify --deep --strict dist/QuotaBar.app
 
 The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed.
 
+## Popup layout
+
+The human does not want scrolling inside the menu popup. Keep both provider summaries side by side, with compact usage windows and reset expiry rows. Long descriptions, additional/model limits, historical values, large inventories and reset-recovery status belong in the separate resizable Details window. Preserve access to every reported field and the existing reset confirmation safeguards.
+
 ## Data and credential rules
 
 - Unknown, unavailable, or malformed data must stay unknown; never turn it into zero usage, full availability, or zero credits.
