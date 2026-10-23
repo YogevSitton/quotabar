@@ -9,6 +9,9 @@ import SwiftUI
         (name == "Claude" ? claude : codex).copy() as! NSImage
     }
     private static func load(resource: String, applications: [String], identifiers: [String]) -> NSImage {
+        // Render committed vector mark paths ourselves; never crop screenshots.
+        if let url = Bundle.main.url(forResource: resource, withExtension: "pdf") ?? Bundle.module.url(forResource: resource, withExtension: "pdf"),
+           let image = NSImage(contentsOf: url) { image.isTemplate = false; return image }
         let home = FileManager.default.homeDirectoryForCurrentUser
         let candidates = applications.flatMap { name in
             [URL(fileURLWithPath: "/Applications/\(name).app"), home.appendingPathComponent("Applications/\(name).app")]

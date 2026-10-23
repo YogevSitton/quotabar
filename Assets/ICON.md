@@ -1,7 +1,12 @@
-# QuotaBar app icon
+# QuotaBar and provider icons
 
-Created with the built-in image-generation tool. `QuotaBar.png` is the transparent master. `scripts/build-icon.sh` creates the macOS ICNS file with 16–1024 pixel representations; `scripts/build.sh` packages it, sets CFBundleIconFile, and signs the app. The same artwork appears in the popup header and as the fallback menu icon when no connected provider can be displayed.
+The current QuotaBar icon is original, code-drawn vector artwork: a usage dashboard with two remaining-quota meters and a clock for scheduled replenishment. The human selected this direction after rejecting the earlier abstract Q/ring icon. It contains no provider branding or text.
 
-Final generation prompt:
+`scripts/draw-app-icon.swift` is the editable source. It draws with native AppKit paths and produces vector PDFs plus transparent 1024px PNG previews. `scripts/build-icon.sh` generates the app's standard 16–1024px macOS ICNS representations. The in-app header and fallback menu icon load the PDF; Finder uses the bundled ICNS. No image-generation tool is used for the replacement artwork.
 
-> Use case: logo-brand. Asset type: finished macOS app icon for QuotaBar, a menu-bar app that tracks remaining AI subscription usage. Generate ONE square 1024 by 1024 icon, straight-on orthographic, not a mockup. A finely crafted dark midnight navy rounded-square macOS tile, centered with standard macOS icon safe margins and a genuinely transparent exterior. On the tile: a bold luminous teal circular quota-meter ring with a small clean gap at lower right and a short orange accent segment near that gap, suggesting a subtle Q silhouette. Inside the ring are exactly two simple horizontal rounded quota bars, the upper bar longer than the lower, in soft white/teal. Strong simple silhouette that reads at 32 px. Restrained premium native macOS depth: smooth ceramic/glass-like bevels and soft controlled lighting, crisp edges, no glitter or noise, no excessive bloom. Balanced centered composition, no perspective or tilt. No letters, words, numbers, text, wordmark, provider logos, watermark, background scenery, or extra objects. Outer canvas must be transparent, not a checkerboard drawing.
+Provider symbols are unchanged vendor vector paths, rendered locally onto simple app-icon tiles. They identify integrations and are not QuotaBar's own branding. They are neither screenshot crops nor approximate hand redraws:
+
+- `ChatGPT-mark.svg`: the 20×20 ChatGPT symbol in the navigation at https://chatgpt.com/, read from its rendered SVG on 23 October 2026. OpenAI owns this mark. See https://openai.com/brand/.
+- `Claude-mark.svg`: the 125×125 Claude symbol path from the header wordmark at https://claude.com/, read from its rendered SVG on 23 October 2026. Anthropic owns this mark.
+
+The renderer supports the absolute SVG path commands used by these committed assets and fails on unsupported syntax. Provider PDFs are preferred in both the menu and dashboard. Installed application icons and bundled ICNS files remain fallbacks if a PDF cannot load.

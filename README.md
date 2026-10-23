@@ -12,7 +12,7 @@ For development with either Claude or Codex, read [AGENTS.md](AGENTS.md). No pub
 
 Open `dist/QuotaBar.app`. Click its menu bar item to open the usage popup. Clicking outside closes it; reopening the app shows the same popup instead of a separate persistent window.
 
-The menu bar uses the ChatGPT and Claude app icons, each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
+The menu bar uses locally rendered vector ChatGPT and Claude icons, each followed by **5h: 93% Weekly: 91%**, for example. Percentages always mean remaining usage. A dash means a current live value is unavailable. Providers without a detected local installation are hidden and are not polled. Codex detection recognizes its CLI, including the copy bundled in the desktop app. Claude detection recognizes the Desktop app or a standalone Claude Code CLI; QuotaBar's private downloaded sign-in helper alone does not count as an installed provider.
 
 Installed providers appear side by side in the popup. An installed but disconnected Claude shows only **Connect Claude…** in the popup and no menu bar percentages. Once live usage is available, its full card appears with usage windows, reset times, and any reported reset grants. Codex still needs a valid ChatGPT subscription sign-in and a reachable usage service, even when installed. Cached Codex values remain explicitly historical; expired windows never supply current percentages. Dates follow the Mac's timezone, including daylight-saving changes.
 
@@ -36,6 +36,8 @@ The user-triggered sign-in is handled by Anthropic's official Claude Code helper
 Development builds use an ad-hoc signature. Its designated requirement is tied to the current binary hash, so rebuilding can invalidate a previous Always Allow decision. Proper, stable certificate signing is needed for reliable trust across updates. Set `QUOTABAR_SIGN_IDENTITY` to an existing appropriate signing identity when building for that purpose; the build never changes Keychain ACLs, creates certificates, or relaxes trust checks automatically. The legacy silent-access compatibility calls are deprecated SDK APIs used deliberately alongside LAContext for macOS login-keychain protection; they are serialized and restore the previous interaction setting.
 
 If the saved sign-in expires or is rejected, choose **Connect Claude** and sign in again. This is an explicit user action, not automatic token refresh. A successful browser sign-in is followed by a live usage check; an incomplete connection is never labelled successful.
+
+QuotaBar still accesses Claude Code’s Keychain token for independent live polling. Suppressing repeated prompts did not remove that access. The official CLI handles sign-in only; it is not currently the usage reader. Claude Code documents an interactive `/usage` panel and status-line quota fields, but no matching standalone quota JSON/RPC was found in the reviewed CLI reference. The status-line exporter can avoid QuotaBar handling credentials, but supplies readings only from an active Claude Code session and does not provide reset-credit inventory. Switching to that route would require a separate connection-mode change; the current build has not done so.
 
 The usage request is:
 
@@ -81,7 +83,7 @@ python3 scripts/test-statusline-export.py
 
 The Claude diagnostic is non-interactive by default. Add `--allow-keychain` only to request a system access prompt. Diagnostics print percentages, source/sample time, and safe status messages; never credentials or account identifiers. Exit 2 indicates a fallback or connection issue, not verified live usage.
 
-The original app icon lives in `Assets/QuotaBar.png`, with its generation prompt in `Assets/ICON.md`. The build script regenerates all standard macOS icon sizes with `scripts/build-icon.sh` and sets the bundle icon automatically.
+The app icon represents two quota meters and a reset clock. Its editable vector drawing is `scripts/draw-app-icon.swift`; `Assets/QuotaBar.pdf` and the provider PDFs preserve the paths, and PNG files are previews. The build regenerates the artwork and standard macOS app-icon sizes, then sets the bundle icon automatically. Provider symbol paths come from the official sites, with provenance in `Assets/ICON.md`. No screenshots are used.
 
 Set `QUOTABAR_BUILD_PATH` to keep build intermediates outside the source directory. The build script produces an ad-hoc signed personal app in `dist/`. For a stable launch-at-login installation, move the app into Applications before enabling that option. This local build is not notarized for distribution.
 
@@ -103,4 +105,4 @@ Background monitoring remains read-only. The only quota mutation is the separate
 
 References: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Claude credential management](https://code.claude.com/docs/en/authentication#credential-management), [Claude status-line usage fields](https://code.claude.com/docs/en/statusline#rate-limit-usage), [Claude reset offers](https://support.claude.com/en/articles/17007452-what-is-a-limit-reset). The internal OAuth usage/reset-grant contract comes from the user-supplied brief and is not presented as a documented public API.
 
-Provider icons are the respective providers’ artwork, included only to identify the integrations. Installed application artwork is preferred, with bundled icons as fallbacks.
+Provider symbols remain the respective providers’ artwork, included only to identify the integrations. Locally rendered vector PDFs are preferred, with installed application artwork and bundled ICNS files as fallbacks.
