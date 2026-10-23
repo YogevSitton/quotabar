@@ -9,6 +9,12 @@ import QuotaCore
     @Published var claude: UsageSnapshot?
     @Published var codexError: String?
     @Published var claudeError: String?
+    @Published private(set) var redeemingCodex = false
+    @Published private(set) var pendingCodexReset: CodexResetAttempt?
+    @Published private(set) var codexResetMessage: String?
+    @Published private(set) var codexResetError: String?
+    @Published private(set) var resetRecoveryError: String?
+    private let resetStore = CodexResetStore()
     @Published var refreshingCodex = false
     @Published var refreshingClaude = false
     @Published var interval: Double = UserDefaults.standard.object(forKey: "refreshMinutes") as? Double ?? 1
@@ -20,6 +26,11 @@ import QuotaCore
     private var localTimer: Timer?
     private var statusLineModified: Date?
     var onChange: (() -> Void)?
+
+    init() {
+        do { pendingCodexReset = try resetStore.load() }
+        catch { resetRecoveryError = "A saved Codex reset request could not be read. Reset actions are disabled to prevent a duplicate. Check ChatGPT Usage before repairing the recovery file." }
+    }
 
     func start() {
         // Upgrade the old default once, preserving explicit manual/15-minute choices.
@@ -54,7 +65,7 @@ import QuotaCore
     func refresh() {
         updateInstallation()
         if installation.claude { refreshClaude() }
-        guard installation.codex, !refreshingCodex else { return }; refreshingCodex = true
+        guard installation.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
             let result = Result { try CodexProvider.read() }
             DispatchQueue.main.async {
@@ -75,6 +86,77 @@ import QuotaCore
             let result = await claudeProvider.read(allowInteraction: allowInteraction)
             self.claude = result.snapshot; self.claudeError = result.error
             self.refreshingClaude = false; self.onChange?()
+        }
+    }
+    func canUseCodexReset(_ offer: ResetOffer) -> Bool {
+        guard !redeemingCodex, !refreshingCodex, pendingCodexReset == nil, resetRecoveryError == nil,
+              codexError == nil, let codex else { return false }
+        return (try? CodexResetAttempt.validate(snapshot: codex, creditID: offer.id)) != nil
+    }
+    func confirmCodexReset(_ offer: ResetOffer) {
+        guard canUseCodexReset(offer), let snapshot = codex else { return }
+        do {
+            let attempt = try CodexResetAttempt(snapshot: snapshot, offer: offer)
+            let expiry = offer.expiresAt.map { $0.formatted(.dateTime.day().month().year().hour().minute().timeZone()) } ?? "Not reported"
+            let session = snapshot.session.map { "\($0.remaining)% remaining" } ?? "Unknown"
+            let weekly = snapshot.weekly.map { "\($0.remaining)% remaining" } ?? "Unknown"
+            guard confirmReset(title: "Use 1 saved Codex reset?",
+                message: "\(offer.title)\nExpires: \(expiry)\n\n5-hour usage: \(session)\nWeekly usage: \(weekly)\n\nIf accepted by Codex, this permanently consumes one saved reset. It cannot be undone. Only this selected credit will be requested.",
+                action: "Use 1 reset") else { return }
+            beginCodexReset(attempt, retrying: false)
+        } catch { codexResetError = error.localizedDescription }
+    }
+    func reviewPendingCodexReset() {
+        guard !redeemingCodex, !refreshingCodex, resetRecoveryError == nil, let pending = pendingCodexReset else { return }
+        guard confirmReset(title: "Resolve the saved Codex reset request?",
+            message: "\(pending.title)\nStarted \(pending.createdAt.formatted(.dateTime.day().month().hour().minute()))\n\nThe previous result is uncertain. This may already have consumed one reset. Retrying sends the exact same credit and request ID; it cannot select another credit. Codex will verify the signed-in account first. Nothing is retried automatically.",
+            action: "Retry same request") else { return }
+        beginCodexReset(pending, retrying: true)
+    }
+    private func confirmReset(title: String, message: String, action: String) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning; alert.messageText = title; alert.informativeText = message
+        // Cancel owns Return and Escape. A reset requires clicking its own button.
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: action).keyEquivalent = ""
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+    private func beginCodexReset(_ attempt: CodexResetAttempt, retrying: Bool) {
+        guard !redeemingCodex, !refreshingCodex, resetRecoveryError == nil else {
+            codexResetError = "Wait for the current operation, then confirm the reset again. Nothing was sent."
+            return
+        }
+        // The journal must be durable BEFORE the only mutating RPC can run.
+        do { try resetStore.save(attempt) }
+        catch {
+            codexResetError = "The reset request could not be saved safely. Nothing was sent."
+            return
+        }
+        pendingCodexReset = attempt; redeemingCodex = true
+        codexResetMessage = nil; codexResetError = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try CodexProvider.redeem(attempt, retryingSameRequest: retrying) }
+            DispatchQueue.main.async {
+                self.redeemingCodex = false
+                self.codex?.source = .cached
+                self.codex?.sourceName = "Codex reading before reset request"
+                switch result {
+                case .success(let outcome):
+                    self.codexResetMessage = outcome.message
+                    do {
+                        try self.resetStore.clear(attempt)
+                        self.pendingCodexReset = nil
+                    } catch {
+                        self.codexResetError = "Codex returned a definite result, but the recovery record could not be cleared. Review the saved request before starting another reset."
+                    }
+                case .failure(let error):
+                    let reason = (error as? UsageError)?.localizedDescription ?? "The reset result could not be confirmed."
+                    self.codexResetError = reason + " The original request is saved. Review it to retry the same request, or check ChatGPT Usage. No automatic retry will occur."
+                }
+                // Refresh only reads. Never infer new balances or redeem again.
+                self.onChange?(); self.refresh()
+            }
         }
     }
     func connectClaude() {

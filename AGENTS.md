@@ -26,7 +26,9 @@ The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a not
 
 - Unknown, unavailable, or malformed data must stay unknown; never turn it into zero usage, full availability, or zero credits.
 - Cached data belongs in the historical section with its original timestamp. Never show it as current in the dashboard or menu bar. Expired windows require a fresh reading.
-- Monitoring is read-only: no prompts, reset redemption, purchases, subscription changes, background token refresh, or credential writes.
+- Background monitoring is read-only: no prompts, purchases, subscription changes, background token refresh, or credential writes.
+- The human explicitly authorized manual reset capability. Codex redemption is allowed only after its own in-app confirmation, targets a specific account/credit, and must persist/reuse its idempotency key after uncertain results. Never automatically submit, retry, resume, or replay a reset, including after app restart. Claude resets hand off to the official Usage page for confirmation; do not invent an undocumented redemption call.
+- **Never exercise a reset action or send a live reset request during development or verification. The human explicitly forbids testing resets or spending any reset credits. Compile and statically review changes only unless the human changes this instruction.**
 - Only an explicit user-triggered official Claude Code sign-in helper may save its own credentials. Do not add custom OAuth token refresh or scrape encrypted browser/Desktop credential stores.
 - Background Keychain reads must not prompt. Keep bearer tokens, cookies, authorization URLs with private query parameters, and account identifiers out of logs, diagnostics, fixtures, screenshots, and commits.
 - Never commit runtime caches, downloaded helper binaries, local account data, app bundles, or credential files. Use synthetic test fixtures.

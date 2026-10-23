@@ -15,6 +15,7 @@ public struct ResetOffer: Identifiable, Equatable {
     public let expiresAt: Date?
     public let detail: String?
     public let expiryText: String?
+    public var supportsDirectRedemption = false
     public var remainingCount: Int? = 1
     public var kind: String?
     public var isNext = false
@@ -44,6 +45,7 @@ public struct ExtraUsage {
 }
 
 public struct UsageSnapshot {
+    public var accountID: String?
     public var source: ReadingSource = .live
     public var sourceName: String?
     public var showsResetCredits = true
@@ -98,12 +100,16 @@ public enum UsageParser {
         let offers = (summary?["credits"] as? [[String: Any]] ?? []).compactMap { row -> ResetOffer? in
             guard row["status"] as? String == "available", let id = row["id"] as? String else { return nil }
             let expiry = unix(row["expiresAt"])
-            return ResetOffer(id: id, title: row["title"] as? String ?? "Usage reset", expiresAt: expiry,
-                              detail: expiry.map { $0 <= now ? "Expired since last provider update" : nil } ?? nil)
+            var offer = ResetOffer(id: id, title: row["title"] as? String ?? "Usage reset", expiresAt: expiry,
+                                   detail: row["description"] as? String)
+            offer.supportsDirectRedemption = row["resetType"] as? String == "codexRateLimits"
+            return offer
         }.sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
-        return UsageSnapshot(session: window(300), weekly: window(10080), plan: bucket["planType"] as? String,
+        var snapshot = UsageSnapshot(session: window(300), weekly: window(10080), plan: bucket["planType"] as? String,
             resetCount: number(summary?["availableCount"]).map { max(0, Int($0)) }, offers: offers,
             resetNote: summary == nil ? "Reset availability not reported by Codex." : nil, observedAt: now)
+        snapshot.accountID = root["accountId"] as? String
+        return snapshot
     }
     public static func claude(_ data: Data, now: Date = Date()) throws -> UsageSnapshot {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any], let usage = root["usage"] as? [String: Any] else {

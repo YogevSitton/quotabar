@@ -31,9 +31,12 @@ struct Dashboard: View {
                     VStack(spacing: 14) {
                         HStack(alignment: .top, spacing: 14) {
                             if state.installation.codex {
-                                ProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
-                                             error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex)
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
+                                                 error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
+                                                 canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
+                                    CodexResetStatus(state: state)
+                                }.frame(maxWidth: .infinity, alignment: .topLeading)
                             }
                             if state.installation.claude && !state.needsClaudeConnection {
                                 ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
@@ -83,6 +86,25 @@ struct Dashboard: View {
     }
 }
 
+private struct CodexResetStatus: View {
+    @ObservedObject var state: AppState
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if state.redeemingCodex {
+                HStack { ProgressView().controlSize(.small); Text("Checking and using the selected reset…") }
+            }
+            if let message = state.codexResetMessage { Text(message).foregroundStyle(.secondary) }
+            if let error = state.codexResetError { Text(error).foregroundStyle(.orange) }
+            if let error = state.resetRecoveryError { Text(error).foregroundStyle(.orange) }
+            if state.pendingCodexReset != nil && !state.redeemingCodex {
+                Button("Review saved reset request…", action: state.reviewPendingCodexReset)
+                    .disabled(state.refreshingCodex || state.resetRecoveryError != nil)
+                Button("Check ChatGPT Usage ↗", action: state.openCodex)
+            }
+        }.font(.caption).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 private struct ProviderCard: View {
     let name: String
     let color: Color
@@ -91,6 +113,8 @@ private struct ProviderCard: View {
     let now: Date
     let staleAfter: Double
     let open: () -> Void
+    var canReset: ((ResetOffer) -> Bool)? = nil
+    var useReset: ((ResetOffer) -> Void)? = nil
     var isCurrent: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -182,6 +206,14 @@ private struct ProviderCard: View {
                 } else if let count = snapshot.resetCount {
                     Text("\(count) available · expiry details not reported").font(.caption).foregroundStyle(.secondary)
                 }
+                if isCurrent && (snapshot.resetCount ?? 0) > 0 {
+                    if name == "Claude" {
+                        Button("Use a reset on Claude ↗", action: open)
+                            .help("Open Claude Usage, then select and confirm a reset there.")
+                    } else if snapshot.offers.isEmpty || snapshot.offers.contains(where: { !$0.supportsDirectRedemption }) {
+                        Button("Manage resets on ChatGPT ↗", action: open)
+                    }
+                }
                 if let note = snapshot.resetNote {
                     Text(note).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 }
@@ -216,6 +248,12 @@ private struct ProviderCard: View {
                 Text(expiryText).foregroundStyle(.secondary)
             } else { Text("Expiry not reported").foregroundStyle(.secondary) }
             if let detail = offer.detail { Text(detail).foregroundStyle(.secondary) }
+            if name == "Codex", isCurrent, offer.supportsDirectRedemption, let useReset {
+                Button("Use reset…") { useReset(offer) }
+                    .disabled(canReset?(offer) != true)
+                    .help("Requires a fresh account-verified reading. Review and confirm before one saved credit is used.")
+                    .padding(.top, 4)
+            }
         }.font(.caption).textSelection(.enabled)
     }
     private func extraUsage(_ extra: ExtraUsage) -> some View {
