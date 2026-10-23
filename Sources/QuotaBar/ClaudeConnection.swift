@@ -24,6 +24,36 @@ import QuotaCore
         guard !busy else { return }
         checkExisting()
     }
+    // This path is invoked only by the human's Connect action. Reuse the
+    // saved login first, then go straight to browser login when it is missing.
+    func connect() {
+        guard !busy else { return }
+        busy = true; connected = false; error = nil; issue = nil
+        loginURL = nil; manualCode = ""; outputBuffer = ""
+        message = "Checking your saved Claude Code sign-in…"
+        operation = Task {
+            do {
+                var result = await verify()
+                try Task.checkCancellation()
+                if result.issue == .helperMissing {
+                    _ = try await ClaudeHelper.prepare { [self] text in self.message = text }
+                    try Task.checkCancellation()
+                    result = await verify()
+                    try Task.checkCancellation()
+                }
+                if result.issue?.needsSignIn == true {
+                    let binary = try await ClaudeHelper.prepare { [self] text in self.message = text }
+                    try Task.checkCancellation()
+                    try startLogin(binary)
+                } else { finishVerification(result) }
+            } catch {
+                guard !Task.isCancelled else { return }
+                busy = false; waitingForBrowser = false
+                self.error = (error as? UsageError)?.localizedDescription ?? "Claude could not connect. Try again later."
+                message = "Claude connection needs attention."
+            }
+        }
+    }
     func checkExisting() {
         guard !busy else { return }
         busy = true; connected = false; error = nil; issue = nil
@@ -91,11 +121,11 @@ import QuotaCore
         process = child; input = stdin; output = stdout
         do { try child.run() } catch { cleanupProcess(); throw error }
         waitingForBrowser = true
-        message = "Finish signing in to Claude in your browser. This window will update automatically."
+        message = "Finish signing in to Claude in your browser. Usage will refresh automatically."
         timeout = Task {
             try? await Task.sleep(for: .seconds(600))
             guard !Task.isCancelled, process === child else { return }
-            cancel(); error = "Sign-in timed out. Choose Sign in with Claude to try again."
+            cancel(); error = "Sign-in timed out. Connect Claude again to retry."
         }
     }
     private func receive(_ data: Data) {
@@ -151,6 +181,32 @@ import QuotaCore
     }
 }
 
+struct ClaudeConnectionSummary: View {
+    @ObservedObject var model: ClaudeConnectionModel
+    let details: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                ProviderIcon(name: "Claude", size: 22)
+                Text(model.busy ? "Connecting Claude…" : "Claude connection").font(.system(size: 13, weight: .semibold))
+                if model.busy { ProgressView().controlSize(.small) }
+            }
+            Text(model.error ?? model.message).font(.caption)
+                .foregroundStyle(model.error == nil ? Color.secondary : Color.orange)
+                .lineLimit(2).help(model.error ?? model.message)
+            HStack {
+                if model.busy {
+                    Button("Cancel", action: model.cancel)
+                    if model.waitingForBrowser { Button("Sign-in help…", action: details) }
+                } else {
+                    Button("Try again", action: model.connect)
+                    Button("Details…", action: details)
+                }
+            }.font(.caption)
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct ClaudeConnectionView: View {
     @ObservedObject var model: ClaudeConnectionModel
     let close: () -> Void
@@ -203,11 +259,15 @@ private struct ClaudeConnectionView: View {
 }
 
 @MainActor final class ClaudeConnectionWindow {
-    private let model: ClaudeConnectionModel
+    let model: ClaudeConnectionModel
     private var window: NSWindow?
     init(verify: @escaping () async -> ClaudeReadResult) { model = ClaudeConnectionModel(verify: verify) }
-    func show() {
-        model.prepareForPresentation()
+    func connect() {
+        window?.close()
+        model.connect()
+    }
+    func show(recheck: Bool = true) {
+        if recheck { model.prepareForPresentation() }
         if window == nil {
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 510, height: 390),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)

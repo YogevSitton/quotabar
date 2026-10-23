@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 import QuotaCore
+import Combine
 
 @MainActor final class AppState: ObservableObject {
     @Published var installation = ProviderInstallation.detect()
@@ -22,7 +23,8 @@ import QuotaCore
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var settingsError: String?
     private let claudeProvider = ClaudeProvider()
-    private var claudeConnection: ClaudeConnectionWindow?
+    @Published private(set) var claudeConnection: ClaudeConnectionWindow?
+    private var claudeConnectionUpdates: AnyCancellable?
     private var providerDetails: ProviderDetailsWindow?
     private var timer: Timer?
     private var localTimer: Timer?
@@ -163,14 +165,25 @@ import QuotaCore
             }
         }
     }
-    func connectClaude() {
-        if claudeConnection == nil {
-            claudeConnection = ClaudeConnectionWindow { [weak self] in
-                guard let self else { return ClaudeReadResult(snapshot: nil, error: "The app is no longer running.", issue: .usageUnavailable) }
-                return await self.verifyClaudeConnection()
-            }
+    private func ensureClaudeConnection() -> ClaudeConnectionWindow {
+        if let claudeConnection { return claudeConnection }
+        let connection = ClaudeConnectionWindow { [weak self] in
+            guard let self else { return ClaudeReadResult(snapshot: nil, error: "The app is no longer running.", issue: .usageUnavailable) }
+            return await self.verifyClaudeConnection()
         }
-        claudeConnection?.show()
+        claudeConnection = connection
+        claudeConnectionUpdates = connection.model.objectWillChange.sink { [weak self] in
+            // Published values finish changing before the popup's size is read.
+            Task { @MainActor in self?.objectWillChange.send(); self?.onChange?() }
+        }
+        return connection
+    }
+    func connectClaude() { ensureClaudeConnection().connect() }
+    func manageClaudeConnection() { ensureClaudeConnection().show() }
+    func showClaudeConnectionHelp() { ensureClaudeConnection().show(recheck: false) }
+    var hasClaudeConnectionActivity: Bool {
+        guard let model = claudeConnection?.model else { return false }
+        return model.busy || (model.error != nil && (claudeError != nil || needsClaudeConnection))
     }
     var hasCodexResetNotice: Bool {
         pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil

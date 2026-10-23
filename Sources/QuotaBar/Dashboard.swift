@@ -14,7 +14,7 @@ struct Dashboard: View {
         maximumSize.height >= 462 ? 2 : maximumSize.height >= 422 ? 1 : 0
     }
     var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 382 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : 170, maximumSize.height))
+        NSSize(width: contentWidth, height: min(hasUsage ? 382 + CGFloat(resetRowLimit) * 40 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 230 : 170, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -41,13 +41,15 @@ struct Dashboard: View {
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
-                            if state.installation.claude && !state.needsClaudeConnection {
+                            if state.installation.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
+                                ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
+                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
+                            } else if state.installation.claude && !state.needsClaudeConnection {
                                 CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
                                              resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
-                            }
-                            if state.installation.claude && state.needsClaudeConnection {
+                            } else if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
                                     HStack(spacing: 8) {
                                         ProviderIcon(name: "Claude", size: 24)
@@ -78,7 +80,7 @@ struct Dashboard: View {
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Locate Codex CLI…", action: state.chooseCodex)
                         if state.installation.claude {
-                            Button("Claude connection…", action: state.connectClaude)
+                            Button("Claude connection…", action: state.manageClaudeConnection)
                             Button("Open Claude Usage…", action: state.openClaude)
                         }
                         Divider()
