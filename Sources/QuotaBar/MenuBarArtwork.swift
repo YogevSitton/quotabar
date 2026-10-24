@@ -35,17 +35,27 @@ struct MenuBarEntry {
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
-    func menuLabel(at now: Date) -> String {
-        if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true { return weekly.menuValue(at: now) }
-        return "\(session.menuValue(at: now))/\(weekly.menuValue(at: now))"
+    /// Each segment carries the percentage that tints it; nil stays uncolored.
+    func menuSegments(at now: Date) -> [(text: String, remaining: Int?)] {
+        if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true { return [(weekly.menuValue(at: now), nil)] }
+        return [(session.menuValue(at: now), session.remaining), ("/", nil), (weekly.menuValue(at: now), weekly.remaining)]
     }
+    func menuLabel(at now: Date) -> String { menuSegments(at: now).map(\.text).joined() }
     var tooltipSection: String {
         [name, session.tooltipLine("5h"), weekly.tooltipLine("Weekly")].joined(separator: "\n")
     }
 }
 
 @MainActor enum MenuBarArtwork {
-    static func image(entries: [MenuBarEntry], labels: [String], appearance: NSAppearance) -> NSImage {
+    /// Plain label color with plenty left, blending steadily into red from 50%
+    /// down to 10%. An exhausted window shows a countdown and stays uncolored.
+    static func color(remaining: Int?) -> NSColor {
+        guard let remaining, remaining > 0 else { return .labelColor }
+        let fraction = max(0, min(1, (50 - CGFloat(remaining)) / 40))
+        guard fraction > 0, let base = NSColor.labelColor.usingColorSpace(.sRGB) else { return .labelColor }
+        return base.blended(withFraction: fraction, of: .systemRed) ?? .labelColor
+    }
+    static func image(entries: [MenuBarEntry], segments: [[(text: String, remaining: Int?)]], appearance: NSAppearance) -> NSImage {
         // Keep the bar to one logo and 5h%/weekly% per connected provider.
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         // Reserve the widest percentage pair or countdown so 9% → 10%, a reset
@@ -69,10 +79,12 @@ struct MenuBarEntry {
                     ProviderArtwork.menuImage(for: entry.name, appearance: appearance)
                         .draw(in: NSRect(x: x, y: 2, width: iconSize, height: iconSize))
                     x += iconSize + iconTextGap
-                    let label = labels[index] as NSString
-                    let height = label.size(withAttributes: [.font: font]).height
-                    label.draw(at: NSPoint(x: x, y: (22 - height) / 2),
-                               withAttributes: [.font: font, .foregroundColor: NSColor.labelColor])
+                    let label = NSMutableAttributedString()
+                    for segment in segments[index] {
+                        label.append(NSAttributedString(string: segment.text, attributes: [
+                            .font: font, .foregroundColor: color(remaining: segment.remaining)]))
+                    }
+                    label.draw(at: NSPoint(x: x, y: (22 - label.size().height) / 2))
                     x += widths[index]
                 }
             }

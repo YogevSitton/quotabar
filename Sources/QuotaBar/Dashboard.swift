@@ -40,7 +40,6 @@ struct Dashboard: View {
                                     CompactProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                                                  resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Codex") },
-                                                 limits: { state.showDetails(for: "Codex", limitsOnly: true) },
                                                  resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.hasCodexResetNotice ? "Reset request needs attention" : nil,
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
@@ -51,8 +50,7 @@ struct Dashboard: View {
                             } else if state.installation.claude && !state.needsClaudeConnection {
                                 CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") },
-                                             limits: { state.showDetails(for: "Claude", limitsOnly: true) }, retry: state.retryClaude,
+                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude,
                                              nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             } else if state.installation.claude && state.needsClaudeConnection {
@@ -109,7 +107,6 @@ private struct CompactProviderCard: View {
     let open: () -> Void
     let resetRowLimit: Int
     let details: () -> Void
-    let limits: () -> Void
     var resetNotice: String? = nil
     var canReset: ((ResetOffer) -> Bool)? = nil
     var useReset: ((ResetOffer) -> Void)? = nil
@@ -185,10 +182,7 @@ private struct CompactProviderCard: View {
             if let resetNotice {
                 Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)
             }
-            if current, let snapshot, !snapshot.additionalWindows.isEmpty || snapshot.extraUsage != nil {
-                Button("More usage limits…", action: limits).font(.system(size: 11)).buttonStyle(.link)
-                    .help("Open additional model limits and extra usage")
-            } else if !current, snapshot != nil {
+            if !current, snapshot != nil {
                 Button("Last saved reading…", action: details).font(.system(size: 11)).buttonStyle(.link)
                     .help("View historical usage with its original sample time")
             }
@@ -234,8 +228,6 @@ struct ProviderCard: View {
     let open: () -> Void
     var canReset: ((ResetOffer) -> Bool)? = nil
     var useReset: ((ResetOffer) -> Void)? = nil
-    // Opened from "More usage limits…": show only what the popup card omits.
-    var limitsOnly = false
     var isCurrent: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -251,10 +243,7 @@ struct ProviderCard: View {
                     Button(action: open) { Text("Usage ↗") }.font(.caption)
                 }
             }
-            if isCurrent, let snapshot, limitsOnly {
-                moreLimits(snapshot)
-                Text("Fetched \(sampleTime(snapshot))").font(.system(size: 10)).foregroundStyle(.secondary)
-            } else if isCurrent, let snapshot {
+            if isCurrent, let snapshot {
                 windows(snapshot, historical: false)
                 Text("Fetched \(sampleTime(snapshot))").font(.system(size: 10)).foregroundStyle(.secondary)
                 details(snapshot, historical: false)
@@ -305,21 +294,6 @@ struct ProviderCard: View {
     @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical)
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical)
-    }
-    @ViewBuilder private func moreLimits(_ snapshot: UsageSnapshot) -> some View {
-        if snapshot.additionalWindows.isEmpty && snapshot.extraUsage == nil {
-            Text("No additional limits reported.").font(.caption).foregroundStyle(.secondary)
-        }
-        if !snapshot.additionalWindows.isEmpty {
-            Text("Additional plan limits").font(.system(size: 12, weight: .semibold))
-            ForEach(snapshot.additionalWindows) { item in
-                UsageRow(title: item.title, window: item.window, color: color, now: now, stale: false)
-            }
-        }
-        if let extra = snapshot.extraUsage {
-            if !snapshot.additionalWindows.isEmpty { Divider() }
-            extraUsage(extra)
-        }
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         if !snapshot.additionalWindows.isEmpty {
@@ -439,7 +413,7 @@ private struct UsageRow: View {
                 if !compact {
                     Text("\(window.used.formatted(.number.precision(.fractionLength(0...1))))% used\(stale ? " then" : "")").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                UsageBar(remaining: window.remaining, color: stale || pending ? .gray : usageTint(color, remaining: window.remaining))
+                UsageBar(remaining: window.remaining, color: stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color)
                     .accessibilityLabel("\(title), \(window.remaining) percent remaining\(stale ? " at the saved reading time" : "")")
                 if let reset = window.resetsAt {
                     Text(stale ? "Reset reported for \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))" : "Auto reset: \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))")
@@ -471,26 +445,6 @@ private struct UsageBar: View {
             }
         }.frame(height: 5)
     }
-}
-
-/// Keeps the provider color while plenty is left, then walks the hue toward
-/// red so the bar gets steadily redder as the window approaches zero.
-func usageTint(_ base: Color, remaining: Int) -> Color {
-    let start = 50.0, end = 10.0
-    let t = max(0, min(1, (start - Double(remaining)) / (start - end)))
-    guard t > 0, let rgb = NSColor(base).usingColorSpace(.sRGB) else { return base }
-    guard t < 1 else { return .red }
-    var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-    rgb.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-    let red = NSColor.systemRed.usingColorSpace(.sRGB) ?? .red
-    var redHue: CGFloat = 0, redSaturation: CGFloat = 0, redBrightness: CGFloat = 0
-    red.getHue(&redHue, saturation: &redSaturation, brightness: &redBrightness, alpha: &alpha)
-    // Approach red from whichever side of the hue circle is nearer.
-    let targetHue = hue > 0.75 ? 1 + redHue : redHue
-    let mix = CGFloat(t)
-    return Color(nsColor: NSColor(hue: (hue + (targetHue - hue) * mix).truncatingRemainder(dividingBy: 1),
-                                  saturation: saturation + (redSaturation - saturation) * mix,
-                                  brightness: brightness + (redBrightness - brightness) * mix, alpha: 1))
 }
 
 func countdown(_ date: Date, now: Date) -> String {
