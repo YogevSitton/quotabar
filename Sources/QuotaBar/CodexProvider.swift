@@ -3,9 +3,8 @@ import QuotaCore
 
 enum CodexProvider {
     static func executable() -> String? {
-        let custom = UserDefaults.standard.string(forKey: "codexPath") ?? ""
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let candidates = [custom,
+        let candidates = [
             "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
             "/opt/homebrew/bin/codex", "/usr/local/bin/codex", "\(home)/.local/bin/codex",
@@ -67,7 +66,7 @@ private final class CodexSession {
 
     init() throws {
         guard let binary = CodexProvider.executable() else {
-            throw UsageError.message("Choose the Codex CLI in Settings → Codex.")
+            throw UsageError.message("The Codex CLI was not found. Install Codex or the ChatGPT app.")
         }
         process.executableURL = URL(fileURLWithPath: binary)
         // npm-installed Codex starts through `env node`. Finder-launched apps

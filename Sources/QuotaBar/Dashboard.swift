@@ -4,18 +4,15 @@ import QuotaCore
 struct Dashboard: View {
     @ObservedObject var state: AppState
     let maximumSize: NSSize
-    private var contentWidth: CGFloat {
+    // Nil while measuring the natural content height; then the measured,
+    // screen-capped height so the popup has no empty space at the bottom.
+    var fixedHeight: CGFloat? = nil
+    var contentWidth: CGFloat {
         min(state.installation.codex && state.installation.claude ? 700 : 380, maximumSize.width)
-    }
-    private var hasUsage: Bool {
-        state.installation.codex || (state.installation.claude && !state.needsClaudeConnection)
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
         return available >= 478 ? 2 : available >= 424 ? 1 : 0
-    }
-    var preferredSize: NSSize {
-        NSSize(width: contentWidth, height: min(hasUsage ? 370 + CGFloat(resetRowLimit) * 54 + (state.settingsError == nil ? 0 : 22) : state.hasClaudeConnectionActivity ? 210 : 150, maximumSize.height))
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -72,8 +69,8 @@ struct Dashboard: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
-                    }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: .infinity, alignment: .top)
-            }.frame(width: preferredSize.width, height: preferredSize.height).background(.regularMaterial)
+                    }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: fixedHeight == nil ? nil : .infinity, alignment: .top)
+            }.frame(width: contentWidth, height: fixedHeight).background(.regularMaterial)
         }
     }
 }
@@ -108,9 +105,11 @@ private struct CompactProviderCard: View {
             if current, let snapshot {
                 UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false, compact: true)
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false, compact: true)
-                Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
+                if name != "Claude" {
+                    Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
+                }
                 if name != "Claude" || snapshot.showsResetCredits {
                     Divider()
                     Label("Available resets", systemImage: "arrow.counterclockwise.circle")
@@ -127,12 +126,9 @@ private struct CompactProviderCard: View {
                                         .disabled(canReset?(offer) != true)
                                 }
                             }
-                            Text(expiry(offer)).font(.system(size: 10)).foregroundStyle(.secondary)
+                            Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(shortCountdown($0, now: now)))" : "" } ?? ""))
+                                .font(.system(size: 10)).foregroundStyle(.secondary)
                                 .lineLimit(1).help(expiry(offer))
-                            if let expiry = offer.expiresAt, expiry > now {
-                                Text("Expires in \(countdown(expiry, now: now))")
-                                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                            }
                         }
                     }
                     if snapshot.offers.isEmpty {
@@ -378,14 +374,13 @@ private struct UsageRow: View {
                 UsageBar(remaining: window.remaining, color: stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color)
                     .accessibilityLabel("\(title), \(window.remaining) percent remaining\(stale ? " at the saved reading time" : "")")
                 if let reset = window.resetsAt {
-                    Text(stale ? "Reset reported for \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))" : "Auto reset: \(reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))")
+                    // The countdown follows the reset time to keep the popup
+                    // short; the timezone stays in the tooltip.
+                    let when = reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+                    Text(stale ? "Reset reported for \(when)" : "Auto reset: \(when) (\(shortCountdown(reset, now: now)))")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(stale ? .secondary : .primary)
                         .lineLimit(compact ? 1 : nil).minimumScaleFactor(0.85)
                         .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
-                    if !stale {
-                        Text("In \(countdown(reset, now: now)) · \(TimeZone.current.abbreviation(for: reset) ?? TimeZone.current.identifier)")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
                 } else { Text("Automatic reset time not reported").font(.system(size: 11)).foregroundStyle(.secondary) }
             }
         }
@@ -407,6 +402,15 @@ private struct UsageBar: View {
             }
         }.frame(height: 5)
     }
+}
+
+/// Countdown for use in parentheses after a time, such as "1d:1h" or "2h:59m".
+func shortCountdown(_ date: Date, now: Date) -> String {
+    let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
+    if minutes < 1 { return "<1m" }
+    if minutes >= 1440 { return "\(minutes / 1440)d:\((minutes % 1440) / 60)h" }
+    if minutes >= 60 { return "\(minutes / 60)h:\(minutes % 60)m" }
+    return "\(minutes)m"
 }
 
 func countdown(_ date: Date, now: Date) -> String {

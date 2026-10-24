@@ -193,12 +193,6 @@ import Combine
         return connection
     }
     func connectClaude() { ensureClaudeConnection().connect() }
-    // Explicit user action only: shows the connection window and starts the
-    // official browser sign-in so another account can be chosen.
-    func switchClaudeAccount() {
-        let connection = ensureClaudeConnection()
-        connection.show(recheck: false); connection.model.signIn()
-    }
     func showSettings() {
         if settingsWindow == nil { settingsWindow = SettingsWindow(state: self) }
         settingsWindow?.show()
@@ -234,19 +228,6 @@ import Combine
         claudeIssue?.needsConnection == true
     }
     func openClaude() { NSWorkspace.shared.open(URL(string: "https://claude.ai/settings/usage")!) }
-    func chooseCodex() {
-        let panel = NSOpenPanel(); panel.title = "Locate the Codex executable"
-        panel.canChooseFiles = true; panel.canChooseDirectories = false; panel.showsHiddenFiles = true
-        NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url {
-            guard FileManager.default.isExecutableFile(atPath: url.path) else { settingsError = "Choose an executable Codex CLI file."; return }
-            UserDefaults.standard.set(url.path, forKey: "codexPath"); settingsError = nil
-            updateInstallation(); refresh()
-        }
-    }
-    func useAutomaticCodexPath() {
-        UserDefaults.standard.removeObject(forKey: "codexPath"); updateInstallation(); refresh()
-    }
     func setLogin(_ enabled: Bool) {
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }

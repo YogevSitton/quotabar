@@ -130,13 +130,20 @@ import QuotaCore
         // Reserve space for the popover arrow, border and a clear screen margin.
         let available = NSSize(width: max(1, screen.visibleFrame.width - 64),
                                height: max(1, screen.visibleFrame.height - 64))
-        let dashboard = Dashboard(state: state, maximumSize: available)
-        let size = dashboard.preferredSize
+        var dashboard = Dashboard(state: state, maximumSize: available)
+        // Measure the laid-out content once, then fix that height so AppKit
+        // places the popup from a precomputed size.
+        let natural = NSHostingController(rootView: dashboard.fixedSize(horizontal: false, vertical: true))
+            .sizeThatFits(in: NSSize(width: dashboard.contentWidth, height: available.height)).height
+        let size = NSSize(width: dashboard.contentWidth, height: min(available.height, ceil(natural)))
+        dashboard.fixedHeight = size.height
         if let hostingController {
             guard maximumPopoverSize != available || popover.contentSize != size else { return }
             hostingController.rootView = dashboard
             hostingController.preferredContentSize = size
-            hostingController.view.setFrameSize(size)
+            // While open, NSPopover resizes its own content view; setting the
+            // frame directly leaves its chrome at the old height.
+            if !popover.isShown { hostingController.view.setFrameSize(size) }
         } else {
             let controller = NSHostingController(rootView: dashboard)
             // The dashboard owns its screen-constrained size. Do not let a

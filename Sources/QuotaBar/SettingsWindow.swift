@@ -9,7 +9,7 @@ import SwiftUI
     init(state: AppState) { self.state = state }
     func show() {
         if window == nil {
-            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 260),
+            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 360, height: 100),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
             panel.title = "QuotaBar Settings"; panel.isReleasedWhenClosed = false
             panel.contentViewController = NSHostingController(rootView: SettingsView(state: state))
@@ -22,39 +22,12 @@ import SwiftUI
 
 private struct SettingsView: View {
     @ObservedObject var state: AppState
-    private var customCodexPath: String? {
-        UserDefaults.standard.string(forKey: "codexPath").flatMap { $0.isEmpty ? nil : $0 }
-    }
     var body: some View {
         Form {
-            Section {
-                Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
-            }
-            if state.installation.claude {
-                Section("Claude") {
-                    LabeledContent("Account") {
-                        Button("Switch Claude account…", action: state.switchClaudeAccount)
-                    }
-                }
-            }
-            Section("Codex") {
-                LabeledContent("Codex CLI") {
-                    Text(CodexProvider.executable() ?? "Not found")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
-                        .help(CodexProvider.executable() ?? "QuotaBar could not find the Codex CLI automatically.")
-                }
-                HStack {
-                    Spacer()
-                    if customCodexPath != nil {
-                        Button("Use automatic", action: state.useAutomaticCodexPath)
-                    }
-                    Button("Choose…", action: state.chooseCodex)
-                }
-            }
+            Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
             if let error = state.settingsError {
                 Text(error).font(.caption).foregroundStyle(.orange)
             }
-        }.formStyle(.grouped).frame(width: 440).fixedSize(horizontal: false, vertical: true)
+        }.formStyle(.grouped).frame(width: 360).fixedSize(horizontal: false, vertical: true)
     }
 }
