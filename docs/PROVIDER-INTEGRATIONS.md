@@ -24,7 +24,7 @@ The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a not
 
 ## Menu bar and popup layout
 
-The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position. Percentage changes must not resize the status item. Let AppKit place the popup from its precomputed content size; do not reintroduce manual or deferred window-origin corrections or repeatedly reapply unchanged sizes.
+The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). An exhausted 5h window shows its reset countdown in place of `0%` (`2h13m/45%`); an exhausted weekly window shows only the weekly countdown. Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position. Percentage changes must not resize the status item. Let AppKit place the popup from its precomputed content size; do not reintroduce manual or deferred window-origin corrections or repeatedly reapply unchanged sizes.
 
 Do not show a generic Details button when it only repeats the visible data. Use contextual links for extra/model limits, historical readings, reset overflow and recovery, and retain the full view under Options → Usage details. Give the header and footer clear top/bottom breathing room. Manual-reset rows show their exact expiry and an Expires in countdown, without a redundant total badge; retain underlying credit counts for validation and count-only inventories.
 

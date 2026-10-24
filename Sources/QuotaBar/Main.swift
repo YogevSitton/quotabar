@@ -78,20 +78,22 @@ import QuotaCore
         guard let button = statusItem.button else { return }
         let entries = state.menuEntries
         let description = entries.map(\.description).joined(separator: "; ")
+        let labels = entries.map { $0.menuLabel(at: Date()) }
+        let renderKey = description + "|" + labels.joined(separator: "|")
         let appearance = button.effectiveAppearance
         // A provider connecting/disconnecting must not move the anchor while
         // its popup is open. Apply that width change when the popup closes.
         let canChangeImage = !popover.isShown || renderedMenuProviderCount == entries.count
-        if canChangeImage && (renderedMenuDescription != description || renderedMenuAppearance != appearance.name) {
+        if canChangeImage && (renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name) {
             button.attributedTitle = NSAttributedString(string: "")
             if entries.isEmpty {
                 let image = AppArtwork.icon.copy() as! NSImage
                 image.size = NSSize(width: 20, height: 20)
                 button.image = image
             } else {
-                button.image = MenuBarArtwork.image(entries: entries, appearance: appearance)
+                button.image = MenuBarArtwork.image(entries: entries, labels: labels, appearance: appearance)
             }
-            renderedMenuDescription = description
+            renderedMenuDescription = renderKey
             renderedMenuAppearance = appearance.name
             renderedMenuProviderCount = entries.count
         }

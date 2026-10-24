@@ -4,6 +4,16 @@ struct MenuBarQuota {
     let remaining: Int?
     let resetsAt: Date?
     var percentage: String { remaining.map { "\($0)%" } ?? "-" }
+    var isExhausted: Bool { remaining == 0 }
+    /// An exhausted window shows time until its reset instead of 0%.
+    func menuValue(at now: Date) -> String {
+        guard isExhausted, let resetsAt, resetsAt > now else { return percentage }
+        let minutes = max(1, Int(ceil(resetsAt.timeIntervalSince(now) / 60)))
+        if minutes >= 1440 { return "\(minutes / 1440)d\((minutes % 1440) / 60)h" }
+        if minutes >= 600 { return "\(minutes / 60)h" }
+        if minutes >= 60 { return "\(minutes / 60)h\(minutes % 60)m" }
+        return "\(minutes)m"
+    }
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
     func tooltipLine(_ label: String) -> String {
@@ -23,19 +33,26 @@ struct MenuBarEntry {
     var description: String {
         "\(name): 5h: \(session.percentage), automatic reset \(session.resetTime); Weekly: \(weekly.percentage), automatic reset \(weekly.resetTime)"
     }
+    /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
+    /// weekly window blocks both, so it shows only the weekly countdown.
+    func menuLabel(at now: Date) -> String {
+        if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true { return weekly.menuValue(at: now) }
+        return "\(session.menuValue(at: now))/\(weekly.menuValue(at: now))"
+    }
     var tooltipSection: String {
         [name, session.tooltipLine("5h"), weekly.tooltipLine("Weekly")].joined(separator: "\n")
     }
 }
 
 @MainActor enum MenuBarArtwork {
-    static func image(entries: [MenuBarEntry], appearance: NSAppearance) -> NSImage {
+    static func image(entries: [MenuBarEntry], labels: [String], appearance: NSAppearance) -> NSImage {
         // Keep the bar to one logo and 5h%/weekly% per connected provider.
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        let labels = entries.map { "\($0.session.percentage)/\($0.weekly.percentage)" }
-        // Reserve the widest percentage pair so 9% → 10% or an unavailable
-        // reading never changes the status item's width beneath an open popup.
-        let slotWidth = ceil(("100%/100%" as NSString).size(withAttributes: [.font: font]).width)
+        // Reserve the widest percentage pair or countdown so 9% → 10%, a reset
+        // countdown or an unavailable reading never changes the item's width.
+        let slotWidth = ["100%/100%", "4h59m/99%", "6d23h"].map {
+            ceil(($0 as NSString).size(withAttributes: [.font: font]).width)
+        }.max() ?? 0
         let widths: [CGFloat] = entries.map { _ in slotWidth }
         let textWidth = widths.reduce(CGFloat.zero, +)
         let iconSize: CGFloat = 18

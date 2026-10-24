@@ -206,9 +206,9 @@ import Combine
     var hasCodexResetNotice: Bool {
         pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil
     }
-    func showDetails(for provider: String) {
+    func showDetails(for provider: String, limitsOnly: Bool = false) {
         if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
-        providerDetails?.show(provider: provider)
+        providerDetails?.show(provider: provider, limitsOnly: limitsOnly)
     }
     private func verifyClaudeConnection() async -> ClaudeReadResult {
         // Opening setup is immediate, even when a background CLI read is
