@@ -97,7 +97,7 @@ import QuotaCore
         }
         button.toolTip = entries.isEmpty
             ? "QuotaBar\nConnect an installed provider"
-            : (["QuotaBar — usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
+            : (["QuotaBar - usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
     }
     @objc private func woke() { state.refresh() }

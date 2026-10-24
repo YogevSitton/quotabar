@@ -22,8 +22,8 @@ cat > "$bundle/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>QuotaBar</string>
 <key>CFBundleIconFile</key><string>QuotaBar.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.7.14</string>
-<key>CFBundleVersion</key><string>26</string>
+<key>CFBundleShortVersionString</key><string>1.7.15</string>
+<key>CFBundleVersion</key><string>27</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

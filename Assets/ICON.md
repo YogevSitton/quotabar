@@ -2,7 +2,7 @@
 
 The current QuotaBar icon is original, code-drawn vector artwork: a usage dashboard with two remaining-quota meters and a fuel-style capacity gauge. The human selected this direction after rejecting the earlier abstract Q/ring icon, then requested a fuel gauge in place of the clock. It contains no provider branding or text.
 
-`scripts/draw-app-icon.swift` is the editable source. It draws with native AppKit paths and produces vector PDFs plus transparent 1024px PNG previews. `scripts/build-icon.sh` generates the app's standard 16–1024px macOS ICNS representations. The in-app header and fallback menu icon load the PDF; Finder uses the bundled ICNS. No image-generation tool is used for the replacement artwork.
+`scripts/draw-app-icon.swift` is the editable source. It draws with native AppKit paths and produces vector PDFs plus transparent 1024px PNG previews. `scripts/build-icon.sh` generates the app's standard 16-1024px macOS ICNS representations. The in-app header and fallback menu icon load the PDF; Finder uses the bundled ICNS. No image-generation tool is used for the replacement artwork.
 
 Provider symbols are unchanged vendor vector paths, rendered locally onto simple app-icon tiles. They identify integrations and are not QuotaBar's own branding. They are neither screenshot crops nor approximate hand redraws:
 

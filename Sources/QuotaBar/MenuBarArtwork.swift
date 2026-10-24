@@ -3,8 +3,8 @@ import AppKit
 struct MenuBarQuota {
     let remaining: Int?
     let resetsAt: Date?
-    var percentage: String { remaining.map { "\($0)%" } ?? "—" }
-    var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "—" }
+    var percentage: String { remaining.map { "\($0)%" } ?? "-" }
+    var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
     func tooltipLine(_ label: String) -> String {
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }

@@ -28,6 +28,10 @@ codesign --verify --deep --strict dist/QuotaBar.app
 
 The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed.
 
+## User-facing text
+
+Use the ASCII hyphen `-` for every authored dash, including missing-value placeholders, headings, tooltips, alerts, help text and documentation. Do not use long Unicode dashes. Preserve this convention in future changes.
+
 ## Menu bar and popup layout
 
 The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position. Percentage changes must not resize the status item. Let AppKit place the popup from its precomputed content size; do not reintroduce manual or deferred window-origin corrections or repeatedly reapply unchanged sizes.
