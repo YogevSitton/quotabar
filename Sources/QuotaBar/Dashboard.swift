@@ -21,14 +21,12 @@ struct Dashboard: View {
                     QuotaBarIcon(size: 24)
                     Text("QuotaBar").font(.system(size: 16, weight: .semibold))
                     Spacer()
-                    Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                        .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                    Menu {
-                        Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
-                    } label: { Image(systemName: "gearshape") }
-                        .menuStyle(.button).menuIndicator(.hidden).fixedSize().help("Settings")
                     Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power") }
                         .help("Quit QuotaBar").keyboardShortcut("q")
+                    Menu {
+                        Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
+                    } label: { Image(systemName: "ellipsis") }
+                        .menuStyle(.button).menuIndicator(.hidden).fixedSize().help("More")
                 }.padding(.horizontal, 16).padding(.vertical, 20)
                     .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()
