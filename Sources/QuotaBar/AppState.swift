@@ -19,13 +19,16 @@ import Combine
     private let resetStore = CodexResetStore()
     @Published var refreshingCodex = false
     @Published var refreshingClaude = false
-    @Published var interval: Double = UserDefaults.standard.object(forKey: "refreshMinutes") as? Double ?? 1
+    // Fixed one-minute cadence: Claude Code caches usage for 60 seconds, so
+    // faster reads return the same values, and slower ones only lag.
+    let interval: Double = 1
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var settingsError: String?
     private let claudeProvider = ClaudeProvider()
     @Published private(set) var claudeConnection: ClaudeConnectionWindow?
     private var claudeConnectionUpdates: AnyCancellable?
     private var providerDetails: ProviderDetailsWindow?
+    private var settingsWindow: SettingsWindow?
     private var timer: Timer?
     private var localTimer: Timer?
     private var claudeRetryTimer: Timer?
@@ -39,12 +42,6 @@ import Combine
     }
 
     func start() {
-        // Upgrade the old default once, preserving explicit manual/15-minute choices.
-        if !UserDefaults.standard.bool(forKey: "minutePollingEnabled") {
-            if interval == 5 { interval = 1 }
-            UserDefaults.standard.set(true, forKey: "minutePollingEnabled")
-        }
-        if interval > 0 && interval < 1 { interval = 1 }
         refresh(); schedule()
         localTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.checkStatusLineFile() }
@@ -63,7 +60,6 @@ import Combine
     }
     func schedule() {
         timer?.invalidate(); claudeRetryTimer?.invalidate()
-        UserDefaults.standard.set(interval, forKey: "refreshMinutes")
         guard interval > 0 else { return }
         timer = Timer.scheduledTimer(withTimeInterval: interval * 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
@@ -197,7 +193,16 @@ import Combine
         return connection
     }
     func connectClaude() { ensureClaudeConnection().connect() }
-    func manageClaudeConnection() { ensureClaudeConnection().show() }
+    // Explicit user action only: shows the connection window and starts the
+    // official browser sign-in so another account can be chosen.
+    func switchClaudeAccount() {
+        let connection = ensureClaudeConnection()
+        connection.show(recheck: false); connection.model.signIn()
+    }
+    func showSettings() {
+        if settingsWindow == nil { settingsWindow = SettingsWindow(state: self) }
+        settingsWindow?.show()
+    }
     func showClaudeConnectionHelp() { ensureClaudeConnection().show(recheck: false) }
     var hasClaudeConnectionActivity: Bool {
         guard let model = claudeConnection?.model else { return false }
@@ -235,8 +240,12 @@ import Combine
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url {
             guard FileManager.default.isExecutableFile(atPath: url.path) else { settingsError = "Choose an executable Codex CLI file."; return }
-            UserDefaults.standard.set(url.path, forKey: "codexPath"); refresh()
+            UserDefaults.standard.set(url.path, forKey: "codexPath"); settingsError = nil
+            updateInstallation(); refresh()
         }
+    }
+    func useAutomaticCodexPath() {
+        UserDefaults.standard.removeObject(forKey: "codexPath"); updateInstallation(); refresh()
     }
     func setLogin(_ enabled: Bool) {
         do {

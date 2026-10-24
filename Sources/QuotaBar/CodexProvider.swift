@@ -8,9 +8,21 @@ enum CodexProvider {
         let candidates = [custom,
             "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
-            "/opt/homebrew/bin/codex", "/usr/local/bin/codex", "\(home)/.local/bin/codex"]
+            "/opt/homebrew/bin/codex", "/usr/local/bin/codex", "\(home)/.local/bin/codex",
+            // Node-based installs. Apps opened from Finder do not inherit the
+            // shell PATH, so look in the usual global package folders directly.
+            "\(home)/.npm-global/bin/codex", "\(home)/.volta/bin/codex", "\(home)/.bun/bin/codex",
+            "\(home)/Library/pnpm/codex"]
+            + nvmCandidates(home: home)
             + (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map { "\($0)/codex" }
         return candidates.first { !$0.isEmpty && FileManager.default.isExecutableFile(atPath: $0) }
+    }
+    /// Newest nvm Node version first.
+    private static func nvmCandidates(home: String) -> [String] {
+        let root = "\(home)/.nvm/versions/node"
+        let versions = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        return versions.sorted { $0.compare($1, options: .numeric) == .orderedDescending }
+            .map { "\(root)/\($0)/bin/codex" }
     }
     // Polling uses only read RPCs. Redemption has a separate, explicit entry point.
     static func read() throws -> UsageSnapshot {
@@ -55,9 +67,15 @@ private final class CodexSession {
 
     init() throws {
         guard let binary = CodexProvider.executable() else {
-            throw UsageError.message("Locate the Codex CLI using Options → Locate Codex CLI.")
+            throw UsageError.message("Choose the Codex CLI in Settings → Codex.")
         }
         process.executableURL = URL(fileURLWithPath: binary)
+        // npm-installed Codex starts through `env node`. Finder-launched apps
+        // get a minimal PATH, so add the folder holding Codex (and its Node).
+        var environment = ProcessInfo.processInfo.environment
+        let folder = URL(fileURLWithPath: binary).deletingLastPathComponent().path
+        environment["PATH"] = ([folder, "/opt/homebrew/bin", "/usr/local/bin"] + [environment["PATH"] ?? "/usr/bin:/bin"]).joined(separator: ":")
+        process.environment = environment
         process.arguments = ["app-server", "--listen", "stdio://"]
         process.standardInput = input; process.standardOutput = output
         process.standardError = FileHandle.nullDevice

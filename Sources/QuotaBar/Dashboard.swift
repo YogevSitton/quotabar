@@ -26,7 +26,10 @@ struct Dashboard: View {
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                    optionsMenu
+                    Button(action: state.showSettings) { Image(systemName: "gearshape") }
+                        .help("Settings")
+                    Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power") }
+                        .help("Quit QuotaBar").keyboardShortcut("q")
                 }.padding(.horizontal, 16).padding(.vertical, 20)
                     .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()
@@ -72,28 +75,6 @@ struct Dashboard: View {
                     }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: .infinity, alignment: .top)
             }.frame(width: preferredSize.width, height: preferredSize.height).background(.regularMaterial)
         }
-    }
-    private var optionsMenu: some View {
-        Menu("Options") {
-            Picker("Refresh", selection: $state.interval) {
-                Text("Every minute").tag(1.0)
-                Text("Every 5 minutes").tag(5.0)
-                Text("Every 15 minutes").tag(15.0)
-                Text("Manual only").tag(0.0)
-            }.onChange(of: state.interval) { state.schedule() }
-            Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
-            Button("Locate Codex CLI…", action: state.chooseCodex)
-            if state.installation.claude {
-                Button("Claude connection…", action: state.manageClaudeConnection)
-                Button("Open Claude Usage…", action: state.openClaude)
-            }
-            Menu("Usage details") {
-                if state.installation.codex { Button("Codex…") { state.showDetails(for: "Codex") } }
-                if state.installation.claude { Button("Claude…") { state.showDetails(for: "Claude") } }
-            }
-            Divider()
-            Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
-        }.fixedSize()
     }
 }
 
@@ -296,14 +277,6 @@ struct ProviderCard: View {
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical)
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        if !snapshot.additionalWindows.isEmpty {
-            DisclosureGroup("Additional plan limits") {
-                ForEach(snapshot.additionalWindows) { item in
-                    UsageRow(title: item.title, window: item.window, color: color, now: now, stale: historical)
-                }
-            }.font(.caption)
-        }
-        if let extra = snapshot.extraUsage { extraUsage(extra) }
         if name != "Claude" || snapshot.showsResetCredits { resets }
     }
     @ViewBuilder private var resets: some View {
@@ -378,17 +351,6 @@ struct ProviderCard: View {
                     .padding(.top, 4)
             }
         }.font(.caption).textSelection(.enabled)
-    }
-    private func extraUsage(_ extra: ExtraUsage) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Extra usage\(extra.enabled.map { $0 ? " · enabled" : " · disabled" } ?? "")").fontWeight(.medium)
-            if let used = extra.used {
-                Text("Used: \(used.formatted(.number.precision(.fractionLength(2)))) \(extra.currency?.uppercased() ?? "(currency not reported)")")
-            }
-            if let limit = extra.monthlyLimit {
-                Text("Monthly limit: \(limit.formatted(.number.precision(.fractionLength(2)))) \(extra.currency?.uppercased() ?? "")")
-            }
-        }.font(.caption).foregroundStyle(.secondary)
     }
 }
 
