@@ -23,8 +23,10 @@ struct Dashboard: View {
                     Spacer()
                     Button { state.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Refresh both subscriptions").disabled(state.refreshingCodex && state.refreshingClaude)
-                    Button(action: state.showSettings) { Image(systemName: "gearshape") }
-                        .help("Settings")
+                    Menu {
+                        Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
+                    } label: { Image(systemName: "gearshape") }
+                        .menuStyle(.button).menuIndicator(.hidden).fixedSize().help("Settings")
                     Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power") }
                         .help("Quit QuotaBar").keyboardShortcut("q")
                 }.padding(.horizontal, 16).padding(.vertical, 20)

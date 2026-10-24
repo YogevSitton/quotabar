@@ -28,7 +28,6 @@ import Combine
     @Published private(set) var claudeConnection: ClaudeConnectionWindow?
     private var claudeConnectionUpdates: AnyCancellable?
     private var providerDetails: ProviderDetailsWindow?
-    private var settingsWindow: SettingsWindow?
     private var timer: Timer?
     private var localTimer: Timer?
     private var claudeRetryTimer: Timer?
@@ -193,10 +192,6 @@ import Combine
         return connection
     }
     func connectClaude() { ensureClaudeConnection().connect() }
-    func showSettings() {
-        if settingsWindow == nil { settingsWindow = SettingsWindow(state: self) }
-        settingsWindow?.show()
-    }
     func showClaudeConnectionHelp() { ensureClaudeConnection().show(recheck: false) }
     var hasClaudeConnectionActivity: Bool {
         guard let model = claudeConnection?.model else { return false }
