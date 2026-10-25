@@ -13,6 +13,14 @@ QuotaBar is a native macOS 14+ menu bar app. Both Codex and Claude are first-cla
 
 A personal tool was used during development. It is not an app dependency or required to build a fresh clone.
 
+Follow the Git workflow in `CONTRIBUTING.md`:
+
+- Never commit or push to `main`. Work on a branch, preferably named `<type>/<short-topic>` (tool-generated names are fine), and open a pull request.
+- Title the pull request as a Conventional Commit (`fix(claude): ...`, `feat(popup): ...`); it becomes the squash-merged commit on `main`.
+- Add an Unreleased entry to `CHANGELOG.md` for user-visible changes.
+- Do not create tags, releases or version bumps unless the maintainer asks for a release.
+- Do not merge a pull request unless the maintainer asks.
+
 ## Build and verify
 
 Run from the repository root on macOS with Xcode/Swift 5.9+:

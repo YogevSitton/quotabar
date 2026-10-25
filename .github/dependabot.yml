@@ -5,3 +5,7 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Produces Conventional Commit titles such as "ci(deps): bump actions/checkout".
+    commit-message:
+      prefix: ci
+      include: scope
