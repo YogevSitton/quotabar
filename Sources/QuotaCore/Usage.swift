@@ -7,6 +7,32 @@ public struct UsageWindow: Equatable {
     public init(used: Double, resetsAt: Date?) { self.used = used; self.resetsAt = resetsAt }
     public func awaitingReset(at now: Date) -> Bool { resetsAt.map { $0 <= now } ?? false }
     public func currentRemaining(at now: Date) -> Int? { awaitingReset(at: now) ? nil : remaining }
+
+    // An even budget across a known window, not a forecast of future activity.
+    // Compare at the reading's timestamp so an unchanged sample cannot appear
+    // to improve its pace merely by aging between provider reads.
+    public func pace(over duration: TimeInterval, at sampleTime: Date) -> UsagePace? {
+        guard duration.isFinite, duration > 0, used.isFinite, (0...100).contains(used),
+              let resetsAt else { return nil }
+        let timeLeft = resetsAt.timeIntervalSince(sampleTime)
+        guard timeLeft.isFinite, timeLeft > 0, timeLeft <= duration else { return nil }
+        let expectedUsed = 100 * (1 - timeLeft / duration)
+        return UsagePace(expectedUsed: expectedUsed, percentagePointsOverBudget: used - expectedUsed)
+    }
+}
+
+public struct UsagePace: Equatable {
+    public let expectedUsed: Double
+    public let percentagePointsOverBudget: Double
+    public var expectedRemaining: Double { 100 - expectedUsed }
+    // A small tolerance avoids warning on rounding noise in provider percentages.
+    public var overBudget: Bool { percentagePointsOverBudget > 2 }
+    public var underBudget: Bool { percentagePointsOverBudget < -2 }
+}
+
+public enum ResetExpiryUrgency: Int, Comparable {
+    case normal, soon, imminent
+    public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
 public struct ResetOffer: Identifiable, Equatable {
@@ -24,6 +50,13 @@ public struct ResetOffer: Identifiable, Equatable {
     public var unavailableReason: String?
     public init(id: String, title: String, expiresAt: Date?, detail: String? = nil, expiryText: String? = nil) {
         self.id = id; self.title = title; self.expiresAt = expiresAt; self.detail = detail; self.expiryText = expiryText
+    }
+    public func expiryUrgency(at now: Date) -> ResetExpiryUrgency {
+        guard remainingCount.map({ $0 > 0 }) ?? true, let expiresAt else { return .normal }
+        let timeLeft = expiresAt.timeIntervalSince(now)
+        guard timeLeft > 0 else { return .normal }
+        if timeLeft <= 3600 { return .imminent }
+        return timeLeft <= 86400 ? .soon : .normal
     }
 }
 
@@ -59,6 +92,16 @@ public struct UsageSnapshot {
     public var offers: [ResetOffer]
     public var resetNote: String?
     public var observedAt: Date
+    public func orderedResetOffers(at now: Date) -> [ResetOffer] {
+        offers.sorted {
+            // Past expiries must not hide upcoming expiries in the compact list.
+            let leftExpired = $0.expiresAt.map { $0 <= now } ?? false
+            let rightExpired = $1.expiresAt.map { $0 <= now } ?? false
+            if leftExpired != rightExpired { return !leftExpired }
+            let left = $0.expiresAt ?? .distantFuture, right = $1.expiresAt ?? .distantFuture
+            return left == right ? $0.id < $1.id : left < right
+        }
+    }
     public func isCurrent(at now: Date, maximumAge: TimeInterval, hasConnectionError: Bool) -> Bool {
         let age = now.timeIntervalSince(observedAt)
         return source == .live && !hasConnectionError && age >= -60 && age < maximumAge
