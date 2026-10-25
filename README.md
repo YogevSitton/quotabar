@@ -35,7 +35,7 @@ shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
 
 Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded preview. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
 
-Updates are manual: quit QuotaBar, download or build the new version, and replace the app. There is no in-app updater in this release.
+Updates are manual: quit QuotaBar, download or build the new version, and replace the app. There is no in-app updater in this release. See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Usage
 

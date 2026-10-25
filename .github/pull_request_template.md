@@ -1,6 +1,12 @@
+<!--
+Title this pull request as a Conventional Commit, for example:
+  fix(claude): keep saved readings visible during transient failures
+It becomes the commit message on main when squash-merged. See CONTRIBUTING.md.
+-->
+
 ## Summary
 
-<!-- What changes, and why. -->
+<!-- What changes, and why. Link the issue, for example: Closes #12 -->
 
 ## Verification
 
@@ -16,4 +22,6 @@ What was verified against a live account, if anything, and what still needs one:
 - [ ] No reset action was exercised and no reset credit was spent
 - [ ] Tests use synthetic fixtures only
 - [ ] No tokens, account identifiers, emails or raw CLI output in code, tests, screenshots or this description
+- [ ] `CHANGELOG.md` has an Unreleased entry if users would notice this change
 - [ ] `docs/VERIFICATION.md` updated if verification status changed
+- [ ] AI assistance, if any, is mentioned above
