@@ -12,7 +12,7 @@ struct Dashboard: View {
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
-        return available >= 478 ? 2 : available >= 424 ? 1 : 0
+        return available >= 488 ? 2 : available >= 434 ? 1 : 0
     }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -105,8 +105,10 @@ private struct CompactProviderCard: View {
                     .buttonStyle(.plain).help("Open \(name) usage").accessibilityLabel("Open \(name) usage")
             }.padding(.bottom, 2)
             if current, let snapshot {
-                UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false, compact: true)
-                UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false, compact: true)
+                UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false,
+                         duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
+                UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
+                         duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
                 if name != "Claude" {
                     Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -114,11 +116,19 @@ private struct CompactProviderCard: View {
                 }
                 if name != "Claude" || snapshot.showsResetCredits {
                     Divider()
-                    Label("Available resets", systemImage: "arrow.counterclockwise.circle")
-                        .foregroundStyle(color).font(.system(size: 11, weight: .semibold))
-                    ForEach(Array(snapshot.offers.prefix(resetRowLimit))) { offer in
+                    let urgency = snapshot.offers.map { $0.expiryUrgency(at: now) }.max() ?? .normal
+                    Label(urgency == .normal ? "Available resets" : "Resets - expiring soon",
+                          systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(expiryColor(urgency, fallback: color)).font(.system(size: 11, weight: .semibold))
+                    ForEach(Array(snapshot.orderedResetOffers(at: now).prefix(resetRowLimit))) { offer in
+                        let urgency = offer.expiryUrgency(at: now)
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
+                                if urgency != .normal {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 10)).foregroundStyle(expiryColor(urgency))
+                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 1 hour" : "Reset expires within 24 hours")
+                                }
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
                                     .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -129,9 +139,11 @@ private struct CompactProviderCard: View {
                                 }
                             }
                             Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(shortCountdown($0, now: now)))" : "" } ?? ""))
-                                .font(.system(size: 10)).foregroundStyle(.secondary)
-                                .lineLimit(1).help(expiry(offer))
+                                .font(.system(size: 10, weight: urgency == .normal ? .regular : .semibold))
+                                .foregroundStyle(expiryColor(urgency))
+                                .lineLimit(1).help(expiryHelp(offer))
                         }
+                        .background(expiryColor(urgency).opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
                     }
                     if snapshot.offers.isEmpty {
                         Text(snapshot.resetCount == 0 ? "No resets available" : "Expiry details not reported")
@@ -175,6 +187,10 @@ private struct CompactProviderCard: View {
         guard let date = offer.expiresAt else { return count + (offer.expiryText ?? "Expiry not reported") }
         let prefix = date <= now ? "Expired" : "Expires"
         return "\(count)\(prefix) \(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))"
+    }
+    private func expiryHelp(_ offer: ResetOffer) -> String {
+        guard let date = offer.expiresAt else { return expiry(offer) }
+        return date.formatted(.dateTime.day().month().year().hour().minute().timeZone())
     }
 }
 
@@ -271,8 +287,10 @@ struct ProviderCard: View {
         return "\(minutes)m"
     }
     @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical)
-        UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical)
+        UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical,
+                 duration: 5 * 3600, observedAt: snapshot.observedAt)
+        UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
+                 duration: 7 * 86400, observedAt: snapshot.observedAt)
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         if name != "Claude" || snapshot.showsResetCredits { resets }
@@ -287,7 +305,7 @@ struct ProviderCard: View {
             }
             if let snapshot {
                 if !snapshot.offers.isEmpty {
-                    ForEach(snapshot.offers) { offer in offerRow(offer) }
+                    ForEach(snapshot.orderedResetOffers(at: now)) { offer in offerRow(offer) }
                     let detailedCount = snapshot.offers.reduce(0) { sum, offer in
                         let (value, overflow) = sum.addingReportingOverflow(offer.remainingCount ?? 0)
                         return overflow ? Int.max : value
@@ -322,11 +340,19 @@ struct ProviderCard: View {
     }
     private func expiryText(_ expiry: Date) -> String {
         let date = expiry.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-        return "\(expiry <= now ? "Expired" : "Expires") \(date) \(TimeZone.current.abbreviation(for: expiry) ?? "")"
+        return "\(expiry <= now ? "Expired" : "Expires") \(date)\(expiry > now ? " (\(shortCountdown(expiry, now: now)))" : "")"
     }
     private func offerRow(_ offer: ResetOffer) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(offer.title).font(.system(size: 12, weight: .medium))
+        let urgency = isCurrent ? offer.expiryUrgency(at: now) : .normal
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                if urgency != .normal {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(expiryColor(urgency))
+                    Text(urgency == .imminent ? "Expires within 1 hour" : "Expires within 24 hours")
+                        .foregroundStyle(expiryColor(urgency))
+                }
+                Text(offer.title).font(.system(size: 12, weight: .medium))
+            }
             if name == "Claude" {
                 HStack {
                     if let count = offer.remainingCount { Text("\(count) remaining\(offer.kind.map { " · \($0.capitalized)" } ?? "")") }
@@ -336,8 +362,9 @@ struct ProviderCard: View {
                 if offer.usableNow == false { Text(offer.unavailableReason ?? "Not usable right now").foregroundStyle(.secondary) }
             }
             if let expiry = offer.expiresAt {
-                Text(expiryText(expiry)).foregroundStyle(expiry.timeIntervalSince(now) < 86400 ? Color.orange : Color.secondary)
-                if expiry > now { Text("Expires in \(countdown(expiry, now: now))").foregroundStyle(.secondary) }
+                Text(expiryText(expiry)).foregroundStyle(expiryColor(urgency))
+                    .fontWeight(urgency == .normal ? .regular : .semibold)
+                    .help(expiry.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
             } else if let expiryText = offer.expiryText {
                 Text(expiryText).foregroundStyle(.secondary)
             } else { Text("Expiry not reported").foregroundStyle(.secondary) }
@@ -358,9 +385,23 @@ private struct UsageRow: View {
     let color: Color
     let now: Date
     let stale: Bool
+    var duration: TimeInterval? = nil
+    var observedAt: Date? = nil
     var compact = false
     var pending: Bool { window?.awaitingReset(at: now) == true }
     var visibleWindow: UsageWindow? { !stale && pending ? nil : window }
+    private var pace: UsagePace? {
+        guard !stale, !pending, let duration, let observedAt else { return nil }
+        return window?.pace(over: duration, at: observedAt)
+    }
+    private var paceExplanation: String {
+        guard let window = visibleWindow, let pace else { return "Remaining quota at the reading time" }
+        // Do not round a valid near-reset reference down to zero.
+        let reference = pace.expectedRemaining < 0.1 ? "<0.1" : pace.expectedRemaining.formatted(.number.precision(.fractionLength(0...1)))
+        let elapsed = pace.expectedUsed > 99.9 ? ">99.9" : pace.expectedUsed.formatted(.number.precision(.fractionLength(0...1)))
+        let status = pace.overBudget ? "Quota used faster than an even pace" : pace.underBudget ? "Quota used slower than an even pace" : "Quota use matches an even pace"
+        return "\(status). \(window.used.formatted(.number.precision(.fractionLength(0...1))))% of quota used; \(elapsed)% of this window's time elapsed. The white tick is the even-use target: \(reference)% left. The colored bar is your actual \(window.remaining)% left. The target approaches zero as reset time approaches. This comparison assumes even use across the window; it is not a forecast."
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
@@ -373,8 +414,12 @@ private struct UsageRow: View {
                 if !compact {
                     Text("\(window.used.formatted(.number.precision(.fractionLength(0...1))))% used\(stale ? " then" : "")").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                UsageBar(remaining: window.remaining, color: stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color)
+                UsageBar(remaining: window.remaining, color: stale || pending ? .gray : window.remaining <= 15 ? .red : window.remaining <= 30 ? .orange : color,
+                         expectedRemaining: pace?.expectedRemaining)
+                    .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(title), \(window.remaining) percent remaining\(stale ? " at the saved reading time" : "")")
+                    .accessibilityHint(paceExplanation)
+                    .help(paceExplanation)
                 if let reset = window.resetsAt {
                     // The countdown follows the reset time to keep the popup
                     // short; the timezone stays in the tooltip.
@@ -393,16 +438,34 @@ private struct UsageRow: View {
 private struct UsageBar: View {
     let remaining: Int
     let color: Color
+    var expectedRemaining: Double? = nil
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.1))
+                Capsule().fill(Color.primary.opacity(0.1)).frame(height: 5)
                 if remaining > 0 {
                     Capsule().fill(color)
-                        .frame(width: max(proxy.size.height, proxy.size.width * CGFloat(min(100, remaining)) / 100))
+                        .frame(width: max(5, proxy.size.width * CGFloat(min(100, remaining)) / 100), height: 5)
                 }
-            }
-        }.frame(height: 5)
+                if let expectedRemaining {
+                    RoundedRectangle(cornerRadius: 1).fill(Color.primary)
+                        .frame(width: 2, height: 9)
+                        .overlay(RoundedRectangle(cornerRadius: 1).stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 0.5))
+                        .offset(x: max(0, min(proxy.size.width - 2, proxy.size.width * expectedRemaining / 100 - 1)))
+                        .accessibilityHidden(true)
+                }
+            }.frame(width: proxy.size.width, height: proxy.size.height)
+        // Reserve the tick's full height so it cannot grow the track or crowd
+        // the reset time below the meter.
+        }.frame(height: 9)
+    }
+}
+
+private func expiryColor(_ urgency: ResetExpiryUrgency, fallback: Color = .secondary) -> Color {
+    switch urgency {
+    case .normal: return fallback
+    case .soon: return .orange
+    case .imminent: return .red
     }
 }
 
