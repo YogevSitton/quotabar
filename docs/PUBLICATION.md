@@ -6,7 +6,7 @@ The audit included Gitleaks 8.30.1 with full-history scanning and redacted outpu
 
 Four previously flagged historical artwork blobs were removed. Other historical PNG and embedded ICNS PNG metadata and PDF build metadata were stripped as well. Pixel data and PDF drawing streams were compared before and after sanitization. Certificate contact addresses and a generated-image identifier existed only inside the removed artwork. The private development tool's name was removed from public file contents and commit messages.
 
-The rewritten history is rescanned before upload. Only the rewritten main branch is pushed to a newly created private repository; no old refs, tags, pull requests or audit reports containing private findings are copied. Security settings are verified as GitHub makes them available. On GitHub Free, some settings become available only when a repository is public.
+The rewritten history was rescanned before upload. Only the rewritten main branch was pushed, to a newly created repository that started private and was then made public; no old refs, tags, pull requests or audit reports containing private findings were copied. Security settings are verified as GitHub makes them available. On GitHub Free, some settings become available only when a repository is public.
 
 ## Release checks and remaining work
 
