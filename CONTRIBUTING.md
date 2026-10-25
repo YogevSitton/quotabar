@@ -98,15 +98,15 @@ QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `
 
 Releases are cut by the maintainer from `main`:
 
-1. Open a `chore(release): 0.x.y` pull request that bumps `CFBundleShortVersionString` in `scripts/build.sh` and moves the **Unreleased** changelog entries under the new version and date.
-2. After it merges, tag the merge commit `v0.x.y` and run `./scripts/package-release.sh`.
+1. Open a `chore(release): 0.x.y` pull request that bumps `CFBundleShortVersionString` and increments `CFBundleVersion` in `scripts/build.sh`, updates the version in the README's Status section and checksum example, and moves the **Unreleased** changelog entries under the new version and date.
+2. After it merges, tag the squashed commit it created on `main` as `v0.x.y` and run `./scripts/package-release.sh`.
 3. Publish a GitHub release for the tag with the changelog section as notes, and attach the zip and its `.sha256` file.
 
 Tags and releases are never moved or rewritten once published. A broken release is fixed by a new patch release.
 
 ## Labels
 
-Issues and pull requests use a small set of labels: `bug`, `enhancement`, `documentation`, `question`, `good first issue`, `help wanted`, `needs-info` and `wontfix`. The maintainer applies them; you do not need to.
+Issues and pull requests use a small set of labels: `bug`, `enhancement`, `documentation`, `accessibility`, `question`, `good first issue`, `help wanted`, `duplicate`, `invalid` and `wontfix`. The maintainer applies them; you do not need to.
 
 ## Reporting bugs and security issues
 

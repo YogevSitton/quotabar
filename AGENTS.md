@@ -15,7 +15,7 @@ A personal tool was used during development. It is not an app dependency or requ
 
 Follow the Git workflow in `CONTRIBUTING.md`:
 
-- Never commit or push to `main`. Work on a `<type>/<short-topic>` branch and open a pull request.
+- Never commit or push to `main`. Work on a branch, preferably named `<type>/<short-topic>` (tool-generated names are fine), and open a pull request.
 - Title the pull request as a Conventional Commit (`fix(claude): ...`, `feat(popup): ...`); it becomes the squash-merged commit on `main`.
 - Add an Unreleased entry to `CHANGELOG.md` for user-visible changes.
 - Do not create tags, releases or version bumps unless the maintainer asks for a release.
