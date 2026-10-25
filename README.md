@@ -6,7 +6,9 @@ Independent community project, with no analytics or hosted backend. Not affiliat
 
 ## Status
 
-Early public preview for Apple Silicon Macs running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
+The first public preview is **0.1.0**. Earlier development builds used higher internal version numbers.
+
+Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
 ## Install
 
@@ -28,7 +30,7 @@ The app has no external Swift package dependencies. Move `QuotaBar.app` into App
 If a packaged build is available, download its zip and matching `.sha256` file from [Releases](https://github.com/YogevSitton/quotabar/releases). In the download folder, verify the checksum using the actual version number:
 
 ```sh
-shasum -a 256 -c QuotaBar-1.7.15.zip.sha256
+shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
 ```
 
 Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded preview. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
