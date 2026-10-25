@@ -1,6 +1,6 @@
-.build/
-.swiftpm/
-.personal-tool/
+# Local development state and hidden tool directories.
+/.*/
+!/.github/
 .DS_Store
 dist/
 __pycache__/
@@ -10,7 +10,19 @@ __pycache__/
 *.log
 *.zip
 *.dmg
+*.app/
+*.dSYM/
 *.p12
+*.pfx
+*.pem
+*.key
+*.cer
 *.mobileprovision
-
+*.xcuserstate
+xcuserdata/
+# Local provider data and reset recovery.
+auth.json
+credentials.json
+claude-statusline.json
+plan-usage-history.json
 pending-codex-reset.json

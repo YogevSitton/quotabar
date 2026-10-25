@@ -17,3 +17,7 @@ for name in QuotaBar Codex Claude; do
 done
 sips -z 256 256 "$PWD/Assets/QuotaBar.png" --out "$PWD/Assets/QuotaBar-preview.png" >/dev/null
 cp "$PWD/Assets/QuotaBar-preview.png" "$PWD/Assets/QuotaBar-gauge-preview.png"
+# Committed previews carry no EXIF, XMP or text metadata.
+python3 scripts/strip-png-metadata.py "$PWD"/Assets/*.png
+
+python3 scripts/sanitize-artwork.py Assets/*.png Assets/*.pdf Sources/QuotaBar/Resources/*.icns Sources/QuotaBar/Resources/*.pdf

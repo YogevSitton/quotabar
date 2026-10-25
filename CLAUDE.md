@@ -1,5 +1,5 @@
 # Claude development instructions
 
-Read and follow `AGENTS.md` in this repository for architecture, build/test commands, provider parity, credential handling, and current verification limits. Read `README.md` before changing provider integration or connection UI.
+Read and follow `AGENTS.md` and `README.md` for architecture, connection behavior, credential handling, reset safeguards, layout and verification limits.
 
-Keep changes focused, test the behavior affected, and report what was verified versus what still requires a live account. Use synthetic fixtures and never include local credentials or account caches in commits.
+Keep changes focused. Compile and statically review changes only unless the maintainer changes that restriction. Do not run tests, live diagnostics, sign-in or reset actions. Use synthetic fixtures and never commit local credentials or account data.

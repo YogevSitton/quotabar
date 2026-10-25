@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Runs once when the repository changes from private to public.
+  public:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Skip while the repository is private so CI never uses private Actions minutes.
+    if: ${{ !github.event.repository.private }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      CLANG_MODULE_CACHE_PATH: ${{ github.workspace }}/.build/ModuleCache
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show toolchain
+        run: swift --version
+      - name: Build (release)
+        run: swift build -c release --disable-sandbox
+      - name: Compile test targets without running tests
+        run: swift build --build-tests --disable-sandbox
+      - name: Public-tree audit
+        run: python3 scripts/audit-public-tree.py --public-docs
+      - name: Verify app packaging
+        run: ./scripts/package-release.sh
