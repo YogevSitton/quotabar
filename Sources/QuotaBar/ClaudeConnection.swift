@@ -24,7 +24,7 @@ import QuotaCore
         guard !busy else { return }
         checkExisting()
     }
-    // This path is invoked only by the human's Connect action. Reuse the
+    // This path is invoked only by the user's Connect action. Reuse the
     // saved login first, then go straight to browser login when it is missing.
     func connect() {
         guard !busy else { return }
