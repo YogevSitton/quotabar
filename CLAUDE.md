@@ -1,7 +1,7 @@
 # Claude development instructions
 
-Read and follow `AGENTS.md` and `README.md` for architecture, connection behavior, credential handling, reset safeguards, layout and verification limits.
+Read and follow `AGENTS.md` and `README.md` for architecture, connection behavior, credential handling, reset safeguards, layout and verification limits. Follow `docs/UPDATES.md` for releases, update channels and the updater.
 
 Follow the Git workflow in `CONTRIBUTING.md`, summarized in `AGENTS.md`.
 
-Keep changes focused. Compile and statically review changes only unless the maintainer changes that restriction. Do not run tests, live diagnostics, sign-in or reset actions. Use synthetic fixtures and never commit local credentials or account data.
+Keep changes focused. Compile and statically review changes only unless the maintainer changes that restriction. Do not run tests, live diagnostics, sign-in or reset actions. Do not run the updater, its helper, `QuotaReleaseTool` or the release workflow, and do not create keys, secrets, tags, releases or publishing settings. Use synthetic fixtures and never commit local credentials or account data.

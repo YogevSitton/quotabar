@@ -20,8 +20,9 @@ labels: bug
 
 - macOS version:
 - Mac (Apple Silicon model):
-- QuotaBar version (Finder > Get Info, or the release you downloaded):
-- Installed from: release zip / built from source (commit):
+- QuotaBar version and build (More > Updates..., or Finder > Get Info):
+- Installed from: Stable release / Preview build / 0.1.0 zip / built from source (commit):
+- Update channel, if this is about updates (Stable or Preview):
 - Codex CLI version (`codex --version`), if relevant:
 - Claude Code CLI version (`claude --version`), if relevant:
 

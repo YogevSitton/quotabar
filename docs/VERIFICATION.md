@@ -19,6 +19,7 @@ This file records what has been checked against live provider accounts, what has
 - **Pace and reset-expiry indicators.** Synthetic cases cover both window lengths, pace tolerance, invalid or expired dates, the near-zero weekly reference before reset, expiry warning boundaries, unknown expiries, and ordering upcoming offers ahead of expired ones. These cases are compiled without execution. No provider, credential, reset redemption, or recovery request is involved.
 - **Codex reset redemption.** The confirmation, specific-credit targeting, idempotency key persistence and recovery record were compiled and statically reviewed only. No reset button, confirmation, mutation request, recovery retry or reset test has been exercised, and no reset credit has been consumed.
 - **Claude reset hand-off.** Opening Claude's Usage page is implemented; no Claude reset has been performed through it.
+- **Updates and releases (26 October 2026).** The build identity, signed update metadata, Stable and Preview channel selection, schedule and backoff, Updates window, `QuotaUpdater` helper, release workflow and its static trust checks were compiled and statically reviewed. Synthetic cases cover metadata parsing and signatures, downgrade and conflicting-identity rejection, absent and invalid feeds, and backoff; they compile without being executed. Local packaging produced a source-mode build whose app and helper signatures verify. No release key, secret, variable, environment or Pages site exists, the release workflow has never run, and no update has been downloaded, installed, denied, rolled back or recovered. See [Releases and in-app updates](UPDATES.md).
 
 ## Not yet verified
 
@@ -26,11 +27,14 @@ This file records what has been checked against live provider accounts, what has
 - Reset-expiry warning appearance against actual reported offers within the last 24 hours or last hour of expiry.
 - Comparing both usage windows, reset times and any reported reset grants against the provider account pages after a fresh sign-in.
 - Actual reset redemption behavior for either provider.
-- Developer ID signing and notarization, and an in-app update path.
+- Developer ID signing and notarization.
+- Publishing: Preview publication from an eligible `main` build after activation, the first Stable promotion becoming GitHub Latest, feed deployment, and free standard-runner usage.
+- Update qualification on isolated Macs or accounts without provider CLIs: manual migration from 0.1.0; check, download, install and relaunch; App Management denial and approval; launch at login across an update; Gatekeeper behavior; interrupted replacement and recovery; channel switching; and missing-feed behavior.
 - Builds and behavior on Intel Macs.
 
 ## Rules for updating this file
 
 - Never claim live verification that did not happen; state the version, date and what was observed.
 - Never exercise reset actions or spend reset credits to verify anything here. See `AGENTS.md`.
+- Record update qualification only from separately authorized runs, with the build number, macOS version, steps and what was observed. Compilation is not evidence of installation.
 - Do not record raw CLI output, account identifiers, emails or tokens.

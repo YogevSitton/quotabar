@@ -10,6 +10,8 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 - Subtle pace reference ticks on current usage meters, with even-use comparisons available on hover.
 - Warnings for manual reset offers expiring within 24 hours, with stronger highlighting in the last hour and upcoming expiries shown before expired offers.
+- In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from 0.1.0 needs one manual download. Publishing these channels is not switched on yet.
+- Release downloads include signed update metadata alongside the zip and its checksum.
 
 ## [0.1.0] - 2026-10-25
 

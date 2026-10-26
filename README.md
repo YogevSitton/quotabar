@@ -8,6 +8,8 @@ Independent community project, with no analytics or hosted backend. Not affiliat
 
 The first public preview is **0.1.0**. Earlier development builds used higher internal version numbers.
 
+Builds after 0.1.0 include an in-app updater with a default **Stable** channel and an opt-in **Preview** channel, both published from this public repository. The updater and its release workflow are implemented but not yet switched on or tested on real Macs. See [Releases and in-app updates](docs/UPDATES.md).
+
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
 ## Install
@@ -25,17 +27,25 @@ open dist/QuotaBar.app
 
 The app has no external Swift package dependencies. Move `QuotaBar.app` into Applications before enabling launch at login.
 
-### Download a preview
+### Download a release
 
-If a packaged build is available, download its zip and matching `.sha256` file from [Releases](https://github.com/YogevSitton/quotabar/releases). In the download folder, verify the checksum using the actual version number:
+Download a zip and its matching `.sha256` file from [Releases](https://github.com/YogevSitton/quotabar/releases): the release marked **Latest** for Stable (once one is published), or a `preview-<build>` prerelease for Preview. In the download folder, verify the checksum using the actual file name, for example:
 
 ```sh
 shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
 ```
 
-Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded preview. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
+Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded build. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
 
-Updates are manual: quit QuotaBar, download or build the new version, and replace the app. There is no in-app updater in this release. See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+### Updates
+
+0.1.0 predates the updater, so moving from 0.1.0 to a build with updates is one manual download and replacement as above. After that, **More > Updates...** opens a separate Updates window:
+
+- Choose Stable (the default) or Preview on each Mac.
+- Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
+- Nothing installs until you click **Install and Relaunch** for the exact build shown. Quitting, restarting or switching channels never installs anything, and switching from Preview to Stable never downgrades.
+
+Update checks are anonymous: no GitHub account, token or command-line tool is needed. macOS may ask you to allow QuotaBar under App Management when it replaces itself, and may ask again on later updates. Builds made from source never install updates. See [Releases and in-app updates](docs/UPDATES.md) for channels, permissions and recovery, and [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Usage
 
@@ -47,7 +57,7 @@ A subtle white tick on each current usage meter marks the remaining quota expect
 
 Reported manual reset offers expiring within 24 hours have an orange warning icon and highlighted expiry; within 1 hour they turn red. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
+The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login** and **Updates...**, which opens the separate Updates window. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
 
 Screenshots are omitted until current, privacy-reviewed captures are available.
 
@@ -71,7 +81,7 @@ Claude Code may return a cached reading. QuotaBar matches non-secret account/cac
 
 Transient Claude failures retry automatically with a one-to-five-minute backoff. The newest account-matched reading remains clearly labeled **Saved reading**, with its original timestamp; it never supplies current menu percentages. Optional status-line snapshots and local Claude usage history supply historical percentages only. See [provider integration details](docs/PROVIDER-INTEGRATIONS.md).
 
-There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. A confirmed Codex reset stores local recovery metadata, never credentials.
+There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. A confirmed Codex reset stores local recovery metadata, never credentials. Update checks download public, signed files from GitHub without any account data; update state stays in `~/Library/Application Support/QuotaBar/Updates`.
 
 ### Optional status-line exporter
 
@@ -95,7 +105,8 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Missing provider fields remain unknown; full reset-credit parity is not promised.
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
-- Packaged previews are ad-hoc signed, not notarized. Developer ID signing, notarization and a supported update channel remain future work.
+- Packaged builds are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
+- The update channels are implemented but not yet activated, and installation, permission prompts and recovery have not been tested on real Macs.
 
 ## Development
 
@@ -105,10 +116,12 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Current veri
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
+python3 scripts/check-workflow-trust.py
+python3 scripts/check-release-docs.py
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
-Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere. `scripts/package-release.sh` creates a zip and SHA-256 checksum and verifies the extracted app's signature; it uploads nothing. Normal builds use committed artwork. `scripts/build-icon.sh` explicitly regenerates artwork and strips metadata. [Assets/ICON.md](Assets/ICON.md) records its provenance.
+Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere. Version and build numbers come from `release-version.json` and public history. `scripts/package-release.sh` creates a zip and SHA-256 checksum and verifies the extracted app's signature; it needs no secret and uploads nothing. Only the release workflow signs and publishes ([details](docs/UPDATES.md)). Normal builds use committed artwork. `scripts/build-icon.sh` explicitly regenerates artwork and strips metadata. [Assets/ICON.md](Assets/ICON.md) records its provenance.
 
 Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/YogevSitton/quotabar/security/advisories/new), following [SECURITY.md](SECURITY.md). Use redacted or synthetic examples in issues.
 

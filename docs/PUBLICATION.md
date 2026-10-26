@@ -15,6 +15,7 @@ The rewritten history was rescanned before upload. Only the rewritten main branc
 - Include the MIT license and provider artwork notice inside the app bundle.
 - Omit obsolete screenshots; current captures require a separate approved read-only session.
 - Keep monitoring, sign-in and reset verification restrictions in place.
-- Clearly label the downloadable app an early preview: Developer ID signing, notarization, a supported update channel, broader account compatibility and Intel validation remain incomplete.
+- Clearly label the downloadable app an early preview: Developer ID signing, notarization, broader account compatibility and Intel validation remain incomplete.
+- Releases and in-app updates now follow [Releases and in-app updates](UPDATES.md): one public repository, Stable and Preview channels, keyless contributor packaging and owner-activated signed publication. That policy does not repeat this repository migration.
 
 Pattern scans and metadata inspection reduce exposure risk; they do not prove the absence of every possible secret or vulnerability. Future changes still need review and repository security scanning.
