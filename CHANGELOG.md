@@ -6,6 +6,8 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
 ### Added
 
 - Show the app version at the bottom right of the popup.
@@ -14,7 +16,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
-- Remove the public preview label while retaining the existing version numbering and documented limitations.
+- Remove the public preview label; documented limitations still apply.
 - Make the downloaded-app installation a four-step Finder flow, with Terminal checksum verification and source builds in separate optional sections.
 - Refresh public guidance with numbered download and source-build steps, first-launch and provider setup, troubleshooting, and privacy-reviewed light/dark UI examples rendered from synthetic data.
 
@@ -32,5 +34,6 @@ First public release.
 - Popup with both providers side by side, scheduled reset times and reset-credit expiries.
 - Ad-hoc signed app zip with a SHA-256 checksum. Not notarized; updates are manual.
 
-[Unreleased]: https://github.com/YogevSitton/quotabar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/YogevSitton/quotabar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/YogevSitton/quotabar/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YogevSitton/quotabar/releases/tag/v0.1.0
