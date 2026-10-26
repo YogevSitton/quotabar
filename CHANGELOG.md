@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to QuotaBar, for people using it. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). While the version is `0.x`, releases are public previews and a minor version may include breaking changes.
+Notable changes to QuotaBar, for people using it. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/). While the version is `0.x`, a minor version may include breaking changes.
 
 Add an entry under **Unreleased** in the same pull request as the change. Use the headings Added, Changed, Fixed, Removed and Security, and leave out empty ones.
 
@@ -13,6 +13,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- Remove the public preview label while retaining the existing version numbering and documented limitations.
 - Make the downloaded-app installation a four-step Finder flow, with Terminal checksum verification and source builds in separate optional sections.
 - Refresh public guidance with numbered download and source-build steps, first-launch and provider setup, troubleshooting, and privacy-reviewed light/dark UI examples rendered from synthetic data.
 
@@ -22,7 +23,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [0.1.0] - 2026-10-25
 
-First public preview.
+First public release.
 
 ### Added
 
