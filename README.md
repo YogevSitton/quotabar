@@ -71,7 +71,7 @@ A subtle contrasting tick on each current usage meter marks the remaining quota 
 
 Reported manual reset offers expiring within 24 hours have an orange warning icon and highlighted expiry; within 1 hour they turn red. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
+The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. The app version appears at the bottom right of the popup. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
 
 ## Screenshots
 

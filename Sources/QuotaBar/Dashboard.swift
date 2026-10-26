@@ -14,6 +14,11 @@ struct Dashboard: View {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
         return available >= 488 ? 2 : available >= 434 ? 1 : 0
     }
+    private var appVersion: String? {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !version.isEmpty else { return nil }
+        return version
+    }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
@@ -72,7 +77,18 @@ struct Dashboard: View {
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
                     }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: fixedHeight == nil ? nil : .infinity, alignment: .top)
-            }.frame(width: contentWidth, height: fixedHeight).background(.regularMaterial)
+            }.frame(width: contentWidth, height: fixedHeight)
+                .overlay(alignment: .bottomTrailing) {
+                    if let version = appVersion {
+                        // Use the existing bottom padding without adding a footer
+                        // row or changing the content height used by the popover.
+                        Text("v\(version)")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                            .accessibilityLabel("QuotaBar version \(version)")
+                            .padding(.trailing, 16).padding(.bottom, 2)
+                    }
+                }
+                .background(.regularMaterial)
         }
     }
 }

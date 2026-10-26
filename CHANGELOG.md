@@ -8,6 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Added
 
+- Show the app version at the bottom right of the popup.
 - Subtle pace reference ticks on current usage meters, with even-use comparisons available on hover.
 - Warnings for manual reset offers expiring within 24 hours, with stronger highlighting in the last hour and upcoming expiries shown before expired offers.
 
