@@ -103,7 +103,7 @@ QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `
 
 Releases are cut by the maintainer from `main`:
 
-1. Open a `chore(release): 0.x.y` pull request that bumps `CFBundleShortVersionString` and increments `CFBundleVersion` in `scripts/build.sh`, updates the version in the README's Status section and checksum example, and moves the **Unreleased** changelog entries under the new version and date.
+1. Open a `chore(release): 0.x.y` pull request that bumps `CFBundleShortVersionString` and increments `CFBundleVersion` in `scripts/build.sh`, updates the version in the README's Status section, download link and optional checksum example, and moves the **Unreleased** changelog entries under the new version and date.
 2. After it merges, tag the squashed commit it created on `main` as `v0.x.y` and run `./scripts/package-release.sh`.
 3. Publish a GitHub release for the tag with the changelog section as notes, and attach the zip and its `.sha256` file.
 

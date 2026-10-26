@@ -16,51 +16,24 @@ Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live u
 
 ## Install
 
-You need an **Apple Silicon Mac with macOS 14 or later**, plus a subscription sign-in for at least one supported provider. You do not need to connect both providers.
+Requires an **Apple Silicon Mac with macOS 14 or later**. You can use Codex, Claude, or both.
 
-Choose one installation method. The download is the simplest route; building from source gives you the current code, including Unreleased changes.
+**No Terminal is needed to install the downloaded app.**
 
-### Download a preview
+1. Download [QuotaBar-0.1.0.zip](https://github.com/YogevSitton/quotabar/releases/download/v0.1.0/QuotaBar-0.1.0.zip) from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases).
+2. Double-click the ZIP in Finder to extract it.
+3. Drag **QuotaBar.app** into **Applications**.
+4. Open **QuotaBar** from Applications. Its icon appears in the menu bar at the top of your screen.
 
-No Xcode or Swift installation is needed for this route.
+### If macOS blocks the app
 
-1. Open [Releases](https://github.com/YogevSitton/quotabar/releases) and expand **Assets** for the version you want. Download **both** `QuotaBar-0.1.0.zip` and `QuotaBar-0.1.0.zip.sha256` for the 0.1.0 preview. Choose the QuotaBar files, not GitHub's **Source code** archives.
-2. Keep both files in the same folder. Open **Terminal** from **Applications > Utilities**. If the files are in Downloads, paste these two commands:
+Preview builds are not notarized by Apple. If macOS says the developer cannot be verified and you trust the download, first try opening the app, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**. See [Apple's explanation](https://support.apple.com/en-us/102445).
 
-   ```sh
-   cd ~/Downloads
-   shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
-   ```
+Continue with [First launch and provider setup](#first-launch-and-provider-setup) to connect your subscription.
 
-   The expected result is `QuotaBar-0.1.0.zip: OK`. For a different version, use that release's matching filenames. If the files are elsewhere, use that folder instead of `~/Downloads`. If verification fails, stop and see [Troubleshooting](#troubleshooting).
-3. Double-click the verified ZIP in Finder to extract it. Drag **QuotaBar.app** into **Applications**, then open it from Applications.
+### Updates
 
-The checksum checks that the ZIP matches the published file. Preview builds are ad-hoc signed, not Developer ID signed or notarized by Apple. If macOS blocks the app because the developer cannot be verified, read [Apple's guidance](https://support.apple.com/en-us/102445). If you trust the download and choose to proceed, first try opening it, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**.
-
-Continue with [First launch and provider setup](#first-launch-and-provider-setup).
-
-### Build from source
-
-Use this route for development or to get changes that have not been released yet.
-
-1. Install [Xcode](https://developer.apple.com/xcode/resources/) with Swift 5.9 or newer, choosing a version compatible with your macOS. Open Xcode once and finish its setup. An existing Swift 5.9+ toolchain with Apple's command-line tools and a macOS 14+ SDK also works.
-2. Open Terminal and run the following commands, one line at a time. Start in the folder where you want to keep the source code:
-
-   ```sh
-   git clone https://github.com/YogevSitton/quotabar.git
-   cd quotabar
-   ./scripts/build.sh
-   open dist
-   ```
-
-   A successful build prints `Built .../dist/QuotaBar.app`. The last command opens the output folder in Finder. If the build fails, fix the reported error before continuing.
-3. Drag **QuotaBar.app** from that folder into **Applications**, then open it from Applications. Continue with [First launch and provider setup](#first-launch-and-provider-setup).
-
-The app has no external Swift package dependencies. If you already cloned the repository, use that checkout instead of cloning again. Contributor build and verification steps are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-review).
-
-### Update an existing installation
-
-Quit QuotaBar with the power button in its popup, download and verify a newer release or build the source again, then replace **QuotaBar.app** in Applications and reopen it. Updates are manual; there is no in-app updater. See [CHANGELOG.md](CHANGELOG.md) for version changes.
+Quit QuotaBar with the power button in its popup. Open [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), download the newer version's ZIP, extract it, and replace the app in Applications. Then reopen QuotaBar. Updates are manual. See [CHANGELOG.md](CHANGELOG.md) for version changes.
 
 ## First launch and provider setup
 
@@ -114,14 +87,14 @@ See [dark appearance, saved-reading examples and image provenance](docs/SCREENSH
 
 | What you see | What to do |
 | --- | --- |
-| The checksum command says a file is missing | Check that Terminal is in the folder containing both downloads, with the exact filenames shown in the command. If your browser automatically extracted and removed the ZIP, download the original ZIP again. |
-| The checksum result says `FAILED` | Do not open that download. Download both matching files again from the same release and repeat the check. |
-| The source build fails | Make sure Xcode has finished setup and the selected toolchain includes Swift 5.9+ and a macOS 14+ SDK. Keep the error message for a bug report, with personal paths redacted. |
 | A provider is missing | Check that its desktop app or CLI is installed in a supported location. Wait about 30 seconds or reopen the popup for installation detection. See [installation discovery details](docs/PROVIDER-INTEGRATIONS.md). |
 | Codex has no current values | Check the detected official app or CLI's subscription sign-in. An API-key-only account cannot supply subscription limits. |
 | Claude shows **Connect Claude** | Follow the [Claude setup steps](#claude) and finish the official browser flow if requested. |
 | Claude shows a usage error | Use **Retry usage** or wait for the automatic retry. An old cache, unavailable service or incompatible CLI does not by itself mean you need to sign in again. |
 | A card shows **Saved reading** | Its timestamp and percentages describe an earlier sample. Those values never supply current menu bar percentages. **Last saved reading** opens historical details. |
+| An optional checksum check says a file is missing | Check that Terminal is in the folder containing both downloads, with the exact filenames shown in the command. If your browser automatically extracted and removed the ZIP, download the original ZIP again. |
+| An optional checksum check says `FAILED` | Do not open that download. Download both matching files again from the same release and repeat the check. |
+| An optional source build fails | Make sure Xcode has finished setup and the selected toolchain includes Swift 5.9+ and a macOS 14+ SDK. Keep the error message for a bug report, with personal paths redacted. |
 
 The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage), where you can check your account directly.
 
@@ -162,6 +135,38 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
 - Packaged previews are ad-hoc signed, not notarized. Developer ID signing, notarization and a supported update channel remain future work.
+
+## Optional checksum verification
+
+This extra check compares the ZIP against the release's published checksum. **It is optional and requires Terminal.** It does not replace Developer ID signing or notarization.
+
+Download the matching `QuotaBar-0.1.0.zip.sha256` file from the same [release](https://github.com/YogevSitton/quotabar/releases/tag/v0.1.0) and keep it beside the ZIP. If both files are in Downloads, open **Terminal** from **Applications > Utilities** and run:
+
+```sh
+cd ~/Downloads
+shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
+```
+
+The expected result is `QuotaBar-0.1.0.zip: OK`. For a different release or folder, use its matching filename or folder. If you choose to run this check and it reports `FAILED`, download both matching files again before opening the app.
+
+## Build from source
+
+This is an optional alternative for development or Unreleased changes. To install the ready-made app, use the [ZIP download](#install) above.
+
+1. Install [Xcode](https://developer.apple.com/xcode/resources/) with Swift 5.9 or newer, choosing a version compatible with your macOS. Open Xcode once and finish its setup. An existing Swift 5.9+ toolchain with Apple's command-line tools and a macOS 14+ SDK also works.
+2. Open Terminal and run the following commands, one line at a time. Start in the folder where you want to keep the source code:
+
+   ```sh
+   git clone https://github.com/YogevSitton/quotabar.git
+   cd quotabar
+   ./scripts/build.sh
+   open dist
+   ```
+
+   A successful build prints `Built .../dist/QuotaBar.app`. The last command opens the output folder in Finder. If the build fails, fix the reported error before continuing.
+3. Drag **QuotaBar.app** from that folder into **Applications**, then open it from Applications. Continue with [First launch and provider setup](#first-launch-and-provider-setup).
+
+The app has no external Swift package dependencies. If you already cloned the repository, use that checkout instead of cloning again. Contributor build and verification steps are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-review).
 
 ## Development
 
