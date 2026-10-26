@@ -18,6 +18,7 @@ actor ClaudeProvider {
     private var lastIssue: ClaudeConnectionIssue?
     private var inFlight = false
     private var checkedCLI: URL?
+    private var lastRequestStartedAt: Date?
 
     init(home: URL = FileManager.default.homeDirectoryForCurrentUser) { self.home = home }
     private func account() -> (organization: String?, identity: String?) {
@@ -53,10 +54,21 @@ actor ClaudeProvider {
         let identity = [current.identity, current.organization].compactMap { $0 }.joined(separator: ":")
         if activeIdentity != identity {
             latestLive = nil; nextRequestAt = .distantPast; lastError = nil; lastIssue = nil; failureCount = 0
+            lastRequestStartedAt = nil
             activeIdentity = identity
         }
         guard !inFlight else { return fallback(organization: current.organization, error: lastError) }
         if reconnect { checkedCLI = nil; nextRequestAt = .distantPast }
+        // Another official Claude process may recover while we are backing off.
+        // A newly fetched account-matched cache is only a reason to recheck via
+        // get_usage, never permission to display disk values as live usage.
+        let now = Date()
+        if lastIssue == .usageUnavailable, now < nextRequestAt,
+           let lastRequestStartedAt, let cached = persistedUsage(identity: current.identity),
+           ClaudeCacheRecovery.shouldRecheck(observedAt: cached.observedAt,
+               lastRequestStartedAt: lastRequestStartedAt, now: now, minimumInterval: cadence) {
+            nextRequestAt = now
+        }
         if Date() < nextRequestAt {
             if lastError == nil, let latestLive { return ClaudeReadResult(snapshot: latestLive, error: nil, nextRequestAt: nextRequestAt) }
             return fallback(organization: current.organization, error: lastError)
@@ -70,6 +82,7 @@ actor ClaudeProvider {
                 throw UsageError.message("Claude Code is not available. Choose Connect Claude to set up the official helper, then check your saved sign-in.")
             }
             let startedAt = Date()
+            lastRequestStartedAt = startedAt
             let data = try await Task.detached(priority: .utility) {
                 try ClaudeCLIReader(binary: binary).readUsage()
             }.value

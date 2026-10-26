@@ -17,6 +17,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 - Make the downloaded-app installation a four-step Finder flow, with Terminal checksum verification and source builds in separate optional sections.
 - Refresh public guidance with numbered download and source-build steps, first-launch and provider setup, troubleshooting, and privacy-reviewed light/dark UI examples rendered from synthetic data.
 
+### Fixed
+
+- Recheck Claude usage sooner when the official CLI receives a fresh account-matched sample during a failure backoff, instead of keeping the old error until the full retry delay expires.
+
 ## [0.1.0] - 2026-10-25
 
 First public release.
