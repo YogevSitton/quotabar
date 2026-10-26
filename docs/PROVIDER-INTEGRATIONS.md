@@ -1,6 +1,6 @@
 # Provider integration details
 
-Implementation notes for the current release. Read [AGENTS.md](../AGENTS.md) before changing these paths. Current verification remains compilation and static review only.
+For installation and first launch, follow the [README setup guide](../README.md#install). This page is a technical reference for the current source. Read [AGENTS.md](../AGENTS.md) before changing these paths. Current verification remains compilation and static review only.
 
 ## Connect Codex
 
@@ -10,7 +10,7 @@ QuotaBar locates the Codex CLI bundled in ChatGPT/Codex or a standalone installa
 
 Claude automatically reuses the official CLI's saved subscription sign-in at startup and on refresh, just like Codex. There is no separate **Use existing sign-in** choice. **Connect Claude** checks the saved sign-in and, only if needed, starts the official browser sign-in directly, without a second native window or another sign-in button. If a helper is missing, this explicit action prepares the verified official helper, then checks the saved login before signing in. Progress, cancellation and errors appear in the popup; **Sign-in help…** opens the optional recovery window for reopening the official authorization page or entering a browser-provided code. To change accounts, sign in to a different account in Claude Code; QuotaBar follows its saved sign-in. Browser login runs only `auth login --claudeai`; finish authorization yourself. Startup, polling and retrying usage never start browser sign-in.
 
-**QuotaBar no longer reads Keychain credentials or calls Claude's authenticated usage endpoint itself.** Claude Code manages its own normal saved sign-in. macOS may still require Claude Code itself to unlock or access its credentials; QuotaBar does not request that access or alter any Keychain permissions.
+**QuotaBar does not read Keychain credentials or call Claude's authenticated usage endpoint itself.** Claude Code manages its own normal saved sign-in. macOS may still require Claude Code itself to unlock or access its credentials; QuotaBar does not request that access or alter any Keychain permissions.
 
 The usage reader starts a bounded Claude Code subprocess and sends only these control requests:
 
@@ -28,11 +28,11 @@ The result preserves five-hour/weekly usage, scheduled reset times, model window
 
 Claude Code can answer from its own usage cache. QuotaBar reads only the non-secret account metadata and `cachedUsageUtilization` fields in `~/.claude.json`, matches the account and the returned quota windows, and preserves `fetchedAtMs`. It does not stamp an older CLI cache as newly fetched. A sample older than two minutes or one without verifiable provenance cannot supply current menu percentages. In-flight account changes invalidate the result. Transient usage failures retry automatically after one minute, increasing to at most five minutes; authentication/helper failures wait at least five minutes. Explicit connection verification can retry after sign-in.
 
-Verification on 23 October 2026: the local official CLI 2.1.309 accepted initialization, the binary-version request, and `get_usage` with history scanning disabled. It reported zero model cost, zero model API duration, and empty model usage. It returned no eligible subscription windows for the helper's current sign-in, so actual live percentages, reset times, cache matching, and optional grants still need acceptance after browser authorization. Raw CLI output and account identifiers were not logged or saved. On 24 October, after the maintainer completed sign-in, 1.7.11 showed live five-hour/weekly readings and the reported weekly reset; observation times advanced across several automatic refresh cycles without clicking Retry. Optional Claude reset-grant fields remain unverified.
+Dated observations and remaining acceptance work are recorded in [verification status](VERIFICATION.md). Live five-hour/weekly usage and automatic refresh have been observed locally; optional Claude reset-grant fields remain unverified.
 
 ## Refresh and local fallbacks
 
-Network polling is fixed at one minute, plus a read after wake. This is a client cadence, not a guaranteed provider-supported request quota. Successful Claude CLI usage queries are spaced at least one minute apart even when repeatedly refreshed. This sends up to 60 reads per provider per hour; no model inference requests are made. Claude reads have a dedicated timer at the exact next eligible read time, slightly beyond the CLI’s inspected 60-second cache TTL, so an early shared polling tick cannot skip a full minute. Transient failures use a one-to-five-minute backoff; the CLI owns its internal network throttling and authentication. QuotaBar does not receive or override raw HTTP Retry-After headers through this interface. Both providers refresh after wake. The dashboard and menu share one freshness rule; a past reset time also suppresses that window’s current percentage until a fresh reading arrives.
+Network polling is fixed at one minute, plus a read after wake. This is a client cadence, not a guaranteed provider-supported request quota. Successful Claude CLI usage queries are spaced at least one minute apart even when repeatedly refreshed. During normal successful polling, this is roughly one read per provider per minute; backoff and unavailable installations reduce the frequency. No model inference requests are made. Claude reads have a dedicated timer at the exact next eligible read time, slightly beyond the CLI’s inspected 60-second cache TTL, so an early shared polling tick cannot skip a full minute. Transient failures use a one-to-five-minute backoff; the CLI owns its internal network throttling and authentication. QuotaBar does not receive or override raw HTTP Retry-After headers through this interface. Both providers refresh after wake. The dashboard and menu share one freshness rule; a past reset time also suppresses that window’s current percentage until a fresh reading arrives.
 
 When Claude's live request is unavailable, the app selects the newest account-matched reading from:
 
@@ -44,9 +44,8 @@ Disk history contributes percentages only: no reset times, credit counts, or exp
 
 ### Optional status-line exporter
 
-`scripts/capture-claude-statusline.py` can receive Claude Code's status-line JSON and save only sanitized rate-limit fields, the active organization ID, and the capture time. It creates a private (0600) JSON snapshot at `~/Library/Application Support/QuotaBar/claude-statusline.json` using an atomic replacement. QuotaBar checks for changes every ten seconds and labels the saved reading Cached with its capture time. This requires an active Claude Code session to supply readings.
+`scripts/capture-claude-statusline.py` can receive Claude Code's status-line JSON and save only sanitized rate-limit fields, the active organization ID, and the capture time. It creates a private (0600) JSON snapshot at `~/Library/Application Support/QuotaBar/claude-statusline.json` using an atomic replacement. QuotaBar checks for changes every ten seconds and labels it **Saved reading** in the popup, with its original capture time. This requires an active Claude Code session to supply readings.
 
-**The exporter is not installed or configured automatically.** Enabling it changes `~/.claude/settings.json` and requires your explicit consent. If you already use a status-line script, preserve or chain that script instead of replacing it. No Claude settings were changed during this implementation.
-
+**The exporter is not installed or configured automatically.** Enabling it changes `~/.claude/settings.json` and requires your explicit consent. If you already use a status-line script, preserve or chain that script instead of replacing it. QuotaBar does not make this settings change for you.
 
 Additional/model windows and extra usage are parsed defensively but deliberately not displayed. Optional reset-credit fields are schema support, not verified live behavior.

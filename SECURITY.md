@@ -2,9 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please report security vulnerabilities privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability**. This uses GitHub's private vulnerability reporting, so only the maintainer can see the report while it is investigated.
+Please report security vulnerabilities through [GitHub's private vulnerability reporting](https://github.com/YogevSitton/quotabar/security/advisories/new): open the repository's **Security** tab and choose **Report a vulnerability**. Keep the initial report out of public issues while it is investigated.
 
-Do not open a public issue for a vulnerability, and do not include real tokens, account identifiers, emails or raw CLI output in a report. Describe the problem with synthetic or redacted examples.
+Do not open a public issue for a vulnerability, and do not include real tokens, account identifiers, emails, private authorization links or raw CLI output in a report. Describe the problem with synthetic or redacted examples.
 
 You can expect an acknowledgment once the maintainer has seen the report. QuotaBar is maintained in spare time, so there is no guaranteed response or fix time.
 

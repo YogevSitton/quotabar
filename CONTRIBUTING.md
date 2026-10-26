@@ -67,22 +67,27 @@ Keep the description short and lowercase-first; no trailing period.
 - Add or update synthetic-fixture tests for behavior changes in `Sources/QuotaCore/`.
 - Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) for anything a user would notice (`feat`, `fix`, `perf`, breaking changes). Write it for users, not for developers.
 - Update `docs/VERIFICATION.md` when a change affects what has or has not been verified.
-- Screenshots must not show emails, names, account or organization IDs, or other personal data.
+- Screenshots must not show emails, names, account or organization IDs, private authorization links, or other personal data. Prefer offline renders of the current UI with synthetic data, and label them as examples. Record their source revision and capture method in [the screenshot guide](docs/SCREENSHOTS.md); strip image metadata and visually review each image before committing it.
 - If an AI assistant wrote a meaningful part of the change, say so in the description. The same rules and the same review apply.
 
 ## Build and review
 
-Requires macOS 14+ and Xcode/Swift 5.9 or newer.
+For toolchain setup and a first build, follow [Build from source](README.md#build-from-source). Requires macOS 14+ and Swift 5.9 or newer. Local build verification has covered Apple Silicon; Intel remains unverified.
+
+Run these commands from the repository root. They build and inspect the app without launching it:
 
 ```sh
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
-python3 scripts/audit-public-tree.py
+python3 scripts/audit-public-tree.py --public-docs
+codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
 `./scripts/build.sh` must leave Git-tracked files unchanged. If you change the app icon drawing, run `./scripts/build-icon.sh` and commit the regenerated artwork in the same pull request.
 
 Do not execute tests, live diagnostics, sign-in or reset actions under the current verification restriction. The maintainer must explicitly change that restriction first. Never paste raw provider output or identifiers into an issue or pull request.
+
+Offline documentation renders may use synthetic fixtures without starting provider monitoring, loading account or recovery files, or invoking any controls. They demonstrate presentation only and do not establish live-provider or reset verification.
 
 CI compiles the app and test targets on macOS, audits the public tree and checks the pull request title; it does not execute tests. Workflows from first-time contributors wait for maintainer approval before running.
 
