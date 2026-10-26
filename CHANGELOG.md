@@ -13,7 +13,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
-- Refresh public setup, troubleshooting and contributor guidance, with privacy-reviewed light/dark UI examples and a saved-reading example rendered from synthetic data.
+- Refresh public guidance with numbered download and source-build steps, first-launch and provider setup, troubleshooting, and privacy-reviewed light/dark UI examples rendered from synthetic data.
 
 ## [0.1.0] - 2026-10-25
 

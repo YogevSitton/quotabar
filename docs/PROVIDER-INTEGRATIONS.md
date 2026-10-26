@@ -1,6 +1,6 @@
 # Provider integration details
 
-Implementation notes for the current release. Read [AGENTS.md](../AGENTS.md) before changing these paths. Current verification remains compilation and static review only.
+For installation and first launch, follow the [README setup guide](../README.md#install). This page is a technical reference for the current source. Read [AGENTS.md](../AGENTS.md) before changing these paths. Current verification remains compilation and static review only.
 
 ## Connect Codex
 

@@ -2,7 +2,9 @@
 
 A native macOS menu bar app for Codex (ChatGPT) and Claude subscription usage. See your remaining five-hour and weekly usage, scheduled reset times, and any reset credits and expiry dates the provider reports.
 
-Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI or Anthropic.
+Use Codex, Claude, or both. Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI or Anthropic.
+
+[Install](#install) | [First launch](#first-launch-and-provider-setup) | [Usage](#usage) | [Screenshots](#screenshots) | [Troubleshooting](#troubleshooting)
 
 ## Status
 
@@ -14,30 +16,77 @@ Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live u
 
 ## Install
 
-### Build from source
+You need an **Apple Silicon Mac with macOS 14 or later**, plus a subscription sign-in for at least one supported provider. You do not need to connect both providers.
 
-Install Xcode or a Swift 5.9+ toolchain, then:
-
-```sh
-git clone https://github.com/YogevSitton/quotabar.git
-cd quotabar
-./scripts/build.sh
-open dist/QuotaBar.app
-```
-
-The app has no external Swift package dependencies. Move `QuotaBar.app` into Applications before enabling launch at login.
+Choose one installation method. The download is the simplest route; building from source gives you the current code, including Unreleased changes.
 
 ### Download a preview
 
-If a packaged build is available, download its zip and matching `.sha256` file from [Releases](https://github.com/YogevSitton/quotabar/releases). In the download folder, verify the checksum using the actual version number:
+No Xcode or Swift installation is needed for this route.
 
-```sh
-shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
-```
+1. Open [Releases](https://github.com/YogevSitton/quotabar/releases) and expand **Assets** for the version you want. Download **both** `QuotaBar-0.1.0.zip` and `QuotaBar-0.1.0.zip.sha256` for the 0.1.0 preview. Choose the QuotaBar files, not GitHub's **Source code** archives.
+2. Keep both files in the same folder. Open **Terminal** from **Applications > Utilities**. If the files are in Downloads, paste these two commands:
 
-Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded preview. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
+   ```sh
+   cd ~/Downloads
+   shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
+   ```
 
-Updates are manual: quit QuotaBar, download or build the new version, and replace the app. There is no in-app updater in this release. See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+   The expected result is `QuotaBar-0.1.0.zip: OK`. For a different version, use that release's matching filenames. If the files are elsewhere, use that folder instead of `~/Downloads`. If verification fails, stop and see [Troubleshooting](#troubleshooting).
+3. Double-click the verified ZIP in Finder to extract it. Drag **QuotaBar.app** into **Applications**, then open it from Applications.
+
+The checksum checks that the ZIP matches the published file. Preview builds are ad-hoc signed, not Developer ID signed or notarized by Apple. If macOS blocks the app because the developer cannot be verified, read [Apple's guidance](https://support.apple.com/en-us/102445). If you trust the download and choose to proceed, first try opening it, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**.
+
+Continue with [First launch and provider setup](#first-launch-and-provider-setup).
+
+### Build from source
+
+Use this route for development or to get changes that have not been released yet.
+
+1. Install [Xcode](https://developer.apple.com/xcode/resources/) with Swift 5.9 or newer, choosing a version compatible with your macOS. Open Xcode once and finish its setup. An existing Swift 5.9+ toolchain with Apple's command-line tools and a macOS 14+ SDK also works.
+2. Open Terminal and run the following commands, one line at a time. Start in the folder where you want to keep the source code:
+
+   ```sh
+   git clone https://github.com/YogevSitton/quotabar.git
+   cd quotabar
+   ./scripts/build.sh
+   open dist
+   ```
+
+   A successful build prints `Built .../dist/QuotaBar.app`. The last command opens the output folder in Finder. If the build fails, fix the reported error before continuing.
+3. Drag **QuotaBar.app** from that folder into **Applications**, then open it from Applications. Continue with [First launch and provider setup](#first-launch-and-provider-setup).
+
+The app has no external Swift package dependencies. If you already cloned the repository, use that checkout instead of cloning again. Contributor build and verification steps are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-review).
+
+### Update an existing installation
+
+Quit QuotaBar with the power button in its popup, download and verify a newer release or build the source again, then replace **QuotaBar.app** in Applications and reopen it. Updates are manual; there is no in-app updater. See [CHANGELOG.md](CHANGELOG.md) for version changes.
+
+## First launch and provider setup
+
+QuotaBar runs in the **menu bar at the top of your screen**. It has no Dock icon or main app window. Click its gauge icon or provider percentages to open the popup.
+
+Set up either provider below, or both. QuotaBar reuses the official tools' subscription sign-in; you do not paste passwords or API keys into QuotaBar.
+
+### Codex
+
+1. Install the ChatGPT/Codex desktop app or the official Codex CLI. OpenAI's [desktop setup](https://developers.openai.com/codex/quickstart/) and [CLI setup](https://learn.chatgpt.com/docs/codex/cli) explain those options.
+2. Sign in through that official app or CLI with your **ChatGPT subscription**. API-key-only authentication cannot provide subscription usage.
+3. Open QuotaBar's popup. It detects supported installations automatically and reads the existing sign-in. There is no separate Codex sign-in button in QuotaBar.
+
+### Claude
+
+1. Install [Claude Desktop](https://claude.com/download) or the [official Claude Code CLI](https://code.claude.com/docs/en/setup#install-claude-code). QuotaBar's usage reader requires Claude Code **2.1.309 or later**.
+2. Open QuotaBar's popup. It automatically checks for an existing **Claude Code subscription sign-in**. Being signed in only to Claude Desktop does not necessarily provide that CLI sign-in.
+3. If **Connect Claude** appears, click it. QuotaBar prepares a verified official helper if needed, checks the saved sign-in, and opens the official browser login only when required. Finish authorization in your browser. Progress, cancel and errors stay in the popup; **Sign-in help** opens optional recovery help.
+
+To change Claude accounts later, sign in to the other account in Claude Code; QuotaBar follows that sign-in. A provider with no detected local installation is hidden. Startup, polling and retrying usage never open browser sign-in or download a helper.
+
+### Check that setup worked
+
+After a successful read, each connected provider shows its five-hour and weekly remaining percentages in the popup and menu bar, for example `72%/61%`. Refresh runs automatically every minute and after wake, with longer waits after some errors. Missing or unverified values stay unavailable; see [Troubleshooting](#troubleshooting) if a card or reading is missing.
+
+To start QuotaBar automatically, open the popup's **More** (ellipsis) menu and enable **Launch at login** after moving the app into Applications.
 
 ## Usage
 
@@ -61,25 +110,22 @@ Current source UI rendered offline with synthetic usage and reset offers. These 
 
 See [dark appearance, saved-reading examples and image provenance](docs/SCREENSHOTS.md).
 
-## Connect your providers
+## Troubleshooting
 
-**Codex:** Install the Codex CLI or the ChatGPT/Codex desktop app and sign in there with your ChatGPT subscription. QuotaBar detects the bundled CLI and common standalone install locations, including npm, nvm, Volta, Bun and pnpm. It reuses the CLI's existing sign-in through its local app server. API-key-only authentication does not provide subscription usage.
+| What you see | What to do |
+| --- | --- |
+| The checksum command says a file is missing | Check that Terminal is in the folder containing both downloads, with the exact filenames shown in the command. If your browser automatically extracted and removed the ZIP, download the original ZIP again. |
+| The checksum result says `FAILED` | Do not open that download. Download both matching files again from the same release and repeat the check. |
+| The source build fails | Make sure Xcode has finished setup and the selected toolchain includes Swift 5.9+ and a macOS 14+ SDK. Keep the error message for a bug report, with personal paths redacted. |
+| A provider is missing | Check that its desktop app or CLI is installed in a supported location. Wait about 30 seconds or reopen the popup for installation detection. See [installation discovery details](docs/PROVIDER-INTEGRATIONS.md). |
+| Codex has no current values | Check the detected official app or CLI's subscription sign-in. An API-key-only account cannot supply subscription limits. |
+| Claude shows **Connect Claude** | Follow the [Claude setup steps](#claude) and finish the official browser flow if requested. |
+| Claude shows a usage error | Use **Retry usage** or wait for the automatic retry. An old cache, unavailable service or incompatible CLI does not by itself mean you need to sign in again. |
+| A card shows **Saved reading** | Its timestamp and percentages describe an earlier sample. Those values never supply current menu bar percentages. **Last saved reading** opens historical details. |
 
-**Claude:** Install Claude Desktop or a standalone Claude Code CLI. The usage reader requires Claude Code 2.1.309 or later. QuotaBar automatically checks its saved subscription sign-in. If needed, **Connect Claude** prepares a verified official helper and starts the official browser sign-in after checking the existing login. Progress, cancel and errors stay in the popup; optional **Sign-in help** opens a separate recovery window. Finish browser authorization yourself. To change accounts, sign in to the other account in Claude Code; QuotaBar follows it.
+The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage), where you can check your account directly.
 
-Startup, polling and retrying usage never start browser sign-in or download a helper. Missing usage is not treated as proof that you are signed out. Network, version, service and stale-cache errors offer retry. Providers with no detected local installation are hidden and are not polled.
-
-The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage).
-
-### If usage is unavailable
-
-- **Provider missing:** Check that its desktop app or CLI is installed in a supported location. QuotaBar hides undetected providers and checks installation again automatically.
-- **Codex has no values:** Check the detected official CLI's subscription sign-in. API-key-only accounts cannot supply subscription limits.
-- **Claude needs sign-in:** Use **Connect Claude** and finish the official browser flow. For a different account, change the sign-in in Claude Code.
-- **Claude shows a usage error:** Use **Retry usage** or wait for the automatic retry. An old cache, unavailable service or incompatible CLI is not proof that you need to sign in again.
-- **Saved reading visible:** Its timestamp and percentages describe an earlier sample. It never supplies current menu bar values. **Last saved reading** opens the historical details.
-
-When reporting a problem, use the [bug template](.github/ISSUE_TEMPLATE/bug_report.md) and remove personal data from screenshots. Never include raw CLI replies or authentication links.
+For help, use the [bug template](.github/ISSUE_TEMPLATE/bug_report.md). Include your macOS version, Mac chip, QuotaBar version and what happened. Remove personal data from screenshots; never include raw CLI replies or private authorization links. Report security issues privately, following [SECURITY.md](SECURITY.md).
 
 ## Freshness and privacy
 

@@ -72,7 +72,9 @@ Keep the description short and lowercase-first; no trailing period.
 
 ## Build and review
 
-Requires macOS 14+ and Xcode/Swift 5.9 or newer.
+For toolchain setup and a first build, follow [Build from source](README.md#build-from-source). Requires macOS 14+ and Swift 5.9 or newer. Local build verification has covered Apple Silicon; Intel remains unverified.
+
+Run these commands from the repository root. They build and inspect the app without launching it:
 
 ```sh
 ./scripts/build.sh
