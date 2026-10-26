@@ -15,6 +15,6 @@ The rewritten history was rescanned before upload. Only the rewritten main branc
 - Include the MIT license and provider artwork notice inside the app bundle.
 - Keep screenshots aligned with the source revision being documented. Prefer privacy-reviewed offline renders with synthetic data; record their provenance and limits in [the screenshot guide](SCREENSHOTS.md). Do not start provider monitoring, sign-in or reset actions to update documentation images.
 - Keep monitoring, sign-in and reset verification restrictions in place.
-- Clearly label the downloadable app an early preview: Developer ID signing, notarization, a supported update channel, broader account compatibility and Intel validation remain incomplete.
+- Keep the release version visible and document current limitations: Developer ID signing, notarization, a supported update channel, broader account compatibility and Intel validation remain incomplete.
 
 Pattern scans and metadata inspection reduce exposure risk; they do not prove the absence of every possible secret or vulnerability. Future changes still need review and repository security scanning.

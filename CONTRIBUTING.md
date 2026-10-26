@@ -99,7 +99,7 @@ CI compiles the app and test targets on macOS, audits the public tree and checks
 
 ## Versions and releases
 
-QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, releases are public previews: a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only.
+QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only. Public releases do not carry a preview label.
 
 Releases are cut by the maintainer from `main`:
 

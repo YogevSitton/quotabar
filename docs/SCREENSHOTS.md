@@ -1,6 +1,6 @@
 # Screenshots
 
-These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They include the pace markers and reset-expiry warnings listed under [Unreleased](../CHANGELOG.md#unreleased), so the packaged 0.1.0 preview can differ.
+These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They include the pace markers and reset-expiry warnings listed under [Unreleased](../CHANGELOG.md#unreleased), so the packaged 0.1.0 release can differ.
 
 All usage, plans, dates and reset offers are synthetic. No account identifiers, credentials, authorization links or desktop content appear in the images. The fixture clock is 26 October 2026 at 10:00 in Europe/London. The dates and countdowns illustrate the UI; they are not current provider readings.
 

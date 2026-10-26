@@ -8,9 +8,9 @@ Use Codex, Claude, or both. Independent community project, with no analytics or 
 
 ## Status
 
-The first public preview is **0.1.0**. Earlier development builds used higher internal version numbers.
+The first public release is **0.1.0**. Earlier development builds used higher internal version numbers.
 
-This README and its screenshots describe the current `main` branch, including [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.1.0 preview, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.1.0/README.md).
+This README and its screenshots describe the current `main` branch, including [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.1.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.1.0/README.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
@@ -27,7 +27,7 @@ Requires an **Apple Silicon Mac with macOS 14 or later**. You can use Codex, Cla
 
 ### If macOS blocks the app
 
-Preview builds are not notarized by Apple. If macOS says the developer cannot be verified and you trust the download, first try opening the app, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**. See [Apple's explanation](https://support.apple.com/en-us/102445).
+Downloaded builds are not notarized by Apple. If macOS says the developer cannot be verified and you trust the download, first try opening the app, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**. See [Apple's explanation](https://support.apple.com/en-us/102445).
 
 Continue with [First launch and provider setup](#first-launch-and-provider-setup) to connect your subscription.
 
@@ -134,7 +134,7 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Missing provider fields remain unknown; full reset-credit parity is not promised.
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
-- Packaged previews are ad-hoc signed, not notarized. Developer ID signing, notarization and a supported update channel remain future work.
+- Packaged releases are ad-hoc signed, not notarized. Developer ID signing, notarization and a supported update channel remain future work.
 
 ## Optional checksum verification
 
