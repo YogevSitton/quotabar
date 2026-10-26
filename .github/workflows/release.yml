@@ -1,0 +1,409 @@
+name: Release
+
+# Publishes signed Preview builds and owner-promoted Stable releases. Inert until
+# the owner completes signing setup and sets QUOTABAR_PUBLISHING=enabled and the
+# QUOTABAR_PREVIEW_SINCE activation boundary (docs/UPDATES.md). Merging this file
+# activates nothing. No pull request or fork code ever runs here: Preview
+# publication only follows a successful CI push run on main.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      preview_tag:
+        description: Published Preview to promote to Stable (preview-<build>)
+        required: true
+        type: string
+      display_version:
+        description: Display version that Preview carries and Stable will publish (for example 0.2.0)
+        required: true
+        type: string
+
+permissions: {}
+
+# Preview publications are serialized together and Stable promotions together:
+# GitHub keeps one pending run per group and supersedes older pending ones
+# (latest-wins). A running publication is never cancelled mid-write. Every other
+# CI completion (pull requests, other branches) gets its own group, so it can
+# never displace a pending publication. Feed deployment is serialized separately.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch' && 'quotabar-stable' ||
+        (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') && 'quotabar-preview' ||
+        format('quotabar-unrelated-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  build-preview:
+    if: >-
+      vars.QUOTABAR_PUBLISHING == 'enabled' &&
+      github.repository == 'YogevSitton/quotabar' &&
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.eligibility.outputs.publish }}
+      build: ${{ steps.identity.outputs.build }}
+      head_sha: ${{ steps.eligibility.outputs.head_sha }}
+      public_key: ${{ steps.identity.outputs.public_key }}
+    steps:
+      - name: Check out the exact CI revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check eligibility and the activation boundary
+        id: eligibility
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BOUNDARY: ${{ vars.QUOTABAR_PREVIEW_SINCE }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid CI head SHA."; exit 1; }
+          [[ "$BOUNDARY" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::QUOTABAR_PREVIEW_SINCE is missing or malformed; nothing is published."; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$HEAD_SHA" ]] || { echo "::error::Checkout does not match the CI head."; exit 1; }
+          main_line="$(git rev-list --first-parent origin/main)"
+          grep -qxF "$BOUNDARY" <<<"$main_line" || { echo "::error::The activation boundary is not on main's first-parent history."; exit 1; }
+          grep -qxF "$HEAD_SHA" <<<"$main_line" || { echo "::error::The CI head is not on main's first-parent history."; exit 1; }
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          head_line="$(git rev-list --first-parent "$HEAD_SHA")"
+          if [[ "$HEAD_SHA" == "$BOUNDARY" ]] || ! grep -qxF "$BOUNDARY" <<<"$head_line"; then
+            echo "::notice::$HEAD_SHA was merged at or before the activation boundary; it is not published."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          build="$(/bin/zsh scripts/build-identity.sh | sed -n 's/^build=//p')"
+          newest="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '[.[] | select(.draft == false) | .tag_name | select(test("^preview-[0-9]+$")) | ltrimstr("preview-") | tonumber] | max // 0')"
+          if (( build <= newest )); then
+            echo "::notice::Build $build is not newer than published Preview $newest (latest-wins); nothing is published."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - name: Build and package in release mode
+        if: steps.eligibility.outputs.publish == 'true'
+        env:
+          QUOTABAR_RELEASE_BUILD: '1'
+        run: /bin/zsh scripts/package-release.sh
+      - name: Prepare unsigned Preview metadata
+        id: identity
+        if: steps.eligibility.outputs.publish == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          bin="$(swift build -c release --disable-sandbox --show-bin-path)"
+          tool="$bin/QuotaReleaseTool"
+          identity="$("$tool" identity --bundle dist/QuotaBar.app)"
+          build="$(sed -n 's/^build=//p' <<<"$identity")"
+          version="$(sed -n 's/^displayVersion=//p' <<<"$identity")"
+          public_key="$(sed -n 's/^publicKey=//p' <<<"$identity")"
+          [[ "$(sed -n 's/^commit=//p' <<<"$identity")" == "$HEAD_SHA" ]] || { echo "::error::Bundle commit does not match the CI head."; exit 1; }
+          stage="$RUNNER_TEMP/preview-stage"
+          mkdir "$stage"
+          archive="QuotaBar-preview-$build.zip"
+          cp "dist/QuotaBar-$version.zip" "$stage/$archive"
+          (cd "$stage" && shasum -a 256 "$archive" > "$archive.sha256")
+          printf 'QuotaBar Preview build %s (%s), from commit %s.\nPreview builds follow main and are not curated Stable releases.\n' \
+            "$build" "$version" "${HEAD_SHA:0:12}" > "$stage/notes.txt"
+          "$tool" manifest --channel preview --bundle dist/QuotaBar.app --archive "$stage/$archive" \
+            --notes "$stage/notes.txt" --output "$stage/QuotaBar-update.unsigned.json"
+          cp "$tool" "$stage/QuotaReleaseTool"
+          (cd "$stage" && shasum -a 256 "$archive" QuotaBar-update.unsigned.json QuotaReleaseTool notes.txt > SHA256SUMS)
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "public_key=$public_key" >> "$GITHUB_OUTPUT"
+      - name: Hand the unsigned Preview to the signing job
+        if: steps.eligibility.outputs.publish == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-stage
+          path: ${{ runner.temp }}/preview-stage
+          retention-days: 1
+          if-no-files-found: error
+
+  sign-and-publish-preview:
+    needs: build-preview
+    if: >-
+      vars.QUOTABAR_PUBLISHING == 'enabled' &&
+      github.repository == 'YogevSitton/quotabar' &&
+      needs.build-preview.outputs.publish == 'true'
+    runs-on: macos-15
+    timeout-minutes: 15
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+      - name: Receive the unsigned Preview
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: preview-stage
+          path: ${{ runner.temp }}/preview-stage
+      - name: Recheck the staged files
+        working-directory: ${{ runner.temp }}/preview-stage
+        env:
+          BUILD: ${{ needs.build-preview.outputs.build }}
+        run: shasum -a 256 -c SHA256SUMS && shasum -a 256 -c "QuotaBar-preview-$BUILD.zip.sha256" && chmod 0755 QuotaReleaseTool
+      - name: Sign Preview metadata
+        working-directory: ${{ runner.temp }}/preview-stage
+        env:
+          QUOTABAR_UPDATE_SIGNING_KEY: ${{ secrets.QUOTABAR_UPDATE_SIGNING_KEY }}
+        run: ./QuotaReleaseTool sign --manifest QuotaBar-update.unsigned.json --output QuotaBar-update.json
+      - name: Verify signed Preview metadata
+        working-directory: ${{ runner.temp }}/preview-stage
+        env:
+          BUILD: ${{ needs.build-preview.outputs.build }}
+          PUBLIC_KEY: ${{ needs.build-preview.outputs.public_key }}
+        run: ./QuotaReleaseTool verify --envelope QuotaBar-update.json --public-key "$PUBLIC_KEY" --channel preview --tag "preview-$BUILD" --archive "QuotaBar-preview-$BUILD.zip"
+      - name: Publish the Preview release
+        working-directory: ${{ runner.temp }}/preview-stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ needs.build-preview.outputs.build }}
+          HEAD_SHA: ${{ needs.build-preview.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          tag="preview-$BUILD"
+          archive="QuotaBar-preview-$BUILD.zip"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq "[.[] | select(.tag_name == \"$tag\")] | map(.draft) | @csv")"
+          if [[ "$existing" == *false* ]]; then echo "::error::$tag is already published; releases are never replaced."; exit 1; fi
+          # A draft left by an earlier failed run of the same tag is never published; remove only that.
+          if [[ "$existing" == *true* ]]; then gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes; fi
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$HEAD_SHA" --draft --prerelease --latest=false \
+            --title "QuotaBar Preview build $BUILD" --notes-file notes.txt
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$archive" "$archive.sha256" QuotaBar-update.json
+          expected="sha256:$(shasum -a 256 "$archive" | cut -d' ' -f1)"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .assets[] | select(.name == \"$archive\") | .digest")"
+          [[ "$actual" == "$expected" ]] || { echo "::error::Uploaded archive digest does not match; the draft stays unpublished."; exit 1; }
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+
+  approve-stable:
+    if: >-
+      vars.QUOTABAR_PUBLISHING == 'enabled' &&
+      github.repository == 'YogevSitton/quotabar' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner
+    runs-on: macos-15
+    timeout-minutes: 20
+    environment: stable-approval
+    permissions:
+      contents: read
+    outputs:
+      display_version: ${{ steps.verify.outputs.display_version }}
+      commit: ${{ steps.verify.outputs.commit }}
+      public_key: ${{ steps.verify.outputs.public_key }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build the release tool
+        run: swift build -c release --disable-sandbox --product QuotaReleaseTool
+      - name: Verify the Preview chosen for Stable
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_TAG: ${{ inputs.preview_tag }}
+          DISPLAY_VERSION: ${{ inputs.display_version }}
+        run: |
+          set -euo pipefail
+          [[ "$PREVIEW_TAG" =~ ^preview-[0-9]+$ ]] || { echo "::error::preview_tag must look like preview-<build>."; exit 1; }
+          [[ "$DISPLAY_VERSION" =~ ^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$ ]] || { echo "::error::display_version must look like 0.2.0."; exit 1; }
+          tool="$(swift build -c release --disable-sandbox --show-bin-path)/QuotaReleaseTool"
+          public_key="$(/usr/bin/plutil -extract publicKey raw -o - release-version.json)"
+          [[ -n "$public_key" ]] || { echo "::error::No committed update public key."; exit 1; }
+          build="${PREVIEW_TAG#preview-}"
+          archive="QuotaBar-preview-$build.zip"
+          stage="$RUNNER_TEMP/stable-stage"; mkdir "$stage"; cd "$stage"
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$PREVIEW_TAG")"
+          [[ "$(jq -r '.draft' <<<"$release")" == false && "$(jq -r '.prerelease' <<<"$release")" == true ]] || { echo "::error::$PREVIEW_TAG is not a published Preview."; exit 1; }
+          gh release download "$PREVIEW_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$archive" --pattern QuotaBar-update.json --dir preview
+          details="$("$tool" verify --envelope preview/QuotaBar-update.json --public-key "$public_key" --channel preview --tag "$PREVIEW_TAG" --archive "preview/$archive")"
+          sha="$(sed -n 's/^sha256=//p' <<<"$details")"
+          commit="$(sed -n 's/^commit=//p' <<<"$details")"
+          [[ "$(sed -n 's/^displayVersion=//p' <<<"$details")" == "$DISPLAY_VERSION" ]] || { echo "::error::$PREVIEW_TAG carries a different display version."; exit 1; }
+          [[ "$(jq -r --arg name "$archive" '.assets[] | select(.name == $name) | .digest' <<<"$release")" == "sha256:$sha" ]] || { echo "::error::GitHub's asset digest does not match the signed hash."; exit 1; }
+          cd "$GITHUB_WORKSPACE"
+          git rev-list --first-parent origin/main | grep -qxF "$commit" || { echo "::error::The Preview commit is not on main's first-parent history."; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$DISPLAY_VERSION" >/dev/null; then echo "::error::v$DISPLAY_VERSION already exists; tags are never moved."; exit 1; fi
+          if gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[].tag_name" | grep -qxF "v$DISPLAY_VERSION"; then echo "::error::A release for v$DISPLAY_VERSION already exists."; exit 1; fi
+          latest_status="$(curl -sS -o "$stage/latest.json" -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest")"
+          if [[ "$latest_status" == 200 ]]; then
+            latest_tag="$(jq -r '.tag_name' "$stage/latest.json")"
+            gh release download "$latest_tag" --repo "$GITHUB_REPOSITORY" --pattern QuotaBar-update.json --dir "$stage/latest"
+            latest_build="$("$tool" verify --envelope "$stage/latest/QuotaBar-update.json" --public-key "$public_key" --channel stable --tag "$latest_tag" | sed -n 's/^build=//p')"
+            (( build > latest_build )) || { echo "::error::Build $build is not newer than Stable build $latest_build."; exit 1; }
+          elif [[ "$latest_status" != 404 ]]; then
+            echo "::error::Could not read the current Stable release (HTTP $latest_status)."; exit 1
+          fi
+          git show "$commit:CHANGELOG.md" | awk -v heading="## [$DISPLAY_VERSION]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }' > "$stage/notes.md"
+          grep -q '[^[:space:]]' "$stage/notes.md" || { echo "::error::CHANGELOG.md at $commit has no ## [$DISPLAY_VERSION] section."; exit 1; }
+          cd "$stage"
+          "$tool" manifest --promote preview/QuotaBar-update.json --public-key "$public_key" --display-version "$DISPLAY_VERSION" \
+            --notes notes.md --output QuotaBar-update.unsigned.json
+          stable_archive="QuotaBar-$DISPLAY_VERSION.zip"
+          cp "preview/$archive" "$stable_archive"
+          shasum -a 256 "$stable_archive" > "$stable_archive.sha256"
+          cp "$tool" QuotaReleaseTool
+          rm -rf preview latest latest.json
+          shasum -a 256 "$stable_archive" QuotaBar-update.unsigned.json QuotaReleaseTool notes.md > SHA256SUMS
+          echo "display_version=$DISPLAY_VERSION" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "public_key=$public_key" >> "$GITHUB_OUTPUT"
+      - name: Hand the verified Stable candidate to the signing job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stable-stage
+          path: ${{ runner.temp }}/stable-stage
+          retention-days: 1
+          if-no-files-found: error
+
+  sign-and-publish-stable:
+    needs: approve-stable
+    if: >-
+      vars.QUOTABAR_PUBLISHING == 'enabled' &&
+      github.repository == 'YogevSitton/quotabar' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner
+    runs-on: macos-15
+    timeout-minutes: 15
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+      - name: Receive the verified Stable candidate
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: stable-stage
+          path: ${{ runner.temp }}/stable-stage
+      - name: Recheck the staged files
+        working-directory: ${{ runner.temp }}/stable-stage
+        run: shasum -a 256 -c SHA256SUMS && chmod 0755 QuotaReleaseTool
+      - name: Sign Stable metadata
+        working-directory: ${{ runner.temp }}/stable-stage
+        env:
+          QUOTABAR_UPDATE_SIGNING_KEY: ${{ secrets.QUOTABAR_UPDATE_SIGNING_KEY }}
+        run: ./QuotaReleaseTool sign --manifest QuotaBar-update.unsigned.json --output QuotaBar-update.json
+      - name: Verify signed Stable metadata
+        working-directory: ${{ runner.temp }}/stable-stage
+        env:
+          VERSION: ${{ needs.approve-stable.outputs.display_version }}
+          PUBLIC_KEY: ${{ needs.approve-stable.outputs.public_key }}
+        run: ./QuotaReleaseTool verify --envelope QuotaBar-update.json --public-key "$PUBLIC_KEY" --channel stable --tag "v$VERSION" --archive "QuotaBar-$VERSION.zip"
+      - name: Publish the Stable release as Latest
+        working-directory: ${{ runner.temp }}/stable-stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.approve-stable.outputs.display_version }}
+          COMMIT: ${{ needs.approve-stable.outputs.commit }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          archive="QuotaBar-$VERSION.zip"
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq "[.[] | select(.tag_name == \"$tag\")] | map(.draft) | @csv")"
+          if [[ "$existing" == *false* ]]; then echo "::error::$tag is already published; releases are never replaced."; exit 1; fi
+          if [[ "$existing" == *true* ]]; then gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes; fi
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$COMMIT" --draft \
+            --title "QuotaBar $VERSION" --notes-file notes.md
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$archive" "$archive.sha256" QuotaBar-update.json
+          expected="sha256:$(shasum -a 256 "$archive" | cut -d' ' -f1)"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .assets[] | select(.name == \"$archive\") | .digest")"
+          [[ "$actual" == "$expected" ]] || { echo "::error::Uploaded archive digest does not match; the draft stays unpublished."; exit 1; }
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+
+  deploy-feeds:
+    needs: [sign-and-publish-preview, sign-and-publish-stable]
+    if: >-
+      always() &&
+      vars.QUOTABAR_PUBLISHING == 'enabled' &&
+      github.repository == 'YogevSitton/quotabar' &&
+      (needs.sign-and-publish-preview.result == 'success' || needs.sign-and-publish-stable.result == 'success')
+    runs-on: macos-15
+    timeout-minutes: 20
+    # Each deployment rebuilds both feeds from published releases when it runs,
+    # so a superseded pending deployment loses nothing.
+    concurrency:
+      group: quotabar-feeds
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the release tool
+        run: swift build -c release --disable-sandbox --product QuotaReleaseTool
+      - name: Assemble verified channel feeds
+        id: feeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tool="$(swift build -c release --disable-sandbox --show-bin-path)/QuotaReleaseTool"
+          public_key="$(/usr/bin/plutil -extract publicKey raw -o - release-version.json)"
+          [[ -n "$public_key" ]] || { echo "::error::No committed update public key."; exit 1; }
+          work="$RUNNER_TEMP/feeds"; site="$RUNNER_TEMP/site"
+          mkdir -p "$work" "$site/updates/v1"; touch "$site/.nojekyll"
+          # Each present channel must verify; an absent channel simply has no file.
+          publish_channel() {
+            local channel="$1" tag="$2" release="$3"
+            local archive digest details
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern QuotaBar-update.json --dir "$work/$channel" ||
+              { echo "::error::$tag has no QuotaBar-update.json; feeds are not changed."; exit 1; }
+            details="$("$tool" verify --envelope "$work/$channel/QuotaBar-update.json" --public-key "$public_key" --channel "$channel" --tag "$tag")" ||
+              { echo "::error::$tag metadata does not verify; feeds are not changed."; exit 1; }
+            archive="$(sed -n 's/^archiveName=//p' <<<"$details")"
+            digest="$(jq -r --arg name "$archive" '.assets[] | select(.name == $name) | .digest' <<<"$release")"
+            [[ "$digest" == "sha256:$(sed -n 's/^sha256=//p' <<<"$details")" ]] ||
+              { echo "::error::$tag archive digest does not match its metadata; feeds are not changed."; exit 1; }
+            cp "$work/$channel/QuotaBar-update.json" "$site/updates/v1/$channel.json"
+          }
+          latest_status="$(curl -sS -o "$work/latest.json" -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest")"
+          if [[ "$latest_status" == 200 ]]; then
+            publish_channel stable "$(jq -r '.tag_name' "$work/latest.json")" "$(cat "$work/latest.json")"
+          elif [[ "$latest_status" == 404 ]]; then
+            echo "::notice::No Stable release yet; stable.json stays absent."
+          else
+            echo "::error::Could not read the Latest release (HTTP $latest_status); feeds are not changed."; exit 1
+          fi
+          releases="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          preview_tag="$(jq -r '[.[] | select(.draft == false and (.tag_name | test("^preview-[0-9]+$")))] | max_by(.tag_name | ltrimstr("preview-") | tonumber) | .tag_name // empty' <<<"$releases")"
+          if [[ -n "$preview_tag" ]]; then
+            publish_channel preview "$preview_tag" "$(jq --arg tag "$preview_tag" '.[] | select(.tag_name == $tag)' <<<"$releases")"
+          else
+            echo "::notice::No Preview release yet; preview.json stays absent."
+          fi
+          if compgen -G "$site/updates/v1/*.json" >/dev/null; then echo "deploy=true" >> "$GITHUB_OUTPUT"; else echo "deploy=false" >> "$GITHUB_OUTPUT"; fi
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+      - name: Upload the feed site
+        if: steps.feeds.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ steps.feeds.outputs.site }}
+          retention-days: 1
+      - name: Deploy the feed site
+        id: deployment
+        if: steps.feeds.outputs.deploy == 'true'
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
