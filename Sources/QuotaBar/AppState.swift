@@ -24,6 +24,8 @@ import Combine
     let interval: Double = 1
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var settingsError: String?
+    /// Opens the separate Updates window; set by the app delegate.
+    var showUpdates: () -> Void = {}
     private let claudeProvider = ClaudeProvider()
     @Published private(set) var claudeConnection: ClaudeConnectionWindow?
     private var claudeConnectionUpdates: AnyCancellable?

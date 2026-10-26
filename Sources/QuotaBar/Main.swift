@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import QuotaCore
+import QuotaUpdateSupport
 
 @main enum Main {
     @MainActor static func main() {
@@ -36,6 +37,8 @@ import QuotaCore
     private var hostingController: NSHostingController<Dashboard>?
     private var maximumPopoverSize = NSSize.zero
     private var state: AppState!
+    private var updates: UpdateCoordinator!
+    private var updateWindow: UpdateWindow!
     private var timer: Timer?
     private var outsideClickMonitor: Any?
     private var renderedMenuDescription: String?
@@ -48,7 +51,18 @@ import QuotaCore
             NSApp.terminate(nil); return
         }
         NSApp.applicationIconImage = AppArtwork.icon
+        // Confirms a just-finished update for this exact app and build. It
+        // only records the acknowledgment; startup never installs anything.
+        if let build = UInt64(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") {
+            UpdateInstallation.acknowledgeLaunch(bundle: Bundle.main.bundleURL, build: build)
+        }
         state = AppState()
+        updates = UpdateCoordinator()
+        updateWindow = UpdateWindow(coordinator: updates)
+        state.showUpdates = { [weak self] in
+            self?.popover.performClose(nil)
+            self?.updateWindow.show()
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "QuotaBar"
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
@@ -60,7 +74,7 @@ import QuotaCore
             self?.updateLabel()
             if self?.popover.isShown == true { self?.fitPopoverToDisplay() }
         }
-        updateLabel(); state.start()
+        updateLabel(); state.start(); updates.start()
         if !UserDefaults.standard.bool(forKey: "hasLaunched") || CommandLine.arguments.contains("--show") {
             UserDefaults.standard.set(true, forKey: "hasLaunched")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showPopover() }
@@ -103,7 +117,7 @@ import QuotaCore
             : (["QuotaBar - usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
     }
-    @objc private func woke() { state.refresh() }
+    @objc private func woke() { state.refresh(); updates.didWake() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showPopover()
         return true

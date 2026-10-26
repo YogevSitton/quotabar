@@ -49,8 +49,32 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
 <key>QuotaBarUpdateCommit</key><string>$update_commit</string>
 </dict></plist>
 PLIST
-# A configured certificate can preserve Keychain trust across updates. The
-# default remains an ad-hoc local build; never change Keychain ACLs to bypass it.
-codesign --force --deep --sign "${QUOTABAR_SIGN_IDENTITY:--}" "$bundle"
+# The one-shot update helper, with the same identity as the app it installs.
+helper="$bundle/Contents/Helpers/QuotaUpdater.app"
+rm -rf "$helper"
+mkdir -p "$helper/Contents/MacOS"
+cp "$bin_path/QuotaUpdater" "$helper/Contents/MacOS/QuotaUpdater"
+cat > "$helper/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>QuotaUpdater</string>
+<key>CFBundleIdentifier</key><string>com.yogev.quotabar.updater</string>
+<key>CFBundleExecutable</key><string>QuotaUpdater</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>$display_version</string>
+<key>CFBundleVersion</key><string>$build_number</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>LSBackgroundOnly</key><true/>
+<key>QuotaBarUpdateMode</key><string>$update_mode</string>
+<key>QuotaBarUpdatePublicKey</key><string>$update_public_key</string>
+<key>QuotaBarUpdateCommit</key><string>$update_commit</string>
+</dict></plist>
+PLIST
+# Sign inside out: the helper first, then the app that seals it. A configured
+# certificate can preserve Keychain trust across updates. The default remains
+# an ad-hoc local build; never change Keychain ACLs to bypass it.
+codesign --force --sign "${QUOTABAR_SIGN_IDENTITY:--}" "$helper"
+codesign --force --sign "${QUOTABAR_SIGN_IDENTITY:--}" "$bundle"
 touch "$bundle"
 printf 'Built %s (%s build %s, %s mode)\n' "$bundle" "$display_version" "$build_number" "$update_mode"

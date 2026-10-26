@@ -13,7 +13,9 @@ let package = Package(
         .target(name: "QuotaCore"),
         .target(name: "QuotaUpdateSupport", dependencies: ["QuotaCore"]),
         .executableTarget(name: "QuotaReleaseTool", dependencies: ["QuotaCore", "QuotaUpdateSupport"]),
-        .executableTarget(name: "QuotaBar", dependencies: ["QuotaCore"], resources: [.process("Resources")]),
+        // Bundled as Contents/Helpers/QuotaUpdater.app; runs once per Install click.
+        .executableTarget(name: "QuotaUpdater", dependencies: ["QuotaCore", "QuotaUpdateSupport"]),
+        .executableTarget(name: "QuotaBar", dependencies: ["QuotaCore", "QuotaUpdateSupport"], resources: [.process("Resources")]),
         .testTarget(name: "QuotaCoreTests", dependencies: ["QuotaCore"]),
         .testTarget(name: "QuotaUpdateSupportTests", dependencies: ["QuotaCore", "QuotaUpdateSupport"])
     ]
