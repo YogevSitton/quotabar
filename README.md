@@ -8,6 +8,8 @@ Independent community project, with no analytics or hosted backend. Not affiliat
 
 The first public preview is **0.1.0**. Earlier development builds used higher internal version numbers.
 
+This README and its screenshots describe the current `main` branch, including [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.1.0 preview, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.1.0/README.md).
+
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
 ## Install
@@ -43,13 +45,21 @@ Each connected provider has its transparent logo followed by `5h%/weekly%`, such
 
 Click the menu bar item to open the compact popup. Installed providers appear side by side with their five-hour and weekly meters, automatic reset times and reported reset credits. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional/model limits and extra usage are intentionally not displayed.
 
-A subtle white tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
+A subtle contrasting tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. The comparison uses the reading's original timestamp. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
 
 Reported manual reset offers expiring within 24 hours have an orange warning icon and highlighted expiry; within 1 hour they turn red. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning.
 
 The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
 
-Screenshots are omitted until current, privacy-reviewed captures are available.
+## Screenshots
+
+Current source UI rendered offline with synthetic usage and reset offers. These examples include Unreleased changes; they are not live account readings or evidence of reset redemption.
+
+![Light menu bar with Codex 72%/61% and Claude 58%/76% remaining](docs/screenshots/menubar-light.png)
+
+![Light popup with side-by-side Codex and Claude usage, pace ticks, automatic reset countdowns and a Codex reset expiry warning](docs/screenshots/popup-light.png)
+
+See [dark appearance, saved-reading examples and image provenance](docs/SCREENSHOTS.md).
 
 ## Connect your providers
 
@@ -60,6 +70,16 @@ Screenshots are omitted until current, privacy-reviewed captures are available.
 Startup, polling and retrying usage never start browser sign-in or download a helper. Missing usage is not treated as proof that you are signed out. Network, version, service and stale-cache errors offer retry. Providers with no detected local installation are hidden and are not polled.
 
 The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage).
+
+### If usage is unavailable
+
+- **Provider missing:** Check that its desktop app or CLI is installed in a supported location. QuotaBar hides undetected providers and checks installation again automatically.
+- **Codex has no values:** Check the detected official CLI's subscription sign-in. API-key-only accounts cannot supply subscription limits.
+- **Claude needs sign-in:** Use **Connect Claude** and finish the official browser flow. For a different account, change the sign-in in Claude Code.
+- **Claude shows a usage error:** Use **Retry usage** or wait for the automatic retry. An old cache, unavailable service or incompatible CLI is not proof that you need to sign in again.
+- **Saved reading visible:** Its timestamp and percentages describe an earlier sample. It never supplies current menu bar values. **Last saved reading** opens the historical details.
+
+When reporting a problem, use the [bug template](.github/ISSUE_TEMPLATE/bug_report.md) and remove personal data from screenshots. Never include raw CLI replies or authentication links.
 
 ## Freshness and privacy
 

@@ -12,11 +12,12 @@ This file records what has been checked against live provider accounts, what has
 - **Pace presentation (25 October 2026).** During local development, the final popup was visually checked with both providers: pace appears only as a meter tick, with no separate warning row. This observation predates migration of the feature onto the public repository's history; the migrated sources and meter tooltip are validated by compilation and static review.
 - **Usage links.** The ChatGPT and Claude Usage destinations were checked in a signed-in browser.
 
-## Compiled or tested with fixtures only
+## Compilation, static review and synthetic renders
 
 - The Swift test suite (synthetic fixtures) covers provider contracts, missing versus zero data, malformed values, grant counts and expiries, timestamp formats, account-matched caches, CLI response parsing, missing subscription data, backoff, the helper release URL, manifest size/checksum validation, path-injection rejection and strict authorization-link handling. The current release compiles these targets without executing them, locally and in CI. An earlier abandoned preparation branch reported fixture tests; that is not a test result for this release.
 - The exporter and audit have synthetic Python tests, not executed during this release preparation. The tree and history audits themselves run offline.
 - **Pace and reset-expiry indicators.** Synthetic cases cover both window lengths, pace tolerance, invalid or expired dates, the near-zero weekly reference before reset, expiry warning boundaries, unknown expiries, and ordering upcoming offers ahead of expired ones. These cases are compiled without execution. No provider, credential, reset redemption, or recovery request is involved.
+- **Documentation images (26 October 2026).** The UI from source revision `84756c0` was rendered offline in light and dark appearances with synthetic snapshots and a fixed clock. The images were visually reviewed for meter ticks, reset countdowns, an orange expiry warning and labeled historical Claude values. Startup discovery and recovery-file loading were bypassed in the temporary rendering copy; monitoring and all controls remained inactive. These renders do not verify popover placement, live reset offers or redemption. See [screenshots and provenance](SCREENSHOTS.md).
 - **Codex reset redemption.** The confirmation, specific-credit targeting, idempotency key persistence and recovery record were compiled and statically reviewed only. No reset button, confirmation, mutation request, recovery retry or reset test has been exercised, and no reset credit has been consumed.
 - **Claude reset hand-off.** Opening Claude's Usage page is implemented; no Claude reset has been performed through it.
 
