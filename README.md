@@ -8,9 +8,9 @@ Use Codex, Claude, or both. Independent community project, with no analytics or 
 
 ## Status
 
-The latest public release is **0.2.0**. Earlier development builds used higher internal version numbers.
+The latest public release is **0.3.0**. Earlier development builds used higher internal version numbers.
 
-This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.2.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.2.0/README.md).
+This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
@@ -20,7 +20,7 @@ Requires an **Apple Silicon Mac with macOS 14 or later**. You can use Codex, Cla
 
 **No Terminal is needed to install the downloaded app.**
 
-1. Download [QuotaBar-0.2.0.zip](https://github.com/YogevSitton/quotabar/releases/download/v0.2.0/QuotaBar-0.2.0.zip) from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases).
+1. Download [QuotaBar-0.3.0.zip](https://github.com/YogevSitton/quotabar/releases/download/v0.3.0/QuotaBar-0.3.0.zip) from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases).
 2. Double-click the ZIP in Finder to extract it.
 3. Drag **QuotaBar.app** into **Applications**.
 4. Open **QuotaBar** from Applications. Its icon appears in the menu bar at the top of your screen.
@@ -77,7 +77,7 @@ The header contains **Quit** (power) and **More** (ellipsis). More contains **La
 
 ## Screenshots
 
-Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings included in 0.2.0, but predate its bottom-right version label, the menu bar reset countdown chip and the 3-day warning tier. They are not live account readings or evidence of reset redemption.
+Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings added in 0.2.0, but predate the bottom-right version label, and the menu bar reset countdown chip and 3-day warning tier added in 0.3.0. They are not live account readings or evidence of reset redemption.
 
 ![Light menu bar with Codex 72%/61% and Claude 58%/76% remaining](docs/screenshots/menubar-light.png)
 
@@ -142,14 +142,14 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 
 This extra check compares the ZIP against the release's published checksum. **It is optional and requires Terminal.** It does not replace Developer ID signing or notarization.
 
-Download the matching `QuotaBar-0.2.0.zip.sha256` file from the same [release](https://github.com/YogevSitton/quotabar/releases/tag/v0.2.0) and keep it beside the ZIP. If both files are in Downloads, open **Terminal** from **Applications > Utilities** and run:
+Download the matching `QuotaBar-0.3.0.zip.sha256` file from the same [release](https://github.com/YogevSitton/quotabar/releases/tag/v0.3.0) and keep it beside the ZIP. If both files are in Downloads, open **Terminal** from **Applications > Utilities** and run:
 
 ```sh
 cd ~/Downloads
-shasum -a 256 -c QuotaBar-0.2.0.zip.sha256
+shasum -a 256 -c QuotaBar-0.3.0.zip.sha256
 ```
 
-The expected result is `QuotaBar-0.2.0.zip: OK`. For a different release or folder, use its matching filename or folder. If you choose to run this check and it reports `FAILED`, download both matching files again before opening the app.
+The expected result is `QuotaBar-0.3.0.zip: OK`. For a different release or folder, use its matching filename or folder. If you choose to run this check and it reports `FAILED`, download both matching files again before opening the app.
 
 ## Build from source
 
