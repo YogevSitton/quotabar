@@ -122,6 +122,7 @@ private struct CompactProviderCard: View {
             }.padding(.bottom, 2)
             if current, let snapshot {
                 UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false,
+                         noLimit: snapshot.sessionLimit == .noLimit,
                          duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
                          duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
@@ -304,6 +305,7 @@ struct ProviderCard: View {
     }
     @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical,
+                 noLimit: snapshot.sessionLimit == .noLimit,
                  duration: 5 * 3600, observedAt: snapshot.observedAt)
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
                  duration: 7 * 86400, observedAt: snapshot.observedAt)
@@ -401,6 +403,7 @@ private struct UsageRow: View {
     let color: Color
     let now: Date
     let stale: Bool
+    var noLimit = false
     var duration: TimeInterval? = nil
     var observedAt: Date? = nil
     var compact = false
@@ -419,6 +422,19 @@ private struct UsageRow: View {
         return "\(status). \(window.used.formatted(.number.precision(.fractionLength(0...1))))% of quota used; \(elapsed)% of this window's time elapsed. The white tick is the even-use target: \(reference)% left. The colored bar is your actual \(window.remaining)% left. The target approaches zero as reset time approaches. This comparison assumes even use across the window; it is not a forecast."
     }
     var body: some View {
+        if noLimit, window == nil {
+            HStack(spacing: 6) {
+                Text("∞").font(.system(size: 13, weight: .semibold)).accessibilityHidden(true)
+                Text(stale ? "No 5-hour limit at saved reading" : "No 5-hour limit")
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(stale ? .secondary : .primary)
+        } else {
+            meteredBody
+        }
+    }
+    private var meteredBody: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(.system(size: 12, weight: .medium))

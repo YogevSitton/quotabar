@@ -15,6 +15,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 - Popup reset expiry warnings now start 3 days ahead in orange and turn red in the last 24 hours, instead of 24 hours and 1 hour.
 
+### Fixed
+
+- Show `∞` in the menu bar and **No 5-hour limit** in the popup for current Codex Pro readings without a five-hour limit. Keep missing, malformed and stale readings unavailable, including Claude's undocumented `five_hour: null`.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added

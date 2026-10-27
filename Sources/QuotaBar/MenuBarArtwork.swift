@@ -8,9 +8,17 @@ struct MenuBarResetChip: Equatable {
 }
 
 struct MenuBarQuota {
-    let remaining: Int?
-    let resetsAt: Date?
-    var percentage: String { remaining.map { "\($0)%" } ?? "-" }
+    let limit: UsageLimit
+    var remaining: Int? { limit.remaining }
+    var resetsAt: Date? { limit.window?.resetsAt }
+    init(limit: UsageLimit) { self.limit = limit }
+    init(remaining: Int?, resetsAt: Date?) {
+        limit = remaining.map { .limited(UsageWindow(used: Double(100 - $0), resetsAt: resetsAt)) } ?? .unavailable
+    }
+    var percentage: String {
+        if limit == .noLimit { return "∞" }
+        return remaining.map { "\($0)%" } ?? "-"
+    }
     var isExhausted: Bool { remaining == 0 }
     /// An exhausted window shows time until its reset instead of 0%.
     func menuValue(at now: Date) -> String {
@@ -24,6 +32,7 @@ struct MenuBarQuota {
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
     func tooltipLine(_ label: String) -> String {
+        if limit == .noLimit { return "\(label): No limit" }
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
         let value = remaining.map { "\($0)% left" } ?? "Unavailable"
         let reset = resetsAt.map {
@@ -39,7 +48,7 @@ struct MenuBarEntry {
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
     var description: String {
-        "\(name): 5h: \(session.percentage), automatic reset \(session.resetTime); Weekly: \(weekly.percentage), automatic reset \(weekly.resetTime)"
+        [name, session.tooltipLine("5-hour window"), weekly.tooltipLine("Weekly window")].joined(separator: "; ")
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
@@ -91,8 +100,8 @@ struct MenuBarEntry {
         // Keep the bar to one logo and 5h%/weekly% per connected provider.
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         // Reserve the widest percentage pair or countdown so 9% → 10%, a reset
-        // countdown or an unavailable reading never changes the item's width.
-        let slotWidth = ["100%/100%", "4h59m/99%", "6d23h"].map {
+        // countdown, no-limit marker or unavailable reading never changes its width.
+        let slotWidth = ["100%/100%", "4h59m/99%", "6d23h", "∞/100%"].map {
             ceil(($0 as NSString).size(withAttributes: [.font: font]).width)
         }.max() ?? 0
         // The reset countdown chip's space stays reserved too, so a reset
