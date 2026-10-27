@@ -13,6 +13,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- Tighten the menu bar spacing between the Codex usage and the Claude logo.
 - Popup reset expiry warnings now start 3 days ahead in orange and turn red in the last 24 hours, instead of 24 hours and 1 hour.
 
 ### Fixed
