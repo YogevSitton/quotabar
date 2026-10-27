@@ -63,8 +63,8 @@ import QuotaUpdateSupport
     private let client = UpdateFeedClient()
     private var timer: Timer?
     private var lastAttempt: Date?
-    private var rateLimitedUntil: Date?
-    private var transientAttempts = 0
+    /// One wait state for feed checks and archive downloads alike.
+    private var retry = UpdateRetryState()
     private var highWater = UpdateHighWater()
     private var highWaterUnreadable = false
     private var envelopes: [UpdateChannel: Data] = [:]
@@ -136,9 +136,9 @@ import QuotaUpdateSupport
         guard !installed.publicKey.isEmpty else { status = .notConfigured; return }
         switch status { case .checking, .downloading, .installing: return; default: break }
         let now = Date()
-        if let rateLimitedUntil, rateLimitedUntil > now {
-            note = "GitHub asked QuotaBar to wait. The next check is after \(rateLimitedUntil.formatted(date: .omitted, time: .shortened))."
-            if !manual { scheduleNext(after: rateLimitedUntil.timeIntervalSince(now)) }
+        guard retry.allowsRequest(at: now) else {
+            noteRateLimit()
+            if !manual, let until = retry.rateLimitedUntil { scheduleNext(after: until.timeIntervalSince(now)) }
             return
         }
         let previous = status
@@ -152,21 +152,20 @@ import QuotaUpdateSupport
             if case .failed(let failure) = fetch { return failure }; return nil
         }
         if let failure = failures.first(where: { if case .rateLimited = $0 { return true }; return false }) ?? failures.first {
-            if case .rateLimited(let until) = failure { rateLimitedUntil = until; note = "GitHub asked QuotaBar to wait before checking again. Your installed app is unchanged." }
+            if case .rateLimited = failure { note = "GitHub asked QuotaBar to wait before checking again. Your installed app is unchanged." }
             else { note = "Could not reach the update feed. QuotaBar will retry; your installed app is unchanged." }
             status = previous == .checking ? .idle : previous
-            let delay = UpdateSchedule.delay(after: failure, attempt: transientAttempts, now: Date(), random: .random(in: 0...1))
-            if case .transient = failure { transientAttempts += 1 }
-            scheduleNext(after: delay)
+            scheduleNext(after: retry.record(failure, now: Date(), random: .random(in: 0...1)))
             return
         }
-        transientAttempts = 0; rateLimitedUntil = nil; note = nil
+        note = nil
 
         let stable = verify(stableFetch, channel: .stable)
         let preview = verify(previewFetch, channel: .preview)
-        // Any verified manifest that conflicts with an earlier signed reading stops here.
+        // A verified manifest that conflicts with an earlier signed reading of the
+        // same build, on either channel, stops here.
         for case .verified(let manifest) in [stable, preview] {
-            if let seen = highWater.identity(for: manifest.channel), seen.build == manifest.build, seen != UpdateIdentity(manifest) {
+            if highWater.conflicts(with: manifest) {
                 status = .failed("The \(manifest.channel.rawValue) feed changed the contents of build \(manifest.build). Nothing will be installed.")
                 scheduleNext(after: UpdateSchedule.regularDelay(random: .random(in: 0...1)))
                 return
@@ -179,6 +178,9 @@ import QuotaUpdateSupport
             invalid.isEmpty ? nil : "The \(invalid.map(\.rawValue).joined(separator: " and ")) feed could not be verified and was ignored."
         }
 
+        // The cycle's outcome sets the next check: a download failure keeps its
+        // own rate-limit deadline or transient backoff instead of the hourly delay.
+        var downloadDelay: TimeInterval?
         switch UpdateSelection.select(channel: selected, stable: stable, preview: preview) {
         case .conflictingIdentity:
             status = .failed("The Stable and Preview feeds disagree about the same build. Nothing will be installed.")
@@ -192,7 +194,7 @@ import QuotaUpdateSupport
                 if case .ready(let staged) = previous, staged == candidate { status = previous }
                 else {
                     status = .available(candidate)
-                    if canDownloadAndInstall && automaticDownloads { await download(candidate) }
+                    if canDownloadAndInstall && automaticDownloads { downloadDelay = await download(candidate) }
                 }
             case .upToDate:
                 status = .upToDate
@@ -205,7 +207,14 @@ import QuotaUpdateSupport
                 status = .failed("The update metadata does not match this app. Nothing will be installed.")
             }
         }
+        if let downloadDelay { scheduleNext(after: downloadDelay); return }
+        retry.recordSuccess()
         scheduleNext(after: UpdateSchedule.regularDelay(random: .random(in: 0...1)))
+    }
+
+    private func noteRateLimit() {
+        guard let until = retry.rateLimitedUntil else { return }
+        note = "GitHub asked QuotaBar to wait. The next request is after \(until.formatted(date: .omitted, time: .shortened))."
     }
 
     private func verify(_ fetch: UpdateFeedClient.FeedFetch, channel: UpdateChannel) -> UpdateFeedResult {
@@ -224,11 +233,17 @@ import QuotaUpdateSupport
 
     func downloadNow() {
         guard case .available(let manifest) = status, canDownloadAndInstall else { return }
-        Task { await download(manifest) }
+        // A manual Download honors the same rate-limit deadline as automatic requests.
+        guard retry.allowsRequest(at: Date()) else { noteRateLimit(); return }
+        Task {
+            if let delay = await download(manifest) { scheduleNext(after: delay) } else { retry.recordSuccess() }
+        }
     }
 
-    private func download(_ manifest: UpdateManifest) async {
-        guard let envelope = envelopes[manifest.channel] else { return }
+    /// Returns the delay before the next automatic attempt when the download
+    /// failed in transport, or nil when it finished or failed verification.
+    private func download(_ manifest: UpdateManifest) async -> TimeInterval? {
+        guard let envelope = envelopes[manifest.channel] else { return nil }
         status = .downloading(manifest)
         let client = self.client, key = installed.publicKey
         do {
@@ -236,11 +251,18 @@ import QuotaUpdateSupport
                 try await Self.stage(manifest, envelope: envelope, publicKey: key, client: client)
             }.value
             status = .ready(manifest)
+            return nil
         } catch let failure as UpdateFeedClient.DownloadFailure {
             status = .available(manifest)
-            note = failure.failure == .unavailable ? "The release download is not available yet." : "The download did not finish. QuotaBar will try again later."
+            switch failure.failure {
+            case .unavailable: note = "The release download is not available yet."
+            case .rateLimited: note = "GitHub asked QuotaBar to wait before downloading. Your installed app is unchanged."
+            default: note = "The download did not finish. QuotaBar will try again later."
+            }
+            return retry.record(failure.failure, now: Date(), random: .random(in: 0...1))
         } catch {
             status = .failed("The downloaded update did not match its signed description and was deleted. Your installed app is unchanged.")
+            return nil
         }
     }
 

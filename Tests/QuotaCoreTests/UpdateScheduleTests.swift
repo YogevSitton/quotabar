@@ -80,6 +80,57 @@ final class UpdateScheduleTests: XCTestCase {
                        .unavailable(invalidFeeds: []))
     }
 
+    func testDownloadRateLimitBlocksManualAndAutomaticRequestsUntilItsDeadline() {
+        var retry = UpdateRetryState()
+        XCTAssertTrue(retry.allowsRequest(at: now))
+        // An archive answered 429 with Retry-After 7200.
+        let failure = UpdateFetchFailure.classify(status: 429, headers: ["Retry-After": "7200"], now: now)!
+        XCTAssertEqual(retry.record(failure, now: now, random: 0), 7_200)
+        XCTAssertFalse(retry.allowsRequest(at: now.addingTimeInterval(3_600)))
+        XCTAssertFalse(retry.allowsRequest(at: now.addingTimeInterval(7_199)))
+        XCTAssertTrue(retry.allowsRequest(at: now.addingTimeInterval(7_200)))
+        // A shorter later wait never shortens an existing deadline.
+        _ = retry.record(.rateLimited(until: now.addingTimeInterval(60)), now: now, random: 0)
+        XCTAssertEqual(retry.rateLimitedUntil, now.addingTimeInterval(7_200))
+        retry.recordSuccess()
+        XCTAssertNil(retry.rateLimitedUntil)
+        XCTAssertTrue(retry.allowsRequest(at: now))
+    }
+
+    func testTransientDownloadFailuresKeepTheBackoffProgressionUntilACycleSucceeds() {
+        var retry = UpdateRetryState()
+        let delays = (0..<5).map { _ in retry.record(.transient, now: now, random: 0) }
+        XCTAssertEqual(delays, [300, 900, 1_800, 3_600, 3_600])
+        XCTAssertEqual(retry.transientAttempts, 5)
+        XCTAssertEqual(retry.record(.unavailable, now: now, random: 0), 3_300)
+        XCTAssertEqual(retry.transientAttempts, 5)
+        retry.recordSuccess()
+        XCTAssertEqual(retry.record(.transient, now: now, random: 0), 300)
+    }
+
+    func testSameBuildConflictIsRejectedAcrossChannelsAfterSwitching() throws {
+        // Preview build 50 (commit A, hash A) was seen; the Mac then switched to Stable.
+        let seenPreview = try UpdateManifestTests.preview(build: 50)
+        let saved = UpdateHighWater().recording(seenPreview)
+        XCTAssertNil(saved.stable)
+        // Stable alone is fetched and offers build 50 with different contents.
+        let other = try UpdateManifest(channel: .stable, build: 50, displayVersion: "0.2.0", commit: String(repeating: "b", count: 40),
+                                       archiveBytes: 1_003_448, sha256: String(repeating: "c", count: 64),
+                                       publicKey: key, releaseNotes: "Notes")
+        XCTAssertEqual(UpdateSelection.select(channel: .stable, stable: .verified(other), preview: .absent),
+                       .candidate(other, invalidFeeds: []))
+        XCTAssertTrue(saved.conflicts(with: other))
+        XCTAssertEqual(UpdateDecision.evaluate(other, publicKey: key, installedBuild: 30, highWater: saved), .conflictingIdentity)
+        // Promoting the same bytes to Stable is not a conflict.
+        let promoted = try seenPreview.promotedToStable(releaseNotes: "Notes")
+        XCTAssertFalse(saved.conflicts(with: promoted))
+        XCTAssertEqual(UpdateDecision.evaluate(promoted, publicKey: key, installedBuild: 30, highWater: saved), .newer(promoted))
+        // The reverse direction: a saved Stable identity also guards Preview.
+        let stableSaved = UpdateHighWater().recording(promoted)
+        let previewOther = try UpdateManifestTests.preview(build: 50, sha256: String(repeating: "d", count: 64))
+        XCTAssertEqual(UpdateDecision.evaluate(previewOther, publicKey: key, installedBuild: 30, highWater: stableSaved), .conflictingIdentity)
+    }
+
     func testDecisionNeverDowngradesAfterSwitchingFromPreviewToStable() throws {
         // Installed Preview build 50; Stable is still at 44.
         XCTAssertEqual(UpdateDecision.evaluate(try stable(44), publicKey: key, installedBuild: 50, highWater: UpdateHighWater()), .upToDate)

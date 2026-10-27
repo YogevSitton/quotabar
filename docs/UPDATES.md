@@ -71,11 +71,11 @@ No account, token, cookie, credential or GitHub command-line tool is used, and n
 | Answer | Meaning | What QuotaBar does |
 | --- | --- | --- |
 | 404 or a feed that does not exist | Nothing is published for that channel yet | Shows that; checks again on the normal schedule |
-| Rate limit (429, or 403 with rate-limit headers) | GitHub asked clients to wait | Waits as long as GitHub asks, from one minute up to 24 hours, including for manual checks |
+| Rate limit (429, or 403 with rate-limit headers) | GitHub asked clients to wait | Waits as long as GitHub asks, from one minute up to 24 hours, for every check and download, including manual ones |
 | Timeout, connection error or 5xx | Temporary problem | Retries after 5, 15, 30, then 60 minutes |
 | Malformed, oversized or unverifiable data | Not trustworthy | Ignores and reports that feed; never installs it |
 
-In every case the installed app is left as it is. If one feed is invalid, a valid, independently signed feed can still offer an update on Preview.
+These rules apply to feed checks and release downloads alike, and the 5, 15, 30, 60-minute progression continues until a check and any needed download both succeed. In every case the installed app is left as it is. If one feed is invalid, a valid, independently signed feed can still offer an update on Preview.
 
 QuotaBar sends no analytics, and its update checks carry no account or usage data. GitHub sees ordinary HTTPS requests from your IP address.
 

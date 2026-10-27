@@ -74,6 +74,16 @@ public struct UpdateHighWater: Codable, Equatable, Sendable {
 
     public func identity(for channel: UpdateChannel) -> UpdateIdentity? { channel == .stable ? stable : preview }
 
+    /// A build number describes the same commit and bytes on every channel, so a
+    /// manifest conflicts with either channel's saved identity for that build.
+    /// Promoting the same bytes to Stable never conflicts.
+    public func conflicts(with manifest: UpdateManifest) -> Bool {
+        [stable, preview].contains { seen in
+            guard let seen, seen.build == manifest.build else { return false }
+            return seen != UpdateIdentity(manifest)
+        }
+    }
+
     /// Records a verified manifest when it is newer than what this channel has seen.
     public func recording(_ manifest: UpdateManifest) -> UpdateHighWater {
         var copy = self
@@ -93,6 +103,9 @@ public enum UpdateDecision: Equatable, Sendable {
     /// Applies downgrade, high-water and identity rules to a selected candidate.
     public static func evaluate(_ manifest: UpdateManifest, publicKey: String, installedBuild: UInt64,
                                 highWater: UpdateHighWater) -> UpdateDecision {
+        // Checked against both channels, so switching channels cannot offer
+        // different contents for a build number already seen on the other one.
+        if highWater.conflicts(with: manifest) { return .conflictingIdentity }
         do {
             try UpdatePolicy.validate(manifest, channel: manifest.channel, publicKey: publicKey,
                                       installedBuild: installedBuild, highWater: highWater.identity(for: manifest.channel))
@@ -100,6 +113,39 @@ public enum UpdateDecision: Equatable, Sendable {
         } catch UpdateValidationError.rollback { return .upToDate }
         catch UpdateValidationError.conflictingIdentity { return .conflictingIdentity }
         catch { return .invalid }
+    }
+}
+
+/// Shared wait state for every update request, feed checks and archive
+/// downloads alike: a rate-limit deadline blocks manual and automatic requests,
+/// and transient failures back off 5, 15, 30, then 60 minutes until a whole
+/// check-and-download cycle succeeds.
+public struct UpdateRetryState: Equatable, Sendable {
+    public private(set) var rateLimitedUntil: Date?
+    public private(set) var transientAttempts = 0
+
+    public init() {}
+
+    /// Whether a new feed or archive request may start now.
+    public func allowsRequest(at now: Date) -> Bool {
+        guard let rateLimitedUntil else { return true }
+        return now >= rateLimitedUntil
+    }
+
+    /// Records a failed request and returns the delay before the next automatic check.
+    public mutating func record(_ failure: UpdateFetchFailure, now: Date, random: Double) -> TimeInterval {
+        let delay = UpdateSchedule.delay(after: failure, attempt: transientAttempts, now: now, random: random)
+        switch failure {
+        case .rateLimited(let until): rateLimitedUntil = max(rateLimitedUntil ?? until, until)
+        case .transient: transientAttempts += 1
+        case .unavailable, .invalid: break
+        }
+        return delay
+    }
+
+    /// Clears waits after a cycle that needed nothing more or finished its download.
+    public mutating func recordSuccess() {
+        rateLimitedUntil = nil; transientAttempts = 0
     }
 }
 
