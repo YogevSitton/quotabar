@@ -65,17 +65,19 @@ To start QuotaBar automatically, open the popup's **More** (ellipsis) menu and e
 
 Each connected provider has its transparent logo followed by `5h%/weekly%`, such as `93%/91%`. These are **remaining** percentages. When five-hour usage is exhausted, its reset countdown replaces the percentage, such as `2h13m/45%`. When the weekly window is exhausted, only its weekly countdown appears. Percentages gradually turn red between 50% and 10% remaining; countdowns stay uncolored. A dash means a current value is unavailable.
 
+When a reported manual reset expires within 3 days, a small countdown chip follows that provider's percentages: orange with the days left (`2d`), then red with the hours or minutes left (`18h`, `45m`) in its last 24 hours. The time is rounded down, so it never overstates how long you have. Room for the chip is always reserved, so the menu bar item keeps the same width whether or not one is showing. Hover over the menu bar item to see each provider's next reset expiry with its date and countdown.
+
 Click the menu bar item to open the compact popup. Installed providers appear side by side with their five-hour and weekly meters, automatic reset times and reported reset credits. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional/model limits and extra usage are intentionally not displayed.
 
 A subtle contrasting tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. The comparison uses the reading's original timestamp. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
 
-Reported manual reset offers expiring within 24 hours have an orange warning icon and highlighted expiry; within 1 hour they turn red. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning.
+Reported manual reset offers expiring within 3 days have an orange warning icon and highlighted expiry; within 24 hours they turn red, matching the menu bar chip. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning or menu bar chip.
 
 The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. The app version appears at the bottom right of the popup. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
 
 ## Screenshots
 
-Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings included in 0.2.0, but predate its bottom-right version label. They are not live account readings or evidence of reset redemption.
+Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings included in 0.2.0, but predate its bottom-right version label, the menu bar reset countdown chip and the 3-day warning tier. They are not live account readings or evidence of reset redemption.
 
 ![Light menu bar with Codex 72%/61% and Claude 58%/76% remaining](docs/screenshots/menubar-light.png)
 

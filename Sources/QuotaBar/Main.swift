@@ -80,6 +80,7 @@ import QuotaCore
         let description = entries.map(\.description).joined(separator: "; ")
         let now = Date()
         let segments = entries.map { $0.menuSegments(at: now) }
+        let chips = entries.map { $0.resetChip(at: now) }
         let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")
         let appearance = button.effectiveAppearance
         // A provider connecting/disconnecting must not move the anchor while
@@ -92,7 +93,7 @@ import QuotaCore
                 image.size = NSSize(width: 20, height: 20)
                 button.image = image
             } else {
-                button.image = MenuBarArtwork.image(entries: entries, segments: segments, appearance: appearance)
+                button.image = MenuBarArtwork.image(entries: entries, segments: segments, chips: chips, appearance: appearance)
             }
             renderedMenuDescription = renderKey
             renderedMenuAppearance = appearance.name
@@ -100,8 +101,9 @@ import QuotaCore
         }
         button.toolTip = entries.isEmpty
             ? "QuotaBar\nConnect an installed provider"
-            : (["QuotaBar - usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
-        button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
+            : (["QuotaBar - usage remaining"] + entries.map { $0.tooltipSection(at: now) }).joined(separator: "\n\n")
+        let expiring = zip(entries, chips).compactMap { entry, chip in chip.map { " \(entry.name) reset expires in \($0.spoken)." } }
+        button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining." + expiring.joined())
     }
     @objc private func woke() { state.refresh() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

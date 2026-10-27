@@ -248,7 +248,8 @@ import Combine
                 }
                 return MenuBarQuota(remaining: remaining, resetsAt: window.resetsAt)
             }
-            return MenuBarEntry(name: name, session: quota(snapshot?.session), weekly: quota(snapshot?.weekly))
+            let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
+            return MenuBarEntry(name: name, session: quota(snapshot?.session), weekly: quota(snapshot?.weekly), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
         if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }

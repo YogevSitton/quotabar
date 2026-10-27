@@ -32,6 +32,11 @@ public struct UsagePace: Equatable {
 
 public enum ResetExpiryUrgency: Int, Comparable {
     case normal, soon, imminent
+    /// Orange within 3 days, red within 24 hours; a past expiry is not urgent.
+    public init(timeLeft: TimeInterval) {
+        guard timeLeft > 0 else { self = .normal; return }
+        self = timeLeft <= 86400 ? .imminent : timeLeft <= 3 * 86400 ? .soon : .normal
+    }
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
@@ -51,12 +56,14 @@ public struct ResetOffer: Identifiable, Equatable {
     public init(id: String, title: String, expiresAt: Date?, detail: String? = nil, expiryText: String? = nil) {
         self.id = id; self.title = title; self.expiresAt = expiresAt; self.detail = detail; self.expiryText = expiryText
     }
-    public func expiryUrgency(at now: Date) -> ResetExpiryUrgency {
-        guard remainingCount.map({ $0 > 0 }) ?? true, let expiresAt else { return .normal }
+    /// Time left on an offer that still has credit; nil when unknown, used up or past.
+    public func timeUntilExpiry(at now: Date) -> TimeInterval? {
+        guard remainingCount.map({ $0 > 0 }) ?? true, let expiresAt else { return nil }
         let timeLeft = expiresAt.timeIntervalSince(now)
-        guard timeLeft > 0 else { return .normal }
-        if timeLeft <= 3600 { return .imminent }
-        return timeLeft <= 86400 ? .soon : .normal
+        return timeLeft > 0 ? timeLeft : nil
+    }
+    public func expiryUrgency(at now: Date) -> ResetExpiryUrgency {
+        timeUntilExpiry(at: now).map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
     }
 }
 
@@ -101,6 +108,10 @@ public struct UsageSnapshot {
             let left = $0.expiresAt ?? .distantFuture, right = $1.expiresAt ?? .distantFuture
             return left == right ? $0.id < $1.id : left < right
         }
+    }
+    /// The soonest expiry among offers that still have credit.
+    public func nextResetExpiry(at now: Date) -> Date? {
+        offers.filter { $0.timeUntilExpiry(at: now) != nil }.compactMap(\.expiresAt).min()
     }
     public func isCurrent(at now: Date, maximumAge: TimeInterval, hasConnectionError: Bool) -> Bool {
         let age = now.timeIntervalSince(observedAt)
