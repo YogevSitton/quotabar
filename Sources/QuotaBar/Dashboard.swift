@@ -178,8 +178,7 @@ private struct CompactProviderCard: View {
                 if name == "Claude", let snapshot {
                     Text("Saved reading · \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange)
-                    UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true,
-                             noLimit: snapshot.sessionLimit == .noLimit, compact: true)
+                    UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true, compact: true)
                     UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: true, compact: true)
                 }
                 if let nextRetry, nextRetry > now {

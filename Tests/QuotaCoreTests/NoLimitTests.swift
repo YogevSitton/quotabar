@@ -94,23 +94,24 @@ final class NoLimitTests: XCTestCase {
         XCTAssertEqual(snapshot.weekly?.remaining, 61)
     }
 
-    func testClaudeExplicitNullFiveHourWithValidWeeklyIsDistinctFromUnknown() throws {
-        let snapshot = try claude(session: NSNull(), weekly: claudeWeek)
-        XCTAssertEqual(snapshot.sessionLimit, .noLimit)
-        XCTAssertNil(snapshot.session)
-        XCTAssertEqual(snapshot.weekly?.remaining, 61)
-        let cache = try UsageParser.claudeOAuth(data(["five_hour": NSNull(), "seven_day": claudeWeek]), now: now)
-        XCTAssertEqual(cache.sessionLimit, .noLimit)
-        XCTAssertTrue(snapshot.hasMatchingUsage(in: cache))
-
-        let unknownSlots: [Any?] = [nil, [String: Any](), [Any](), false, 0, "unavailable", ["utilization": NSNull()],
+    func testClaudeExplicitNullFiveHourStaysUnavailable() throws {
+        // Claude's five_hour null is undocumented, so it is unknown like an omitted window.
+        let unknownSlots: [Any?] = [NSNull(), nil, [String: Any](), [Any](), false, 0, "unavailable", ["utilization": NSNull()],
             ["utilization": true], ["utilization": -1], ["utilization": 101]]
         for slot in unknownSlots {
-            XCTAssertEqual(try claude(session: slot, weekly: claudeWeek).sessionLimit, .unavailable)
+            let snapshot = try claude(session: slot, weekly: claudeWeek)
+            XCTAssertEqual(snapshot.sessionLimit, .unavailable)
+            XCTAssertNil(snapshot.session)
+            XCTAssertEqual(snapshot.weekly?.remaining, 61)
         }
+        // A matching cache or a meter list without a session row does not establish no limit either.
+        let weeklyMeter: [String: Any] = ["kind": "weekly_all", "group": "weekly", "percent": 39]
+        let cache = try UsageParser.claudeOAuth(data(["five_hour": NSNull(), "seven_day": claudeWeek, "limits": [weeklyMeter]]), now: now)
+        XCTAssertEqual(cache.sessionLimit, .unavailable)
+        XCTAssertTrue(try claude(session: NSNull(), weekly: claudeWeek).hasMatchingUsage(in: cache))
     }
 
-    func testClaudeNullFiveHourNeedsEligibleResponseAndValidWeeklyReading() throws {
+    func testClaudeRejectsUnavailableRateLimitsAndAllUnknownWindows() throws {
         XCTAssertThrowsError(try claude(session: NSNull(), weekly: claudeWeek, available: false))
         let invalidWeeks: [Any?] = [nil, NSNull(), [String: Any](), ["utilization": NSNull()],
             ["utilization": true], ["utilization": "39"], ["utilization": -1], ["utilization": 101]]

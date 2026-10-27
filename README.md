@@ -57,7 +57,7 @@ To change Claude accounts later, sign in to the other account in Claude Code; Qu
 
 ### Check that setup worked
 
-After a successful read, each connected provider shows its applicable five-hour and weekly remaining percentages in the popup and menu bar, for example `72%/61%`. A supported reading with no five-hour limit shows `∞/61%` and **No 5-hour limit** in the popup. Refresh runs automatically every minute and after wake, with longer waits after some errors. Missing or unverified values stay unavailable; see [Troubleshooting](#troubleshooting) if a card or reading is missing.
+After a successful read, each connected provider shows its applicable five-hour and weekly remaining percentages in the popup and menu bar, for example `72%/61%`. A supported reading with no five-hour limit, currently Codex Pro, shows `∞/61%` and **No 5-hour limit** in the popup. Refresh runs automatically every minute and after wake, with longer waits after some errors. Missing or unverified values stay unavailable; see [Troubleshooting](#troubleshooting) if a card or reading is missing.
 
 To start QuotaBar automatically, open the popup's **More** (ellipsis) menu and enable **Launch at login** after moving the app into Applications.
 
@@ -106,7 +106,7 @@ Monitoring sends read-only control requests through the official CLIs, with no u
 
 Claude reads use only `initialize`, `get_binary_version` and `get_usage`, always with `skip_behaviors: true`. The reader disables project settings, tools, hooks, external MCP servers, telemetry, automatic updates and session persistence. A bounded `claude auth status` check can classify a failure using its authentication method and exit status; raw replies are not logged.
 
-Claude Code may return a cached reading. QuotaBar matches non-secret account/cache metadata in `~/.claude.json`, including any reported no-limit state, and preserves its original `fetchedAtMs`. Missing provenance or a sample older than two minutes cannot supply current percentages or infinity. Expired quota windows require a fresh reading. Missing or malformed values stay unknown. No-limit handling uses narrow provider-specific response rules; see [provider integration details](docs/PROVIDER-INTEGRATIONS.md#five-hour-limit-applicability).
+Claude Code may return a cached reading. QuotaBar matches non-secret account/cache metadata in `~/.claude.json` and preserves its original `fetchedAtMs`. Missing provenance or a sample older than two minutes cannot supply current percentages. Expired quota windows require a fresh reading. Missing or malformed values stay unknown, and Claude's undocumented `five_hour: null` is not treated as no limit. No-limit handling uses narrow provider-specific response rules; see [provider integration details](docs/PROVIDER-INTEGRATIONS.md#five-hour-limit-applicability).
 
 Transient Claude failures retry automatically with a one-to-five-minute backoff. The newest account-matched reading remains clearly labeled **Saved reading**, with its original timestamp; it never supplies current menu percentages. Optional status-line snapshots and local Claude usage history supply historical percentages only. See [provider integration details](docs/PROVIDER-INTEGRATIONS.md).
 

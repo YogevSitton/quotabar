@@ -154,8 +154,8 @@ actor ClaudeProvider {
     private func observationDate(matching snapshot: UsageSnapshot, identity: String?) -> Date? {
         guard let cached = persistedUsage(identity: identity),
               snapshot.hasMatchingUsage(in: cached) else { return nil }
-        // A no-limit claim is displayed too, so explicit absence must match
-        // the account's cache rather than inheriting a populated window's age.
+        // An unavailable response window is not displayed and need not equal a
+        // populated cache window. Every displayed value must still match.
         return cached.observedAt
     }
     private func persistedUsage(identity: String?) -> UsageSnapshot? {
