@@ -1,6 +1,6 @@
 # Screenshots
 
-These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They illustrate the pace markers and reset-expiry warnings included in [0.2.0](../CHANGELOG.md#020---2026-10-26), but predate its bottom-right version label, the menu bar reset countdown chip and the move of expiry warnings to 3 days (orange) and 24 hours (red). They are not captures of the final release bundle.
+These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They illustrate the pace markers and reset-expiry warnings added in [0.2.0](../CHANGELOG.md#020---2026-10-26), but predate its bottom-right version label, and the menu bar reset countdown chip and move of expiry warnings to 3 days (orange) and 24 hours (red) in [0.3.0](../CHANGELOG.md#030---2026-10-27). They are not captures of a release bundle.
 
 All usage, plans, dates and reset offers are synthetic. No account identifiers, credentials, authorization links or desktop content appear in the images. The fixture clock is 26 October 2026 at 10:00 in Europe/London. The dates and countdowns illustrate the UI; they are not current provider readings.
 
@@ -10,7 +10,7 @@ Menu bar percentages are remaining quota, in five-hour/weekly order. The marks h
 
 ![Light menu bar showing Codex 72%/61% and Claude 58%/76%](screenshots/menubar-light.png)
 
-The popup keeps both providers side by side. Contrasting meter ticks mark the even-use reference. The first synthetic Codex reset expires in eight hours and receives an orange warning. Claude has no reported reset inventory in this example. Reset buttons are disabled because the fixture has no verified account.
+The popup keeps both providers side by side. Contrasting meter ticks mark the even-use reference. The first synthetic Codex reset expires in eight hours and receives an orange warning; under the 0.3.0 tiers it would be red. Claude has no reported reset inventory in this example. Reset buttons are disabled because the fixture has no verified account.
 
 ![Light popup with current synthetic usage and a reset expiring within 24 hours](screenshots/popup-light.png)
 

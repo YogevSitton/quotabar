@@ -6,6 +6,8 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
 ### Added
 
 - A small countdown chip after a provider's menu bar percentages when one of its reported manual resets expires within 3 days: orange with the days left, then red with the hours or minutes left in the last 24 hours. Room for the chip is always reserved, so the menu bar item no longer changes width when one appears.
@@ -48,6 +50,7 @@ First public release.
 - Popup with both providers side by side, scheduled reset times and reset-credit expiries.
 - Ad-hoc signed app zip with a SHA-256 checksum. Not notarized; updates are manual.
 
-[Unreleased]: https://github.com/YogevSitton/quotabar/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/YogevSitton/quotabar/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/YogevSitton/quotabar/releases/tag/v0.3.0
 [0.2.0]: https://github.com/YogevSitton/quotabar/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YogevSitton/quotabar/releases/tag/v0.1.0
