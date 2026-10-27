@@ -61,13 +61,31 @@ final class UsageIndicatorTests: XCTestCase {
         XCTAssertEqual(offer(-1).expiryUrgency(at: sampleTime), .normal)
         XCTAssertEqual(offer(0).expiryUrgency(at: sampleTime), .normal)
         XCTAssertEqual(offer(1).expiryUrgency(at: sampleTime), .imminent)
-        XCTAssertEqual(offer(3600).expiryUrgency(at: sampleTime), .imminent)
-        XCTAssertEqual(offer(3601).expiryUrgency(at: sampleTime), .soon)
-        XCTAssertEqual(offer(86400).expiryUrgency(at: sampleTime), .soon)
-        XCTAssertEqual(offer(86401).expiryUrgency(at: sampleTime), .normal)
+        XCTAssertEqual(offer(86400).expiryUrgency(at: sampleTime), .imminent)
+        XCTAssertEqual(offer(86401).expiryUrgency(at: sampleTime), .soon)
+        XCTAssertEqual(offer(3 * 86400).expiryUrgency(at: sampleTime), .soon)
+        XCTAssertEqual(offer(3 * 86400 + 1).expiryUrgency(at: sampleTime), .normal)
         var empty = offer(60)
         empty.remainingCount = 0
         XCTAssertEqual(empty.expiryUrgency(at: sampleTime), .normal)
+        var unknownCount = offer(60)
+        unknownCount.remainingCount = nil
+        XCTAssertEqual(unknownCount.expiryUrgency(at: sampleTime), .imminent)
+        for timeLeft in [0, -1, -.infinity, .nan] as [TimeInterval] {
+            XCTAssertEqual(ResetExpiryUrgency(timeLeft: timeLeft), .normal)
+        }
+    }
+
+    func testNextExpiryIgnoresPastUnknownAndUsedOffers() {
+        func offer(_ id: String, _ seconds: TimeInterval?, count: Int? = 1) -> ResetOffer {
+            var offer = ResetOffer(id: id, title: "Usage reset", expiresAt: seconds.map { sampleTime.addingTimeInterval($0) })
+            offer.remainingCount = count
+            return offer
+        }
+        let snapshot = UsageSnapshot(offers: [offer("past", -10), offer("used", 30, count: 0), offer("unknown", nil),
+                                              offer("later", 9000), offer("next", 600)])
+        XCTAssertEqual(snapshot.nextResetExpiry(at: sampleTime), sampleTime.addingTimeInterval(600))
+        XCTAssertNil(UsageSnapshot(offers: [offer("unknown", nil), offer("past", -1)]).nextResetExpiry(at: sampleTime))
     }
 
     func testUpcomingExpiryIsNotHiddenByExpiredOffer() {
