@@ -6,6 +6,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+### Changed
+
+- Tighten the menu bar spacing between the Codex usage and the Claude logo.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added
