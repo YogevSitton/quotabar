@@ -80,6 +80,8 @@ public extension UsageParser {
         guard session != nil || weekly != nil else {
             throw UsageError.message("Claude did not report valid subscription windows. The usage format or account access may have changed.")
         }
+        // An explicit five_hour null stays unavailable, never no limit: its
+        // meaning is undocumented and Claude Code renders it as a missing window.
         var result = UsageSnapshot(session: session, weekly: weekly, observedAt: now)
         result.sourceName = "Claude Code sign-in"
         let credits = root["cedar_ember"] as? [String: Any]
