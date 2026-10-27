@@ -144,7 +144,7 @@ private struct CompactProviderCard: View {
                                 if urgency != .normal {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.system(size: 10)).foregroundStyle(expiryColor(urgency))
-                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 1 hour" : "Reset expires within 24 hours")
+                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 24 hours" : "Reset expires within 3 days")
                                 }
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
                                     .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
@@ -366,7 +366,7 @@ struct ProviderCard: View {
             HStack(spacing: 5) {
                 if urgency != .normal {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(expiryColor(urgency))
-                    Text(urgency == .imminent ? "Expires within 1 hour" : "Expires within 24 hours")
+                    Text(urgency == .imminent ? "Expires within 24 hours" : "Expires within 3 days")
                         .foregroundStyle(expiryColor(urgency))
                 }
                 Text(offer.title).font(.system(size: 12, weight: .medium))

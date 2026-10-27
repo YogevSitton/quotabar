@@ -6,6 +6,16 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+### Added
+
+- A small countdown chip after a provider's menu bar percentages when one of its reported manual resets expires within 3 days: orange with the days left, then red with the hours or minutes left in the last 24 hours. Room for the chip is always reserved, so the menu bar item no longer changes width when one appears.
+- The menu bar tooltip shows each provider's next reset expiry with its countdown.
+
+### Changed
+
+- Tighten the menu bar spacing between the Codex usage and the Claude logo.
+- Popup reset expiry warnings now start 3 days ahead in orange and turn red in the last 24 hours, instead of 24 hours and 1 hour.
+
 ### Fixed
 
 - Show `∞` in the menu bar and **No 5-hour limit** in the popup for current Codex Pro readings without a five-hour limit. Keep missing, malformed and stale readings unavailable, including Claude's undocumented `five_hour: null`.

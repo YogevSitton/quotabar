@@ -247,8 +247,9 @@ import Combine
                 MenuBarQuota(limit: current ? limit.current(at: now) : .unavailable)
             }
             let session = snapshot?.currentSessionLimit(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) ?? .unavailable
+            let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
             return MenuBarEntry(name: name, session: MenuBarQuota(limit: session),
-                                weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable))
+                                weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
         if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }
