@@ -6,6 +6,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+### Fixed
+
+- Show `∞` in the menu bar and **No 5-hour limit** in the popup for supported readings without a five-hour limit, including current Codex Pro readings. Keep missing, malformed and stale readings unavailable. Include defensive support for a future Claude response with an explicitly absent five-hour window.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added
