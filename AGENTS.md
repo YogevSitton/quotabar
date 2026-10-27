@@ -32,6 +32,8 @@ python3 scripts/audit-public-tree.py --public-docs
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
+These commands compile the app and test targets without running them. Compile and statically review changes only unless the maintainer changes that restriction: do not run tests, live diagnostics, sign-in or reset actions.
+
 The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed.
 
 ## User-facing text
