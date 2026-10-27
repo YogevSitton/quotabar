@@ -6,6 +6,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+### Changed
+
+- Tighten the menu bar spacing between the Codex usage and the Claude logo.
+
 ### Fixed
 
 - Show `∞` in the menu bar and **No 5-hour limit** in the popup for current Codex Pro readings without a five-hour limit. Keep missing, malformed and stale readings unavailable, including Claude's undocumented `five_hour: null`.
