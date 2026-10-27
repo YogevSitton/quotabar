@@ -111,7 +111,9 @@ struct MenuBarEntry {
         let textWidth = widths.reduce(CGFloat.zero, +)
         let iconSize: CGFloat = 18
         let iconTextGap: CGFloat = 2
-        let providerGap: CGFloat = 4
+        // Providers are as far apart as neighboring menu bar items: 18pt
+        // plus the logo's 1pt inset matches their visible 19-20pt gap.
+        let providerGap: CGFloat = 18
         let iconWidth = CGFloat(entries.count) * (iconSize + iconTextGap)
         let gapWidth = CGFloat(max(0, entries.count - 1)) * providerGap
         let size = NSSize(width: textWidth + iconWidth + gapWidth, height: 22)

@@ -8,7 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
-- The menu bar item now fits its content, removing the empty space after each provider's usage. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
+- The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
 
 ## [0.3.0] - 2026-10-27
 
