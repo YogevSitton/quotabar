@@ -99,16 +99,15 @@ struct MenuBarEntry {
                       appearance: NSAppearance) -> NSImage {
         // Keep the bar to one logo and 5h%/weekly% per connected provider.
         let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        // Reserve the widest percentage pair or countdown so 9% → 10%, a reset
-        // countdown, no-limit marker or unavailable reading never changes its width.
-        let slotWidth = ["100%/100%", "4h59m/99%", "6d23h", "∞/100%"].map {
-            ceil(($0 as NSString).size(withAttributes: [.font: font]).width)
-        }.max() ?? 0
-        // The reset countdown chip's space stays reserved too, so a reset
-        // entering or leaving its last 3 days never changes the width.
-        let chipWidth = ["24h", "59m", "3d"].map { chipText($0, urgency: .soon).size().width }.max() ?? 0
-        let chipSlot = chipGap + ceil(chipWidth + 2 * chipPadding)
-        let widths: [CGFloat] = entries.map { _ in slotWidth + chipSlot }
+        // Fit the content with no reserved space. Digits are monospaced, so
+        // ordinary percentage changes keep the width; a different digit count,
+        // countdown, no-limit marker, unavailable reading or chip changes it.
+        let labelWidths = segments.map {
+            ceil(($0.map(\.text).joined() as NSString).size(withAttributes: [.font: font]).width)
+        }
+        let widths: [CGFloat] = zip(labelWidths, chips).map { label, chip in
+            label + (chip.map { chipGap + chipWidth($0) } ?? 0)
+        }
         let textWidth = widths.reduce(CGFloat.zero, +)
         let iconSize: CGFloat = 18
         let iconTextGap: CGFloat = 2
@@ -130,7 +129,7 @@ struct MenuBarEntry {
                             .font: font, .foregroundColor: color(remaining: segment.remaining)]))
                     }
                     label.draw(at: NSPoint(x: x, y: (22 - label.size().height) / 2))
-                    if let chip = chips[index] { drawChip(chip, at: x + ceil(label.size().width) + chipGap) }
+                    if let chip = chips[index] { drawChip(chip, at: x + labelWidths[index] + chipGap) }
                     x += widths[index]
                 }
             }
@@ -142,11 +141,14 @@ struct MenuBarEntry {
         NSAttributedString(string: text, attributes: [.font: chipFont, .foregroundColor: urgency == .imminent
             ? NSColor.white : NSColor(srgbRed: 0.114, green: 0.114, blue: 0.122, alpha: 1)])
     }
+    private static func chipWidth(_ chip: MenuBarResetChip) -> CGFloat {
+        ceil(chipText(chip.text, urgency: chip.urgency).size().width + 2 * chipPadding)
+    }
     private static func drawChip(_ chip: MenuBarResetChip, at x: CGFloat) {
         let text = chipText(chip.text, urgency: chip.urgency)
         let textSize = text.size()
         let height = ceil(textSize.height + 3)
-        let rect = NSRect(x: x, y: ((22 - height) / 2).rounded(), width: ceil(textSize.width + 2 * chipPadding), height: height)
+        let rect = NSRect(x: x, y: ((22 - height) / 2).rounded(), width: chipWidth(chip), height: height)
         (chip.urgency == .imminent ? NSColor(srgbRed: 0.843, green: 0, blue: 0.082, alpha: 1)
             : NSColor(srgbRed: 1, green: 0.624, blue: 0.039, alpha: 1)).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
