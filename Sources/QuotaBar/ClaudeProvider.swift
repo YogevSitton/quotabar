@@ -153,9 +153,8 @@ actor ClaudeProvider {
     }
     private func observationDate(matching snapshot: UsageSnapshot, identity: String?) -> Date? {
         guard let cached = persistedUsage(identity: identity),
-              snapshot.session == nil || cached.session == snapshot.session,
-              snapshot.weekly == nil || cached.weekly == snapshot.weekly else { return nil }
-        // An absent response window is not displayed and need not equal a
+              snapshot.hasMatchingUsage(in: cached) else { return nil }
+        // An unavailable response window is not displayed and need not equal a
         // populated cache window. Every displayed value must still match.
         return cached.observedAt
     }
