@@ -9,6 +9,12 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 ### Changed
 
 - The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
+- Reduce healthy Claude polling to at least 90.5 seconds between reads. Failed refreshes wait five minutes, increasing to at most one hour after repeated failures. Codex keeps its one-minute interval, and Claude's two-minute freshness limit is unchanged.
+
+### Fixed
+
+- Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.
+- Share and persist Claude's request deadline across QuotaBar copies for the same local user. Retry, restart, wake, sign-in verification and account changes no longer bypass the waiting period.
 
 ## [0.3.0] - 2026-10-27
 
