@@ -4,8 +4,8 @@ This is the canonical policy and runbook for QuotaBar's releases, update channel
 
 ## Current state
 
-- **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest public release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
-- **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. The maintainer supplied the public verification key in `release-version.json`; the `release-signing` and `stable-approval` environments are configured, and the signing secret's presence was checked by name only. Matching that secret to the public key remains unverified. Pages setup and Preview activation remain pending; publishing is disabled.
+- **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest Stable release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
+- **Preview publishing enabled (28 October 2026):** the public verification key is committed, the `release-signing` and `stable-approval` environments are configured, and GitHub Pages uses GitHub Actions with HTTPS enforced. `QUOTABAR_PREVIEW_SINCE` is `a12f999b5610fc3e7750d259f7640b9c81c6f563` and `QUOTABAR_PUBLISHING` is `enabled`. Only eligible merges after that boundary publish; the first signed Preview is pending. The signing secret's presence was checked by name only, so matching it to the public key remains unverified. Stable promotion has not been performed.
 - **Not yet qualified:** installation, permission prompts, relaunch, recovery and multi-Mac behavior have not been tried on a real Mac. See [Verification status](VERIFICATION.md). Compiling the code is not evidence that an update installs.
 
 ## One public repository
@@ -175,7 +175,7 @@ These are separate, explicit owner actions. They are not part of any code change
 
 **B. Signing setup.**
 
-Status (28 October 2026): steps 1-3 are done, and the public-key pull request is step 4. Do not generate a new key or replace `QUOTABAR_UPDATE_SIGNING_KEY` unless you are deliberately rotating both; the stored secret must stay the private half of the key in `release-version.json`. Steps 5-7 remain.
+Status (28 October 2026): steps 1-5 are done, including merged public-key PR #23 and GitHub Pages configuration. Do not generate a new key or replace `QUOTABAR_UPDATE_SIGNING_KEY` unless you are deliberately rotating both; the stored secret must stay the private half of the key in `release-version.json`. Step 6 is optional; account billing confirmation in step 7 remains an owner check. The configured workflow uses standard runners for this public repository.
 
 1. Build the tool, then run it outside every Git checkout:
    ```sh
@@ -190,7 +190,7 @@ Status (28 October 2026): steps 1-3 are done, and the public-key pull request is
 6. Optionally turn on GitHub's immutable releases (free). Draft-then-publish stays compatible with it.
 7. Confirm in your billing settings that Actions usage for this public repository shows no charge.
 
-**C. Preview activation.** After the public-key pull request has merged:
+**C. Preview activation.** Completed on 28 October 2026 with boundary `a12f999b5610fc3e7750d259f7640b9c81c6f563`. The following steps also describe how to activate after a future pause. After the public-key pull request has merged:
 
 1. Copy the current `main` tip commit SHA into the repository variable **`QUOTABAR_PREVIEW_SINCE`**.
 2. Set **`QUOTABAR_PUBLISHING`** to `enabled`.

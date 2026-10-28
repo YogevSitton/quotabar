@@ -8,11 +8,11 @@ Use Codex, Claude, or both. Independent community project, with no analytics or 
 
 ## Status
 
-The latest public release is **0.3.0**. Earlier development builds used higher internal version numbers.
+The latest Stable release is **0.3.0**. Earlier development builds used higher internal version numbers.
 
 This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
-The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Publishing is implemented but not activated, and installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
+The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Preview publishing is enabled for eligible future merges to `main`; the first signed Preview and real-Mac installation and recovery qualification remain pending. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
@@ -39,7 +39,7 @@ Published versions through 0.3.0 predate the updater. To move to the first updat
 
 In an updater-enabled release, **More > Updates...** opens a separate Updates window:
 
-- Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after publishing is activated.
+- Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after the activation boundary.
 - Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
 - Nothing installs until you click **Install and Relaunch** for the exact build shown. Switching from Preview to Stable never downgrades.
 
@@ -147,7 +147,7 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
 - Packaged releases are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
-- The update channels are implemented but publishing is not activated. Installation, permission prompts and recovery remain unqualified on real Macs.
+- Preview publishing is enabled, but the first signed publication and installation, permission prompts and recovery remain unqualified on real Macs.
 
 ## Optional checksum verification
 
