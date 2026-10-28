@@ -9,7 +9,7 @@ public struct ClaudePollState: Codable, Equatable, Sendable {
     public let failureCount: Int
     public let pending: Bool
 
-    public static let normalInterval: TimeInterval = 90.5
+    public static let normalInterval: TimeInterval = 130
 
     public static func failureDelay(for failureCount: Int) -> TimeInterval {
         switch failureCount {
@@ -41,6 +41,17 @@ public struct ClaudePollState: Codable, Equatable, Sendable {
         }
         return ClaudePollState(version: version, requestID: requestID, startedAt: startedAt,
             nextRequestAt: deadline, failureCount: failures, pending: false)
+    }
+
+    /// An older app may have saved a shorter healthy interval. Enforce the
+    /// current minimum between request starts without shortening any deadline
+    /// or changing an unsuccessful/in-flight request's cooldown.
+    public func respectingNormalInterval() -> ClaudePollState {
+        guard !pending, failureCount == 0 else { return self }
+        let deadline = max(nextRequestAt, startedAt.addingTimeInterval(Self.normalInterval))
+        guard deadline > nextRequestAt else { return self }
+        return ClaudePollState(version: version, requestID: requestID, startedAt: startedAt,
+            nextRequestAt: deadline, failureCount: failureCount, pending: pending)
     }
 
     public var isValid: Bool {

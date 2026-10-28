@@ -222,7 +222,7 @@ import Combine
         scheduleClaudeRead(result)
         return result
     }
-    var claudeMaximumAge: TimeInterval { 120 }
+    var claudeMaximumAge: TimeInterval { ClaudeRefreshPolicy.maximumDisplayAge }
     var needsClaudeConnection: Bool {
         claudeIssue?.needsConnection == true
     }

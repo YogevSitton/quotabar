@@ -20,7 +20,12 @@ public struct ClaudePollStore: Sendable {
     public func reserve(at now: Date = Date()) throws -> ClaudePollAcquisition {
         guard now.timeIntervalSince1970.isFinite, now.timeIntervalSince1970 > 0 else { throw StoreError.invalidState }
         return try locked { directoryFD in
-            let previous = try load(directoryFD)
+            var previous = try load(directoryFD)
+            if let saved = previous {
+                let updated = saved.respectingNormalInterval()
+                if updated != saved { try save(updated, directoryFD) }
+                previous = updated
+            }
             if let previous, now < previous.nextRequestAt { return .deferred(previous) }
             let state = ClaudePollState.reservation(after: previous, at: now)
             try save(state, directoryFD)

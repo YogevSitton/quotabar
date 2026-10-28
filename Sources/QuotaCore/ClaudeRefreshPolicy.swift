@@ -13,6 +13,12 @@ public enum ClaudeRefreshClassification: Equatable {
 }
 
 public enum ClaudeRefreshPolicy {
+    /// Display lifetime after a response has passed the stricter checks below.
+    /// Covers the 130-second polling interval, a reused sample under 60 seconds
+    /// old, the reader's 45-second timeout and five seconds of scheduling margin.
+    /// Errors, cached-only sources and expired windows still invalidate values.
+    public static let maximumDisplayAge: TimeInterval = 240
+
     /// The caller must verify the active account and match all displayed usage
     /// against the after-cache before passing its timestamp here. This only
     /// classifies provenance; it never makes a disk-only reading current.

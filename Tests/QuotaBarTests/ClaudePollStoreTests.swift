@@ -21,13 +21,21 @@ final class ClaudePollStoreTests: XCTestCase {
         return lease
     }
 
+    private func rewriteSavedDeadline(_ deadline: Date, in directory: URL) throws {
+        let file = directory.appendingPathComponent("claude-poll-state.json")
+        var state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        // The production JSONEncoder uses Foundation's default Date encoding.
+        state["nextRequestAt"] = deadline.timeIntervalSinceReferenceDate
+        try JSONSerialization.data(withJSONObject: state).write(to: file)
+    }
+
     func testReservationSurvivesAppRestartAndBlocksAnotherCopy() throws {
         try withStore { store, directory in
             let first = try lease(store.reserve(at: start))
             XCTAssertEqual(first.failureCount, 1)
             XCTAssertEqual(first.nextRequestAt, start.addingTimeInterval(300))
             let restarted = ClaudePollStore(directory: directory)
-            guard case .deferred(let state) = try restarted.reserve(at: start.addingTimeInterval(90.5)) else {
+            guard case .deferred(let state) = try restarted.reserve(at: start.addingTimeInterval(130)) else {
                 return XCTFail("A restart must not bypass an unfinished request's cooldown")
             }
             XCTAssertEqual(state, first.state)
@@ -62,7 +70,7 @@ final class ClaudePollStoreTests: XCTestCase {
             let success = try store.complete(second, outcome: .success(observedAt: observed), at: observed)
             XCTAssertEqual(success.failureCount, 0)
             XCTAssertFalse(success.pending)
-            XCTAssertEqual(success.nextRequestAt, observed.addingTimeInterval(90.5))
+            XCTAssertEqual(success.nextRequestAt, observed.addingTimeInterval(130))
             guard case .deferred = try store.reserve(at: success.nextRequestAt.addingTimeInterval(-0.01)) else {
                 return XCTFail("An early timer must not start another helper")
             }
@@ -76,8 +84,53 @@ final class ClaudePollStoreTests: XCTestCase {
         try withStore { store, _ in
             let request = try lease(store.reserve(at: start))
             let success = try store.complete(request,
-                outcome: .success(observedAt: start.addingTimeInterval(-10)), at: start.addingTimeInterval(1))
-            XCTAssertEqual(success.nextRequestAt, start.addingTimeInterval(90.5))
+                outcome: .success(observedAt: start.addingTimeInterval(-59.5)), at: start.addingTimeInterval(0.25))
+            XCTAssertEqual(success.nextRequestAt, start.addingTimeInterval(130))
+            guard case .deferred = try store.reserve(at: start.addingTimeInterval(129.99)) else {
+                return XCTFail("A reused sample must not shorten the request interval")
+            }
+            XCTAssertEqual(try lease(store.reserve(at: start.addingTimeInterval(130))).startedAt,
+                           start.addingTimeInterval(130))
+        }
+    }
+
+    func testUpgradeExtendsOldHealthyDeadlineOnceAcrossRestarts() throws {
+        try withStore { store, directory in
+            let request = try lease(store.reserve(at: start))
+            _ = try store.complete(request, outcome: .success(observedAt: start), at: start)
+            try rewriteSavedDeadline(start.addingTimeInterval(90.5), in: directory)
+            let expected = start.addingTimeInterval(130)
+            let restarted = ClaudePollStore(directory: directory)
+            guard case .deferred(let upgraded) = try restarted.reserve(at: start.addingTimeInterval(90.5)) else {
+                return XCTFail("An old healthy deadline must not bypass the new interval")
+            }
+            XCTAssertEqual(upgraded.nextRequestAt, expected)
+            let saved = try JSONDecoder().decode(ClaudePollState.self,
+                from: Data(contentsOf: directory.appendingPathComponent("claude-poll-state.json")))
+            XCTAssertEqual(saved, upgraded)
+            let restartedAgain = ClaudePollStore(directory: directory)
+            guard case .deferred(let unchanged) = try restartedAgain.reserve(at: expected.addingTimeInterval(-0.01)) else {
+                return XCTFail("The upgraded deadline must survive another restart")
+            }
+            XCTAssertEqual(unchanged, upgraded)
+            XCTAssertEqual(try lease(restartedAgain.reserve(at: expected)).startedAt, expected)
+        }
+    }
+
+    func testUpgradePreservesLongerHealthyDeadline() throws {
+        try withStore { store, directory in
+            let request = try lease(store.reserve(at: start))
+            _ = try store.complete(request, outcome: .success(observedAt: start), at: start)
+            let expected = start.addingTimeInterval(600)
+            try rewriteSavedDeadline(expected, in: directory)
+            let file = directory.appendingPathComponent("claude-poll-state.json")
+            let original = try Data(contentsOf: file)
+            guard case .deferred(let state) = try ClaudePollStore(directory: directory)
+                .reserve(at: start.addingTimeInterval(130)) else {
+                return XCTFail("Upgrading must not shorten an existing longer deadline")
+            }
+            XCTAssertEqual(state.nextRequestAt, expected)
+            XCTAssertEqual(try Data(contentsOf: file), original)
         }
     }
 
@@ -117,7 +170,7 @@ final class ClaudePollStoreTests: XCTestCase {
             let rollback = start.addingTimeInterval(-1)
             XCTAssertThrowsError(try store.complete(request, outcome: .success(observedAt: rollback), at: rollback))
             XCTAssertThrowsError(try store.complete(request, outcome: .failure, at: rollback))
-            guard case .deferred(let saved) = try store.reserve(at: start.addingTimeInterval(90.5)) else {
+            guard case .deferred(let saved) = try store.reserve(at: start.addingTimeInterval(130)) else {
                 return XCTFail("A clock rollback must leave the reservation intact")
             }
             XCTAssertEqual(saved, request.state)
@@ -182,7 +235,7 @@ final class ClaudePollStoreTests: XCTestCase {
             let request = try lease(store.reserve(at: start))
             XCTAssertThrowsError(try store.complete(request,
                 outcome: .success(observedAt: start.addingTimeInterval(1)), at: start))
-            guard case .deferred(let saved) = try store.reserve(at: start.addingTimeInterval(90.5)) else {
+            guard case .deferred(let saved) = try store.reserve(at: start.addingTimeInterval(130)) else {
                 return XCTFail("Invalid success must leave the conservative reservation intact")
             }
             XCTAssertEqual(saved, request.state)
