@@ -8,7 +8,7 @@ Use Codex, Claude, or both. Independent community project, with no analytics or 
 
 ## Status
 
-The latest public release is **0.3.0**. Earlier development builds used higher internal version numbers.
+The current source version is **0.4.0**. The latest public Stable release is **0.3.0**. Earlier development builds used higher internal version numbers.
 
 This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
