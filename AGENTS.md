@@ -5,9 +5,11 @@ QuotaBar is a native macOS 14+ menu bar app. Both Codex and Claude are first-cla
 ## Start here
 
 - Read `README.md` for connection behavior, data sources, and current limitations.
-- `Sources/QuotaCore/` contains Foundation-only models, parsers, freshness rules, backoff, and sign-in validation.
-- `Sources/QuotaBar/` contains the SwiftUI/AppKit UI, provider clients, official Claude helper integration, and the Darwin-backed persistent Claude polling store.
-- `Tests/QuotaCoreTests/` uses synthetic fixtures for Foundation-only behavior. `Tests/QuotaBarTests/` contains platform-specific polling-store fixtures. `scripts/` contains the app build and optional sanitized status-line exporter.
+- `Sources/QuotaCore/` contains Foundation-only models, parsers, freshness rules, backoff, sign-in validation and the signed update metadata, policy and schedule.
+- `Sources/QuotaBar/` contains the SwiftUI/AppKit UI, provider clients, official Claude helper integration, the Darwin-backed persistent Claude polling store and the in-app updater (feed client, coordinator, Updates window).
+- `Sources/QuotaUpdateSupport/` holds update signing, file, ZIP, bundle and installation-journal code; `Sources/QuotaUpdater/` is the bundled one-shot install helper; `Sources/QuotaReleaseTool/` is used only by the release workflow and the owner's key setup.
+- `Tests/QuotaCoreTests/` uses Foundation-only synthetic fixtures; `Tests/QuotaBarTests/` covers the platform-specific polling store; `Tests/QuotaUpdateSupportTests/` covers update integrity. `scripts/` contains the app build, build identity, packaging, static checks and the optional sanitized status-line exporter.
+- [docs/UPDATES.md](docs/UPDATES.md) is the canonical release and update policy.
 
 ## Development workflow
 
@@ -18,7 +20,7 @@ Follow the Git workflow in `CONTRIBUTING.md`:
 - Never commit or push to `main`. Work on a branch, preferably named `<type>/<short-topic>` (tool-generated names are fine), and open a pull request.
 - Title the pull request as a Conventional Commit (`fix(claude): ...`, `feat(popup): ...`); it becomes the squash-merged commit on `main`.
 - Add an Unreleased entry to `CHANGELOG.md` for user-visible changes.
-- Do not create tags, releases or version bumps unless the maintainer asks for a release.
+- Do not create tags, releases, version bumps (`release-version.json`), Stable promotions, signing keys, secrets, variables, environments or Pages settings, and do not enable publishing, unless the maintainer asks. Merges to `main` become public Preview builds once publishing is active.
 - Do not merge a pull request unless the maintainer asks.
 
 ## Build and verify
@@ -29,12 +31,14 @@ Run from the repository root on macOS with Xcode/Swift 5.9+:
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
+python3 scripts/check-workflow-trust.py
+python3 scripts/check-release-docs.py
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
 These commands compile the app and test targets without running them. Compile and statically review changes only unless the maintainer changes that restriction: do not run tests, live diagnostics, sign-in or reset actions.
 
-The build produces `dist/QuotaBar.app` with an ad-hoc signature. It is not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed.
+The build produces `dist/QuotaBar.app`, including `Contents/Helpers/QuotaUpdater.app`, with an ad-hoc signature. It is a source build that never installs updates, not a notarized public release. Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere if needed. Never set `QUOTABAR_RELEASE_BUILD` locally; only the release workflow builds in release mode.
 
 ## User-facing text
 
@@ -44,7 +48,7 @@ Use the ASCII hyphen `-` for every authored dash, including missing-value placeh
 
 The menu bar must stay compact: each connected provider’s transparent logo followed by `5h%/weekly%` (remaining percentages, in that order). A current no-limit state supported by provider evidence shows neutral `∞` in the 5h position and **No 5-hour limit** in the popup, with no five-hour meter or reset time. An exhausted 5h window shows its reset countdown in place of `0%` (`2h13m/45%`); an exhausted weekly window shows only the weekly countdown. Each percentage blends from the plain label color toward red between 50% and 10% left; countdowns stay uncolored. When a current reading reports a manual reset expiring within 3 days, a small chip after that provider's percentages shows the soonest one's time left, rounded down: orange with days (`2d`), then red with hours or minutes (`18h`, `45m`) in the last 24 hours. It is the only reset detail in the visible item, and the tooltip carries the next expiry date. Do not add a More usage limits button to the popup. Keep labels, automatic reset times and other detail in the popup or tooltip, not in the visible menu-bar item. Preserve the user’s saved menu-bar position. The item fits its content, with no reserved slots or trailing space. Providers are separated by the same visible gap as neighboring menu bar items (an 18pt gap plus the logo's inset, about 19pt from the last glyph to the next logo). Digits are monospaced, so ordinary percentage changes keep its width; only a different digit count (`100%`, below `10%`), a countdown, `∞`, an unavailable reading or a chip appearing or leaving resizes it. While the popup is open, defer any width change until it closes so its anchor never moves. Let AppKit place the popup from its precomputed content size; do not reintroduce manual or deferred window-origin corrections or repeatedly reapply unchanged sizes. The popup height is measured from its content (no empty space at the bottom). While it is open, change only `popover.contentSize`; setting the hosting view frame directly leaves the popover chrome at its old height and clips the top. Reset and expiry times carry their countdown in parentheses on the same line, such as `Sun 25 Oct at 10:00 (1d:1h)`; the timezone stays in the tooltip. Claude cards omit the Updated time.
 
-Do not show a generic Details button when it only repeats the visible data. Use contextual links for historical readings, reset overflow and recovery; there is no menu entry for the Details window and it does not show additional/model limits or extra usage (the maintainer dropped them). The header holds only Quit (power) and a More (ellipsis) menu, in that order, with clear top/bottom breathing room; there is no Refresh button (Codex polls every minute, healthy Claude reads are at least 90.5 seconds apart, and wake respects Claude's saved deadline), Options menu or footer. The ellipsis menu holds a Launch at login checkmark; there is no Settings window. Do not add a Switch Claude account button (QuotaBar follows Claude Code's own sign-in) or a manual Codex CLI picker (detection covers the usual install folders). Manual-reset rows show their exact expiry with its countdown in parentheses, without a redundant total badge; retain underlying credit counts for validation and count-only inventories. Popup expiry warnings use the same tiers as the menu bar chip: orange within 3 days, red within 24 hours. Do not add system notifications for expiring resets; the maintainer does not want them.
+Do not show a generic Details button when it only repeats the visible data. Use contextual links for historical readings, reset overflow and recovery; there is no menu entry for the Details window and it does not show additional/model limits or extra usage (the maintainer dropped them). The header holds only Quit (power) and a More (ellipsis) menu, in that order, with clear top/bottom breathing room; there is no Refresh button (Codex polls every minute, healthy Claude reads are at least 90.5 seconds apart, and wake respects Claude's saved deadline), Options menu or footer. The ellipsis menu holds a Launch at login checkmark and an Updates... item that opens the separate Updates window; there is no Settings window. Do not add a Switch Claude account button (QuotaBar follows Claude Code's own sign-in) or a manual Codex CLI picker (detection covers the usual install folders). Manual-reset rows show their exact expiry with its countdown in parentheses, without a redundant total badge; retain underlying credit counts for validation and count-only inventories. Popup expiry warnings use the same tiers as the menu bar chip: orange within 3 days, red within 24 hours. Do not add system notifications for expiring resets; the maintainer does not want them.
 
 The maintainer does not want scrolling inside the menu popup. Keep both provider summaries side by side, with compact usage windows and reset expiry rows. Long descriptions, historical values, large inventories and reset-recovery status belong in the separate resizable Details window. Additional/model limits and extra usage are parsed but intentionally not shown. Preserve the existing reset confirmation safeguards.
 
@@ -64,6 +68,17 @@ The maintainer does not want scrolling inside the menu popup. Keep both provider
 - Keep Claude reads scheduled at their exact next eligible time instead of dropping an early periodic tick for a whole interval. Codex refresh stays at one minute. Healthy Claude reads are at least 90.5 seconds apart; failures wait five minutes, doubling on repeated failure up to 60 minutes, with explicitly labeled saved values during the wait. Persist a shared request reservation and retry state before launching a Claude usage reader so QuotaBar copies under the same local user cannot race or reset the budget. Store no account identifiers or credentials in this state. Retry, restart, wake, sign-in verification and account changes must respect it; a newer cache sample must not bypass it. A failed or unreadable budget write must not allow an unreserved request. Claude's supported server request quota is unknown, so reduced polling cannot guarantee no HTTP 429 responses. Do not repeatedly probe live endpoints while testing parsers.
 - Claude's get_usage interface is experimental and its optional reset-grant fields are undocumented. Keep parsing defensive and distinguish implemented schema support from verified live behavior.
 
+## Update and release rules
+
+Follow [docs/UPDATES.md](docs/UPDATES.md). In short:
+
+- Update checks and downloads are anonymous HTTPS to the public feeds and release downloads only. Never add a GitHub token, account, CLI, cookie or sign-in path; a missing feed means unavailable.
+- Only a fresh Install and Relaunch click for the exact verified build installs it. Launch, wake, channel changes, permission changes and saved journals must never install, retry or resume. Never downgrade; reject a build number reused with different contents.
+- The helper's first protected change is the exclusive rename of the intact app. Keep the original unchanged on denial, keep every copy when uncertain, and delete only settled transactions on explicit request.
+- Never add or remove quarantine, change ACLs or Gatekeeper, or request Full Disk Access to force an update.
+- Pull-request CI stays read-only, secret-free and keyless. The signing key reaches only the single signing step in the release workflow, and `scripts/check-workflow-trust.py` must keep passing.
+- Never exercise updates, the helper, `QuotaReleaseTool` or the release workflow during development or verification without the maintainer's separate authorization. Qualification uses isolated Macs or accounts without provider CLIs and never touches resets.
+
 ## Current verification limits
 
 Local validation has covered Codex live usage, Claude browser sign-in launch, earlier parser/freshness tests and exporter privacy, and the Claude 2.1.309 read-only control protocol with zero model cost. After the maintainer signed in, 1.7.11 displayed live Claude five-hour/weekly values and the reported weekly reset, then refreshed them automatically across several minute boundaries without the agent clicking Retry. Both provider cards and reset expiry countdowns were visually checked, with no popup scrolling. App and test targets compiled; tests were not executed. Claude's optional reset-credit fields and actual redemption behavior remain unverified. No reset action or confirmation was exercised and no reset credit was consumed. The optional exporter is never installed automatically.
@@ -72,4 +87,4 @@ On 27 October 2026, one explicitly requested read-only Codex CLI query confirmed
 
 On 28 October 2026, an explicitly authorized temporary diagnostic build of 0.3.0 captured a successful normal Claude refresh followed by HTTP 429 responses through official helper 2.1.310. The helper returned a successful control response with unchanged cached usage, including a sample more than 122 seconds old. Only sanitized categories, timing and matching booleans were recorded; model cost and model API duration stayed zero. Static inspection found that the helper's remembered HTTP-failure hold is local to its subprocess, so it does not survive QuotaBar's next helper launch. This diagnoses the earlier behavior; the new polling and persistent-budget change has not been verified live. See `docs/VERIFICATION.md` for current build status. These diagnostic exceptions do not authorize reset actions or future live diagnostics.
 
-For wider binary distribution, account connection reliability, real-provider parity, Developer ID signing/notarization, and release/update handling remain to be completed. The project uses the MIT License; provider names and marks retain their owners' rights.
+The updater, helper, signed metadata and release workflow are compiled and statically reviewed only; publishing is not activated, and no update has been installed, denied, rolled back or recovered on a real Mac. For wider binary distribution, account connection reliability, real-provider parity, Developer ID signing/notarization and qualified update handling remain to be completed. The project uses the MIT License; provider names and marks retain their owners' rights.

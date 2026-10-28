@@ -1,9 +1,12 @@
 #!/bin/zsh
 # Builds the app and writes dist/QuotaBar-<version>.zip plus its SHA-256 file.
 # It verifies the signature of the app extracted from the zip and uploads nothing.
+# It needs no secret: PR CI and contributors run it as is. Only the trusted
+# release workflow sets QUOTABAR_RELEASE_BUILD=1 and signs update metadata in a
+# separate job (see docs/UPDATES.md).
 set -euo pipefail
 cd "${0:A:h}/.."
-./scripts/build.sh
+/bin/zsh scripts/build.sh
 bundle="$PWD/dist/QuotaBar.app"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$bundle/Contents/Info.plist")"
 archive="QuotaBar-$version.zip"

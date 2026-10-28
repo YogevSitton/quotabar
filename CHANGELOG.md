@@ -6,6 +6,11 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ## [Unreleased]
 
+### Added
+
+- In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Publishing these channels is not switched on yet.
+- Release downloads include signed update metadata alongside the zip and its checksum.
+
 ### Changed
 
 - The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.

@@ -1,6 +1,6 @@
 # Screenshots
 
-These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They illustrate the pace markers and reset-expiry warnings added in [0.2.0](../CHANGELOG.md#020---2026-10-26), but predate its bottom-right version label, and the menu bar reset countdown chip and move of expiry warnings to 3 days (orange) and 24 hours (red) in [0.3.0](../CHANGELOG.md#030---2026-10-27). They are not captures of a release bundle.
+These images show the UI from source revision [`84756c0`](https://github.com/YogevSitton/quotabar/commit/84756c0), rendered on 26 October 2026. They illustrate the pace markers and reset-expiry warnings added in [0.2.0](../CHANGELOG.md#020---2026-10-26), but predate its bottom-right version label, and the menu bar reset countdown chip and move of expiry warnings to 3 days (orange) and 24 hours (red) in [0.3.0](../CHANGELOG.md#030---2026-10-27). They also predate the Unreleased Updates menu entry and separate Updates window described in [the update guide](UPDATES.md). They are not captures of a release bundle.
 
 All usage, plans, dates and reset offers are synthetic. No account identifiers, credentials, authorization links or desktop content appear in the images. The fixture clock is 26 October 2026 at 10:00 in Europe/London. The dates and countdowns illustrate the UI; they are not current provider readings.
 

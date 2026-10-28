@@ -80,16 +80,20 @@ Run these commands from the repository root. They build and inspect the app with
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
+python3 scripts/check-workflow-trust.py
+python3 scripts/check-release-docs.py
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
 `./scripts/build.sh` must leave Git-tracked files unchanged. If you change the app icon drawing, run `./scripts/build-icon.sh` and commit the regenerated artwork in the same pull request.
 
-Do not execute tests, live diagnostics, sign-in or reset actions under the current verification restriction. The maintainer must explicitly change that restriction first. Never paste raw provider output or identifiers into an issue or pull request.
+Contributor and pull-request builds need no secret: `./scripts/build.sh` and `./scripts/package-release.sh` produce an ad-hoc signed source build that never installs updates. Never add signing keys, publication tokens, release uploads or update installation to pull-request validation; only the trusted release workflow signs and publishes (see [docs/UPDATES.md](docs/UPDATES.md)).
+
+Do not execute tests, live diagnostics, sign-in or reset actions under the current verification restriction, and do not run the updater, its helper, `QuotaReleaseTool` or the release workflow. The maintainer must explicitly change that restriction first. Never paste raw provider output or identifiers into an issue or pull request.
 
 Offline documentation renders may use synthetic fixtures without starting provider monitoring, loading account or recovery files, or invoking any controls. They demonstrate presentation only and do not establish live-provider or reset verification.
 
-CI compiles the app and test targets on macOS, audits the public tree and checks the pull request title; it does not execute tests. Workflows from first-time contributors wait for maintainer approval before running.
+CI compiles the app and test targets on macOS, audits the public tree, checks workflow trust rules and release documentation, packages the app without secrets and checks the pull request title; it does not execute tests. Workflows from first-time contributors wait for maintainer approval before running.
 
 ## Reviews
 
@@ -99,15 +103,19 @@ CI compiles the app and test targets on macOS, audits the public tree and checks
 
 ## Versions and releases
 
-QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only. Public releases do not carry a preview label.
+QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only. Stable and Preview are update channels; Stable public releases do not carry a preview label.
 
-Releases are cut by the maintainer from `main`:
+Releases come from this public repository on two channels. [docs/UPDATES.md](docs/UPDATES.md) is the full policy and owner runbook.
 
-1. Open a `chore(release): 0.x.y` pull request that bumps `CFBundleShortVersionString` and increments `CFBundleVersion` in `scripts/build.sh`, updates the version in the README's Status section, download link and optional checksum example, and moves the **Unreleased** changelog entries under the new version and date.
-2. After it merges, tag the squashed commit it created on `main` as `v0.x.y` and run `./scripts/package-release.sh`.
-3. Publish a GitHub release for the tag with the changelog section as notes, and attach the zip and its `.sha256` file.
+- **Preview** (opt-in on each Mac): once the maintainer has activated publishing, every eligible successful merge to `main` is built and published automatically as a `preview-<build>` prerelease. It is never marked Latest.
+- **Stable** (the default): only the maintainer promotes an existing Preview build to Stable, reusing its exact bytes as the `v0.x.y` release marked Latest.
 
-Tags and releases are never moved or rewritten once published. A broken release is fixed by a new patch release.
+To prepare a Stable release:
+
+1. Open a `chore(release): 0.x.y` pull request that sets `displayVersion` in `release-version.json`, updates the README Status, download link and checksum example, and moves the **Unreleased** changelog entries under `## [0.x.y]` with the date. Choose a new version after the latest public release; never reuse a published tag. Build numbers come from public history automatically; never edit versions in scripts.
+2. After it merges and its Preview build is published, the maintainer runs the Release workflow's Stable promotion for that Preview and approves it.
+
+Do not create tags, releases, version bumps, promotions, keys, secrets, variables or environments unless the maintainer asks. Tags, releases and assets are never moved, replaced or deleted once published. A broken release is fixed by a newer build.
 
 ## Labels
 

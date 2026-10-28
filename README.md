@@ -12,6 +12,8 @@ The latest public release is **0.3.0**. Earlier development builds used higher i
 
 This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
+The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Publishing is implemented but not activated, and installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
+
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
 ## Install
@@ -33,7 +35,15 @@ Continue with [First launch and provider setup](#first-launch-and-provider-setup
 
 ### Updates
 
-Quit QuotaBar with the power button in its popup. Open [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), download the newer version's ZIP, extract it, and replace the app in Applications. Then reopen QuotaBar. Updates are manual. See [CHANGELOG.md](CHANGELOG.md) for version changes.
+Published versions through 0.3.0 predate the updater. To move to the first updater-enabled release, quit QuotaBar with the power button, download the new ZIP from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), extract it, replace the app in Applications, and reopen it. That first migration is manual.
+
+In an updater-enabled release, **More > Updates...** opens a separate Updates window:
+
+- Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after publishing is activated.
+- Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
+- Nothing installs until you click **Install and Relaunch** for the exact build shown. Switching from Preview to Stable never downgrades.
+
+Update checks need no GitHub account, token or command-line tool. macOS may ask for App Management permission again on later updates. Builds made from source never install updates. See [Releases and in-app updates](docs/UPDATES.md) for setup, permissions and recovery, and [CHANGELOG.md](CHANGELOG.md) for version changes.
 
 ## First launch and provider setup
 
@@ -73,11 +83,11 @@ A subtle contrasting tick on each current usage meter marks the remaining quota 
 
 Reported manual reset offers expiring within 3 days have an orange warning icon and highlighted expiry; within 24 hours they turn red, matching the menu bar chip. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning or menu bar chip.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
+The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login** and **Updates...**, which opens the separate Updates window. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
 
 ## Screenshots
 
-Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings added in 0.2.0, but predate the bottom-right version label, and the menu bar reset countdown chip and 3-day warning tier added in 0.3.0. They are not live account readings or evidence of reset redemption.
+Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings added in 0.2.0, but predate the bottom-right version label, and the menu bar reset countdown chip and 3-day warning tier added in 0.3.0. They also predate the Updates menu entry and separate Updates window. They are not live account readings or evidence of reset redemption.
 
 ![Light menu bar with Codex 72%/61% and Claude 58%/76% remaining](docs/screenshots/menubar-light.png)
 
@@ -136,7 +146,8 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Missing provider fields remain unknown; full reset-credit parity is not promised.
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
-- Packaged releases are ad-hoc signed, not notarized. Developer ID signing, notarization and a supported update channel remain future work.
+- Packaged releases are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
+- The update channels are implemented but publishing is not activated. Installation, permission prompts and recovery remain unqualified on real Macs.
 
 ## Optional checksum verification
 
@@ -178,6 +189,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Current veri
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
+python3 scripts/check-workflow-trust.py
+python3 scripts/check-release-docs.py
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 

@@ -4,7 +4,7 @@ about: Something in QuotaBar does not work as described
 labels: bug
 ---
 
-**Do not paste tokens, account or organization IDs, emails, private authorization links, or raw CLI output.** Redact anything personal from logs and screenshots. Report security vulnerabilities privately instead (see [SECURITY.md](https://github.com/YogevSitton/quotabar/blob/main/SECURITY.md)).
+**Do not paste tokens, account or organization IDs, emails, or raw CLI output.** Redact anything personal from logs and screenshots. Report security vulnerabilities privately instead (see SECURITY.md).
 
 ## What happened
 
@@ -20,11 +20,12 @@ labels: bug
 
 - macOS version:
 - Mac model and chip (Apple Silicon is required; Intel is unverified):
-- QuotaBar version (Finder > Get Info, or the release you downloaded):
-- Installed from: release zip / built from source (commit):
+- QuotaBar version and build (More > Updates..., or Finder > Get Info):
+- Installed from: Stable release / Preview build / pre-updater release (through 0.3.0) / built from source (commit):
+- Update channel, if this is about updates (Stable or Preview):
 - Codex CLI version (`codex --version`), if relevant:
 - Claude Code CLI version (`claude --version`), if relevant:
 
 ## Screenshots
 
-<!-- Optional. Check that they show no emails, names, account identifiers or private authorization links. -->
+<!-- Optional. Check that they show no emails, names or account identifiers. -->

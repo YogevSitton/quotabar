@@ -32,5 +32,9 @@ jobs:
         run: swift build --build-tests --disable-sandbox
       - name: Public-tree audit
         run: python3 scripts/audit-public-tree.py --public-docs
-      - name: Verify app packaging
+      - name: Workflow trust rules
+        run: python3 scripts/check-workflow-trust.py
+      - name: Release documentation consistency
+        run: python3 scripts/check-release-docs.py
+      - name: Verify keyless app packaging (no secrets, uploads nothing)
         run: ./scripts/package-release.sh
