@@ -23,7 +23,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Security
 
-- Pin the maintainer's public verification key for future signed updates. Publishing remains disabled pending activation and installation qualification.
+- Pin the maintainer's public verification key for future signed updates. Publishing remains disabled pending activation and installation qualification. Builds made from source now check the public update feeds on the normal schedule and can link to a newer release, but never download or install it.
 
 ## [0.3.0] - 2026-10-27
 
