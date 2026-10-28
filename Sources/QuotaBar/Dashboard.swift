@@ -33,6 +33,7 @@ struct Dashboard: View {
                     Menu {
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Updates...") { state.showUpdates() }
+                        Button("Logs...") { state.showLogs() }
                     } label: { Image(systemName: "ellipsis").frame(width: 18, height: 16) }
                         .menuStyle(.button).menuIndicator(.hidden).fixedSize().help("More")
                 }.padding(.horizontal, 16).padding(.vertical, 20)

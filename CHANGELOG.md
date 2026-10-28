@@ -8,6 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Added
 
+- More > Logs... opens a private local diagnostic history with Copy logs and Clear logs controls. It keeps bounded provider outcomes, Claude cache-validation and retry details, helper versions and update states across restarts, without credentials, account identifiers or raw replies.
 - In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Preview builds are published automatically from `main`.
 - Release downloads include signed update metadata alongside the zip and its checksum.
 
@@ -19,6 +20,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- Retain Claude's original usage failure message when Retry usage is clicked during a cooldown.
 - Manual reset countdown tags and expiry warnings gradually blend from their existing yellow-orange color at 24 hours left to full red at 12 hours, instead of abruptly turning red at 24 hours.
 - Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.
 - Share and persist Claude's request deadline across QuotaBar copies for the same local user. Retry, restart, wake, sign-in verification and account changes no longer bypass the waiting period.
