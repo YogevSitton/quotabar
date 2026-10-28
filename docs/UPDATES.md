@@ -5,7 +5,7 @@ This is the canonical policy and runbook for QuotaBar's releases, update channel
 ## Current state
 
 - **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest public release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
-- **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. No signing key, secret, variable, environment or Pages site has been set up, and the release workflow has never run.
+- **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. The maintainer supplied the public verification key in `release-version.json`; the `release-signing` and `stable-approval` environments are configured, and the signing secret's presence was checked by name only. Matching that secret to the public key remains unverified. Pages setup and Preview activation remain pending; publishing is disabled.
 - **Not yet qualified:** installation, permission prompts, relaunch, recovery and multi-Mac behavior have not been tried on a real Mac. See [Verification status](VERIFICATION.md). Compiling the code is not evidence that an update installs.
 
 ## One public repository
@@ -175,6 +175,8 @@ These are separate, explicit owner actions. They are not part of any code change
 
 **B. Signing setup.**
 
+Status (28 October 2026): steps 1-3 are done, and the public-key pull request is step 4. Do not generate a new key or replace `QUOTABAR_UPDATE_SIGNING_KEY` unless you are deliberately rotating both; the stored secret must stay the private half of the key in `release-version.json`. Steps 5-7 remain.
+
 1. Build the tool, then run it outside every Git checkout:
    ```sh
    swift build -c release --product QuotaReleaseTool
@@ -194,6 +196,8 @@ These are separate, explicit owner actions. They are not part of any code change
 2. Set **`QUOTABAR_PUBLISHING`** to `enabled`.
 
 The next eligible merge after that boundary publishes `preview-<build>` and deploys `preview.json` alone, because an updater-enabled Stable release is still absent. Re-runs or late completions of CI for the boundary commit or anything older are rejected.
+
+GitHub cannot show a stored secret, so the first Preview is also the first check that `QUOTABAR_UPDATE_SIGNING_KEY` matches the committed public key. If it does not, signing fails with "The update signature could not be verified." and nothing is published. Unset `QUOTABAR_PUBLISHING`, replace the secret with the contents of the private key file whose `generate-key` output matched `release-version.json`, set a new `QUOTABAR_PREVIEW_SINCE`, then re-enable.
 
 - **To pause,** unset `QUOTABAR_PUBLISHING`.
 - **To resume,** first set a new `QUOTABAR_PREVIEW_SINCE` equal to the `main` tip at that time, then re-enable. Merges made during the pause are never published retroactively.
