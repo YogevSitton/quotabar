@@ -17,6 +17,7 @@ let package = Package(
         .executableTarget(name: "QuotaUpdater", dependencies: ["QuotaCore", "QuotaUpdateSupport"]),
         .executableTarget(name: "QuotaBar", dependencies: ["QuotaCore", "QuotaUpdateSupport"], resources: [.process("Resources")]),
         .testTarget(name: "QuotaCoreTests", dependencies: ["QuotaCore"]),
-        .testTarget(name: "QuotaUpdateSupportTests", dependencies: ["QuotaCore", "QuotaUpdateSupport"])
+        .testTarget(name: "QuotaUpdateSupportTests", dependencies: ["QuotaCore", "QuotaUpdateSupport"]),
+        .testTarget(name: "QuotaBarTests", dependencies: ["QuotaBar", "QuotaCore"])
     ]
 )

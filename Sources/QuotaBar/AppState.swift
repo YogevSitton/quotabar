@@ -19,8 +19,8 @@ import Combine
     private let resetStore = CodexResetStore()
     @Published var refreshingCodex = false
     @Published var refreshingClaude = false
-    // Fixed one-minute cadence: Claude Code caches usage for 60 seconds, so
-    // faster reads return the same values, and slower ones only lag.
+    // Codex and installation checks run every minute. Claude enforces its
+    // separate, durable polling budget and schedules its exact next deadline.
     let interval: Double = 1
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var settingsError: String?
@@ -87,7 +87,7 @@ import Combine
     func refreshClaude(reconnect: Bool = false) {
         guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
-            let result = await claudeProvider.read(reconnect: reconnect, minimumInterval: max(60, interval * 60))
+            let result = await claudeProvider.read(reconnect: reconnect)
             self.claude = result.snapshot; self.claudeError = result.error
             self.claudeIssue = result.issue
             self.scheduleClaudeRead(result)
@@ -99,11 +99,12 @@ import Combine
         claudeRetryTimer?.invalidate()
         claudeNextRequestAt = nil
         guard interval > 0, installation.claude, let next = result.nextRequestAt else { return }
-        let delay = next > Date() ? next.timeIntervalSinceNow : max(60, interval * 60)
-        claudeNextRequestAt = Date().addingTimeInterval(max(1, delay))
+        let now = Date()
+        let delay = max(1, next.timeIntervalSince(now))
+        claudeNextRequestAt = now.addingTimeInterval(delay)
         // The shared periodic timer can fire just before the provider's exact
         // deadline. Schedule that deadline instead of skipping a whole minute.
-        let retryTimer = Timer(timeInterval: max(1, delay), repeats: false) { [weak self] _ in
+        let retryTimer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.refreshClaude() }
         }
         claudeRetryTimer = retryTimer
@@ -216,7 +217,7 @@ import Combine
         }
         guard !Task.isCancelled else { return ClaudeReadResult(snapshot: nil, error: "Connection check cancelled.", issue: .usageUnavailable) }
         refreshingClaude = true; defer { refreshingClaude = false }
-        let result = await claudeProvider.read(reconnect: true, minimumInterval: max(60, interval * 60))
+        let result = await claudeProvider.read(reconnect: true)
         claude = result.snapshot; claudeError = result.error; claudeIssue = result.issue; onChange?()
         scheduleClaudeRead(result)
         return result
