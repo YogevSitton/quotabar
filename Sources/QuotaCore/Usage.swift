@@ -49,12 +49,18 @@ public struct UsagePace: Equatable {
 
 public enum ResetExpiryUrgency: Int, Comparable {
     case normal, soon, imminent
-    /// Orange within 3 days, red within 24 hours; a past expiry is not urgent.
+    /// Warning within 3 days, imminent within 24 hours; a past expiry is not urgent.
     public init(timeLeft: TimeInterval) {
         guard timeLeft > 0 else { self = .normal; return }
         self = timeLeft <= 86400 ? .imminent : timeLeft <= 3 * 86400 ? .soon : .normal
     }
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+    /// Preserve the warning color at 24 hours and reach full red at 12 hours.
+    /// Urgency still controls warning visibility and countdown units separately.
+    public static func redBlendFraction(timeLeft: TimeInterval) -> Double {
+        guard timeLeft.isFinite, timeLeft > 0 else { return 0 }
+        return max(0, min(1, (24 * 3600 - timeLeft) / (12 * 3600)))
+    }
 }
 
 public struct ResetOffer: Identifiable, Equatable {

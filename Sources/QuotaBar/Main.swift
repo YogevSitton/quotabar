@@ -43,6 +43,7 @@ import QuotaUpdateSupport
     private var outsideClickMonitor: Any?
     private var renderedMenuDescription: String?
     private var renderedMenuAppearance: NSAppearance.Name?
+    private var renderedMenuChips: [MenuBarResetChip?]?
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance prevents duplicate menu items and unnecessary polling.
         if let id = Bundle.main.bundleIdentifier,
@@ -96,7 +97,8 @@ import QuotaUpdateSupport
         let chips = entries.map { $0.resetChip(at: now) }
         let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")
         let appearance = button.effectiveAppearance
-        if renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name {
+        // The expiry tint can advance while the rounded countdown stays the same.
+        if renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name || renderedMenuChips != chips {
             let image: NSImage
             if entries.isEmpty {
                 image = AppArtwork.icon.copy() as! NSImage
@@ -111,6 +113,7 @@ import QuotaUpdateSupport
                 button.image = image
                 renderedMenuDescription = renderKey
                 renderedMenuAppearance = appearance.name
+                renderedMenuChips = chips
             }
         }
         button.toolTip = entries.isEmpty
