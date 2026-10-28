@@ -1,8 +1,8 @@
 # QuotaBar
 
-A native macOS menu bar app for Codex (ChatGPT) and Claude subscription usage. See your remaining five-hour and weekly usage, scheduled reset times, and any reset credits and expiry dates the provider reports.
+A native macOS menu bar app for Codex (ChatGPT), Claude and experimental Antigravity subscription usage. See your remaining five-hour and weekly usage, scheduled reset times, and any reset credits and expiry dates the provider reports.
 
-Use Codex, Claude, or both. Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI or Anthropic.
+Use any combination of the providers. Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI, Anthropic or Google.
 
 [Install](#install) | [First launch](#first-launch-and-provider-setup) | [Usage](#usage) | [Screenshots](#screenshots) | [Troubleshooting](#troubleshooting)
 
@@ -49,7 +49,7 @@ Update checks need no GitHub account, token or command-line tool. macOS may ask 
 
 QuotaBar runs in the **menu bar at the top of your screen**. It has no Dock icon or main app window. Click its gauge icon or provider percentages to open the popup.
 
-Set up either provider below, or both. QuotaBar reuses the official tools' subscription sign-in; you do not paste passwords or API keys into QuotaBar.
+Set up the providers you use below. QuotaBar uses the official tools' subscription sign-in; you do not paste passwords or API keys into QuotaBar.
 
 ### Codex
 
@@ -65,6 +65,17 @@ Set up either provider below, or both. QuotaBar reuses the official tools' subsc
 
 To change Claude accounts later, sign in to the other account in Claude Code; QuotaBar follows that sign-in. A provider with no detected local installation is hidden. Startup, polling and retrying usage never open browser sign-in or download a helper.
 
+### Antigravity (experimental)
+
+1. Install [Antigravity](https://antigravity.google/download) or its official `agy` CLI. QuotaBar detects it automatically.
+2. Click **Connect Antigravity**. This explicitly prepares Google's verified CLI 1.4.9 for Apple Silicon in QuotaBar's own helper directory. It reuses an installed copy only when its bytes match the reviewed version; otherwise it downloads that exact official version.
+3. The official CLI tries its saved authentication and opens browser sign-in when needed. If it provides an authorization code, paste it into QuotaBar and choose **Complete sign-in**. QuotaBar does not read tokens or change your normal CLI settings. The CLI may reuse its shared Keychain account; this is not an independent Google account profile.
+4. If more than one quota group is reported, choose the group to display. Gemini 4 Argon stays separate from other Gemini pools. A missing five-hour window shows a dash, never an inferred unlimited balance. Unknown window formats remain available through **View reported quotas**.
+
+Antigravity refreshes about every five minutes, with longer waits after failures. It does not expose Google reset-credit actions or combine Antigravity with separate Gemini CLI/API billing. The integration currently declines Macs with an Antigravity administrator-policy file rather than overriding that policy.
+
+This integration is compiled and statically reviewed only. Browser sign-in, live quota values, actual Gemini 4 group labels and automatic refresh have not been verified against an account. See [Antigravity integration details](docs/PROVIDER-INTEGRATIONS.md#antigravity) before relying on it.
+
 ### Check that setup worked
 
 After a successful read, each connected provider shows its applicable five-hour and weekly remaining percentages in the popup and menu bar, for example `72%/61%`. A supported reading with no five-hour limit, currently Codex Pro, shows `∞/61%` and **No 5-hour limit** in the popup. Codex refreshes automatically every minute; healthy Claude reads are at least 2 minutes 10 seconds apart. Wake checks respect Claude's saved request deadline, and failures cause longer waits. Missing or unverified values stay unavailable; see [Troubleshooting](#troubleshooting) if a card or reading is missing.
@@ -77,7 +88,7 @@ Each connected provider has its transparent logo followed by `5h%/weekly%`, such
 
 When a reported manual reset expires within 3 days, a small countdown chip follows that provider's percentages: orange with the days left (`2d`), then hours or minutes left (`18h`, `45m`) in its last 24 hours. The existing yellow-orange color gradually blends toward red from 24 hours left, reaching full red at 12 hours and staying red until expiry. The time is rounded down, so it never overstates how long you have. Hover over the menu bar item to see each provider's next reset expiry with its date and countdown.
 
-Click the menu bar item to open the compact popup. Installed providers appear side by side with their applicable five-hour and weekly meters, automatic reset times and reported reset credits. **No 5-hour limit** replaces the five-hour meter and reset time when supported by the reading. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional/model limits and extra usage are intentionally not displayed.
+Click the menu bar item to open the compact popup. Installed providers appear side by side with their applicable five-hour and weekly meters, automatic reset times and reported reset credits. **No 5-hour limit** replaces the five-hour meter and reset time when supported by the reading. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional Codex/Claude model limits and extra usage remain hidden. Antigravity's primary quota groups are selectable; **View reported quotas** shows buckets that cannot fit its two standard window slots.
 
 A subtle contrasting tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. The comparison uses the reading's original timestamp. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
 
@@ -202,4 +213,4 @@ Report vulnerabilities through [GitHub private vulnerability reporting](https://
 
 QuotaBar's own code, documentation and original artwork are under the [MIT License](LICENSE), copyright 2026 Yogev Sitton.
 
-OpenAI, ChatGPT and Codex names and marks belong to OpenAI; Anthropic and Claude names and marks belong to Anthropic. Provider names and artwork are excluded from the MIT grant and identify their respective integrations. QuotaBar is not affiliated with, endorsed by or sponsored by either provider.
+OpenAI, ChatGPT and Codex names and marks belong to OpenAI; Anthropic and Claude names and marks belong to Anthropic; Antigravity and Gemini names and marks belong to Google. Provider names and artwork are excluded from the MIT grant and identify their respective integrations. QuotaBar is not affiliated with, endorsed by or sponsored by these providers.

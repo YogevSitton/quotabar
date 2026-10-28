@@ -8,6 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Added
 
+- Experimental Antigravity subscription usage, including separately reported Gemini 4 quota groups. Connect through the official CLI, choose the quota group shown in the menu bar, and see its remaining quota and reset times. Private CLI settings avoid the saved slash-command preference bug; live connection and quota behavior remain unverified.
 - In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Preview builds are published automatically from `main`.
 - Release downloads include signed update metadata alongside the zip and its checksum.
 

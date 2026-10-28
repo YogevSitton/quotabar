@@ -12,6 +12,7 @@ Provider symbols are unchanged vendor vector paths, rendered locally onto simple
 
 - `ChatGPT-mark.svg`: the 20×20 ChatGPT symbol in the navigation at [chatgpt.com](https://chatgpt.com/), read from its rendered SVG on 23 October 2026. OpenAI owns this mark. See [OpenAI brand guidance](https://openai.com/brand/).
 - `Claude-mark.svg`: the 125×125 Claude symbol path from the header wordmark at [claude.com](https://claude.com/), read from its rendered SVG on 23 October 2026. Anthropic owns this mark.
+- `Antigravity-mark.svg`: the unchanged Antigravity silhouette from [Google's vector favicon](https://antigravity.google/favicon.svg), retrieved on 28 October 2026. `ProviderArtwork` renders this path directly as a transparent monochrome mark, blue in the popup and tinted to the menu text color in the menu bar. Google owns this mark; it is excluded from the MIT License.
 
 These marks, and the `Codex*`, `Claude*` and `ChatGPT*` files rendered from them, belong to their owners and are not covered by the MIT License. QuotaBar uses them only to identify the services it integrates with and is not affiliated with, endorsed by or sponsored by OpenAI or Anthropic.
 

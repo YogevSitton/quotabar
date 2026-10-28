@@ -33,7 +33,9 @@ private struct ProviderDetailsView: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if provider == "Claude" {
+                    if provider == "Antigravity" {
+                        AntigravityDetailsView(state: state, now: context.date)
+                    } else if provider == "Claude" {
                         ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude)
                     } else {

@@ -47,8 +47,9 @@ struct MenuBarEntry {
     let session: MenuBarQuota
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
+    var quotaGroup: String? = nil
     var description: String {
-        [name, session.tooltipLine("5-hour window"), weekly.tooltipLine("Weekly window")].joined(separator: "; ")
+        ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window"), weekly.tooltipLine("Weekly window")]).joined(separator: "; ")
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
@@ -80,7 +81,7 @@ struct MenuBarEntry {
             let when = $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute().timeZone(.specificName(.short)))
             return "Next reset expires \(when) (\(shortCountdown($0, now: now)))"
         }
-        return ([name, session.tooltipLine("5h"), weekly.tooltipLine("Weekly")] + [expiry].compactMap { $0 }).joined(separator: "\n")
+        return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h"), weekly.tooltipLine("Weekly")] + [expiry].compactMap { $0 }).joined(separator: "\n")
     }
 }
 

@@ -40,6 +40,38 @@ On 28 October 2026, an authorized instrumented copy of 0.3.0 showed the official
 
 Dated observations and remaining acceptance work are recorded in [verification status](VERIFICATION.md). Live five-hour/weekly usage and automatic refresh have been observed locally; optional Claude reset-grant fields remain unverified.
 
+## Antigravity
+
+Antigravity support is experimental and covers subscription quota reported by its official CLI, including Gemini 4 groups when the provider supplies them. It does not query the separate Gemini CLI or Gemini API billing. [Issue #27](https://github.com/YogevSitton/quotabar/issues/27) tracks the integration.
+
+### Reviewed helper and configuration workaround
+
+Only the official macOS arm64 CLI **1.4.9** binary with SHA-256 `a66421b7962ffe5642e00cffdd2844dfde440e540502a29d206be5544a065c7b` is accepted. **Connect Antigravity** prepares a private copy from a matching installed CLI or Google's exact, SHA-512-pinned archive, then validates the binary hash and Google Developer ID signature. Polling never downloads, replaces or updates the helper. The source contains the pinned archive URL and checksum; changing the pin requires reviewing the protocol and startup behavior again.
+
+The fixed request is `-p /usage --output-format json`. Static inspection found that a saved `disableSlashCommands: true` wins over `--disable-slash-commands=false` and can route this text into a model turn. The [upstream report](https://github.com/google-antigravity/antigravity-cli/issues/1361) records that defect. Checking `num_turns` afterward cannot prevent it.
+
+QuotaBar instead owns a private filesystem profile under `~/Library/Application Support/QuotaBar/Antigravity`, with an explicit `HOME`, `--gemini_dir` and `--app_data_dir=quotabar`. The profile has known non-secret settings with slash commands enabled, empty MCP/hooks configuration, no global plugin registrations and an empty working directory. Default customizations and automatic CLI updates are disabled. A cross-copy lock covers configuration validation, request reservation, execution and completion. Unsafe paths or unexpected executable customizations stop the read. Personal CLI settings and credential files are never read, copied or modified by QuotaBar.
+
+The pinned CLI's recognized usage-command branch skips conversation creation and model turns. Its headless path skips the conversation-search index. Static review also established that the normal `cli` mode skips the IDE-only system MCP manager, and that the bundled customization registry contains skills but no plugins that add MCP servers. The official helper can still do its own read-only account/bootstrap work, including cloud summary/project metadata; this is not a claim that its only network request is the quota endpoint. QuotaBar consumes only the usage-command JSON and never logs raw output. System administrator policy lives outside this profile; the integration declines to launch while `/Library/Application Support/Antigravity/admin_settings.json` exists, rather than overriding it.
+
+### Authentication and process boundaries
+
+Monitoring uses `posix_spawn` with `POSIX_SPAWN_SETSID`, an EOF pipe on stdin, bounded output and a 45-second deadline. Both input properties matter: this CLI treats character devices, including `/dev/null`, as interactive, and otherwise tries `/dev/tty`. No controlling terminal and a real pipe prevent automatic browser sign-in even when QuotaBar was started from Terminal.
+
+Only **Connect Antigravity** supplies an owned pseudo-terminal on stdin to the same fixed usage command, with a 180-second outer deadline. The official CLI then uses its normal saved-authentication and browser-login path, with optional manual code entry through QuotaBar. Cancel terminates the owned process group and clears the code. No positional `agy login` or internal CDE auth shortcut is used: static inspection found that the latter's credential-file fallback differs from the normal CLI path. The CLI can reuse the shared `antigravity` Keychain service despite isolated `HOME`; QuotaBar does not promise a separate account or inspect that entry. Official CLI authentication remains subject to macOS's normal trust controls.
+
+### Quota groups, freshness and scheduling
+
+The parser requires `status: SUCCESS`, `command.name: usage` and numeric `num_turns: 0`. It reads dynamic `command.data.groups[].buckets[]`; it does not hardcode Gemini model IDs, combine pools, infer reset credits or classify omitted five-hour quota as unlimited. Multiple groups require an explicit popup selection. A missing saved selection never silently switches to another pool. Reported fractions must be finite and within 0...1; disabled, missing or malformed values remain unavailable. Count-only buckets do not become percentages.
+
+The two menu slots recognize only unambiguous window text: `5h`, `5-hour`, `5 hours`, `weekly`, `7d` and `7 days`, ignoring case and surrounding whitespace. This is a conservative interpretation of duration text, not a claim that every label has been seen live. Other labels and independent buckets remain available in the resizable reported-quota view. Gemini 4 Argon is supported through this dynamic schema; its actual account-specific labels and quota availability remain unverified.
+
+Static inspection established that `/usage` requests a fresh quota fetch, clears its old in-process cache and returns an error on fetch failure. The JSON has no account identifier or original server timestamp. QuotaBar conservatively records the local request start, holds readings only in memory, and does not claim account matching. An explicit connection or confirmed authentication boundary clears the old reading. A failure makes remaining values historical immediately; a past reset invalidates that window. Current readings expire after 390 seconds from request start.
+
+Healthy requests start at least five minutes apart. Failures wait five minutes, doubling to at most one hour. A private durable record reserves each attempt as a possible failure before launch, shared across QuotaBar copies. A restart, wake or Retry cannot bypass it. A confirmed missing-authentication result stops background attempts until explicit Connect; because that failure occurred before the quota request, Connect can resolve that authentication boundary immediately. These client intervals are conservative defaults, not a documented Google request allowance.
+
+Official references: [headless behavior](https://antigravity.google/docs/cli/headless), [usage command](https://antigravity.google/docs/cli/commands/usage), and [Google's profile-isolation guidance](https://github.com/google-antigravity/antigravity-cli/issues/1080). The implementation-specific claims above come from static inspection of the exact pinned binary. No Antigravity provider call or sign-in was exercised during development; see [verification status](VERIFICATION.md).
+
 ## Refresh and local fallbacks
 
 Codex polls every 60 seconds. Healthy Claude reads are spaced at least 130 seconds apart, measured from both the request start and the accepted sample time. This reduces QuotaBar's normal Claude request frequency by more than half compared with a one-minute interval. These are client intervals, not a known provider-supported request quota. Claude can still return HTTP 429, and other apps or machines do not share QuotaBar's local budget. No model inference requests are made.

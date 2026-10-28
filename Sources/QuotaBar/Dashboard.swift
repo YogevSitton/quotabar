@@ -8,7 +8,7 @@ struct Dashboard: View {
     // screen-capped height so the popup has no empty space at the bottom.
     var fixedHeight: CGFloat? = nil
     var contentWidth: CGFloat {
-        min(state.installation.codex && state.installation.claude ? 700 : 380, maximumSize.width)
+        min(CGFloat(max(1, state.installation.count) * 320 + 60), maximumSize.width)
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
@@ -41,8 +41,9 @@ struct Dashboard: View {
                     VStack(spacing: 10) {
                         // Explicit columns prevent a long offer or button from
                         // expanding the hosting view beyond the screen budget.
-                        let columnWidth = max(0, (contentWidth - 34) / 2)
-                        let paired = state.installation.codex && state.installation.claude
+                        let columns = max(1, state.installation.count)
+                        let columnWidth = max(0, (contentWidth - 24 - CGFloat(columns - 1) * 10) / CGFloat(columns))
+                        let paired = columns > 1
                         HStack(alignment: .top, spacing: 10) {
                             if state.installation.codex {
                                     CompactProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
@@ -70,9 +71,13 @@ struct Dashboard: View {
                                 }.controlSize(.large)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
                             }
+                            if state.installation.antigravity {
+                                AntigravityCard(state: state, now: context.date)
+                                    .frame(width: columnWidth, alignment: .topLeading)
+                            }
                         }
-                        if !state.installation.codex && !state.installation.claude {
-                            Text("Install Codex or Claude to see your usage here.")
+                        if state.installation.count == 0 {
+                            Text("Install Codex, Claude or Antigravity to see your usage here.")
                                 .font(.callout).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
@@ -401,7 +406,7 @@ struct ProviderCard: View {
     }
 }
 
-private struct UsageRow: View {
+struct UsageRow: View {
     let title: String
     let window: UsageWindow?
     let color: Color
