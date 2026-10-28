@@ -197,7 +197,7 @@ Status (28 October 2026): steps 1-3 are done, and the public-key pull request is
 
 The next eligible merge after that boundary publishes `preview-<build>` and deploys `preview.json` alone, because an updater-enabled Stable release is still absent. Re-runs or late completions of CI for the boundary commit or anything older are rejected.
 
-GitHub cannot show a stored secret, so the first Preview is also the first check that `QUOTABAR_UPDATE_SIGNING_KEY` matches the committed public key. If it does not, signing fails with "the signed metadata did not verify" and nothing is published. Unset `QUOTABAR_PUBLISHING`, replace the secret with the contents of the private key file whose `generate-key` output matched `release-version.json`, set a new `QUOTABAR_PREVIEW_SINCE`, then re-enable.
+GitHub cannot show a stored secret, so the first Preview is also the first check that `QUOTABAR_UPDATE_SIGNING_KEY` matches the committed public key. If it does not, signing fails with "The update signature could not be verified." and nothing is published. Unset `QUOTABAR_PUBLISHING`, replace the secret with the contents of the private key file whose `generate-key` output matched `release-version.json`, set a new `QUOTABAR_PREVIEW_SINCE`, then re-enable.
 
 - **To pause,** unset `QUOTABAR_PUBLISHING`.
 - **To resume,** first set a new `QUOTABAR_PREVIEW_SINCE` equal to the `main` tip at that time, then re-enable. Merges made during the pause are never published retroactively.
