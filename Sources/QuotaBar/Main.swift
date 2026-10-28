@@ -91,8 +91,8 @@ import QuotaUpdateSupport
     private func updateLabel() {
         guard let button = statusItem.button else { return }
         let entries = state.menuEntries
-        let description = entries.map(\.description).joined(separator: "; ")
         let now = Date()
+        let description = entries.map { $0.description(at: now) }.joined(separator: "; ")
         let segments = entries.map { $0.menuSegments(at: now) }
         let chips = entries.map { $0.resetChip(at: now) }
         let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")

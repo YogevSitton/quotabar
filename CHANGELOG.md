@@ -13,6 +13,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- Menu bar hover info shows total hours and minutes until usage resets and manual reset expiry instead of calendar dates and clock times.
 - Set the source version to 0.4.0 for the upcoming release.
 - The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
 - Reduce healthy Claude polling to at least 2 minutes 10 seconds between reads. Validated readings remain current for less than four minutes to cover the next read, while failed refreshes immediately show saved values and wait five minutes, increasing to at most one hour after repeated failures. Codex keeps its one-minute interval.
