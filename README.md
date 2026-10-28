@@ -63,7 +63,7 @@ Set up the providers you use below. QuotaBar uses the official tools' subscripti
 2. Open QuotaBar's popup. It automatically checks for an existing **Claude Code subscription sign-in**. Being signed in only to Claude Desktop does not necessarily provide that CLI sign-in.
 3. If **Connect Claude** appears, click it. QuotaBar prepares a verified official helper if needed, checks the saved sign-in, and opens the official browser login only when required. Finish authorization in your browser. Progress, cancel and errors stay in the popup; **Sign-in help** opens optional recovery help.
 
-To change Claude accounts later, sign in to the other account in Claude Code; QuotaBar follows that sign-in. A provider with no detected local installation is hidden. Startup, polling and retrying usage never open browser sign-in or download a helper.
+To change Claude accounts later, sign in to the other account in Claude Code; QuotaBar follows that sign-in. A provider with no detected local installation is hidden. QuotaBar's managed Claude Code helper counts as an installation, so Claude stays visible if you later remove its desktop app or standalone CLI. Startup, polling and retrying usage never open browser sign-in or download a helper.
 
 ### Antigravity (experimental)
 

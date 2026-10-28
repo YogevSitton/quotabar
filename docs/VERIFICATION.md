@@ -56,6 +56,8 @@ Offline synthetic renders cover all three provider cards at widths of 1020 and 8
 
 No Antigravity provider request, inference, browser sign-in, credential read, reset or update action was performed during implementation. Live sign-in, process behavior and quota acceptance remain separate qualification work requiring the maintainer's authorization.
 
+The related Claude installation-discovery fix counts QuotaBar's managed helper without requiring Desktop or a standalone CLI. Independent static review confirmed that discovery reads only bounded non-secret release metadata and file attributes, while execution retains checksum verification. Three synthetic regression cases cover managed-only installations, missing/stale/non-executable files, directories, malformed or unsafe manifests and oversized metadata. The app and test targets compile, source app/helper signatures verify, and public-tree, workflow-trust and release-documentation checks pass. Tests were not executed and the detection change was not exercised in a running app.
+
 ## Not yet verified
 
 - Antigravity browser/code sign-in, saved authentication on both Keychain and official file fallback, first quota read, automatic refresh, rate limits, and actual Gemini 4 quota labels. Its new-session process/PTY behavior and cancellation have been compiled and statically reviewed, not exercised against the official helper. The implementation remains experimental.

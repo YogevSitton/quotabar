@@ -16,6 +16,8 @@ Claude has no supported no-limit state. Its `get_usage` interface is experimenta
 
 ## Connect Claude
 
+Installation discovery includes QuotaBar's managed Claude Code helper. It reads the non-secret saved release manifest and checks that the referenced executable file exists; an empty directory, missing helper or invalid manifest does not count. This lightweight visibility check never launches or hashes the helper. The normal helper loader still verifies its checksum before use.
+
 Claude automatically reuses the official CLI's saved subscription sign-in at startup and on refresh, just like Codex. There is no separate **Use existing sign-in** choice. **Connect Claude** checks the saved sign-in and, only if needed, starts the official browser sign-in directly, without a second native window or another sign-in button. If a helper is missing, this explicit action prepares the verified official helper, then checks the saved login before signing in. Progress, cancellation and errors appear in the popup; **Sign-in help…** opens the optional recovery window for reopening the official authorization page or entering a browser-provided code. To change accounts, sign in to a different account in Claude Code; QuotaBar follows its saved sign-in. Browser login runs only `auth login --claudeai`; finish authorization yourself. Startup, polling and retrying usage never start browser sign-in.
 
 **QuotaBar does not read Keychain credentials or call Claude's authenticated usage endpoint itself.** Claude Code manages its own normal saved sign-in. macOS may still require Claude Code itself to unlock or access its credentials; QuotaBar does not request that access or alter any Keychain permissions.

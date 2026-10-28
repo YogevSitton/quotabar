@@ -23,7 +23,8 @@ struct ProviderInstallation {
         return Self(
             codex: CodexProvider.executable() != nil || app("Codex", identifiers: ["com.openai.codex"]),
             claude: app("Claude", identifiers: ["com.anthropic.claudefordesktop"])
-                || claudePaths.contains { FileManager.default.isExecutableFile(atPath: $0) },
+                || claudePaths.contains { FileManager.default.isExecutableFile(atPath: $0) }
+                || ClaudeHelper.managedExecutable() != nil,
             antigravity: app("Antigravity", identifiers: ["com.google.antigravity"])
                 || FileManager.default.fileExists(atPath: AntigravityHelper.executable.path)
                 || AntigravityHelper.installedCandidates.contains { FileManager.default.isExecutableFile(atPath: $0.path) })
