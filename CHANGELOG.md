@@ -21,6 +21,10 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 - Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.
 - Share and persist Claude's request deadline across QuotaBar copies for the same local user. Retry, restart, wake, sign-in verification and account changes no longer bypass the waiting period.
 
+### Security
+
+- Pin the maintainer's public verification key for future signed updates. Publishing remains disabled pending activation and installation qualification.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added

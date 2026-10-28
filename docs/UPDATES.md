@@ -5,7 +5,7 @@ This is the canonical policy and runbook for QuotaBar's releases, update channel
 ## Current state
 
 - **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest public release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
-- **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. No signing key, secret, variable, environment or Pages site has been set up, and the release workflow has never run.
+- **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. The maintainer supplied the public verification key in `release-version.json`; the `release-signing` and `stable-approval` environments are configured, and the signing secret's presence was checked by name only. Matching that secret to the public key remains unverified. Pages setup and Preview activation remain pending; publishing is disabled.
 - **Not yet qualified:** installation, permission prompts, relaunch, recovery and multi-Mac behavior have not been tried on a real Mac. See [Verification status](VERIFICATION.md). Compiling the code is not evidence that an update installs.
 
 ## One public repository
