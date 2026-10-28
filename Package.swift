@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "QuotaCore"),
         .executableTarget(name: "QuotaBar", dependencies: ["QuotaCore"], resources: [.process("Resources")]),
-        .testTarget(name: "QuotaCoreTests", dependencies: ["QuotaCore"])
+        .testTarget(name: "QuotaCoreTests", dependencies: ["QuotaCore"]),
+        .testTarget(name: "QuotaBarTests", dependencies: ["QuotaBar", "QuotaCore"])
     ]
 )

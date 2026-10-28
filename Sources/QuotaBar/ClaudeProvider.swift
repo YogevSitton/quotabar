@@ -13,14 +13,16 @@ actor ClaudeProvider {
     private var latestLive: UsageSnapshot?
     private var activeIdentity: String?
     private var nextRequestAt = Date.distantPast
-    private var failureCount = 0
+    private let pollStore: ClaudePollStore
+    private var localRetryAt = Date.distantPast
     private var lastError: String?
     private var lastIssue: ClaudeConnectionIssue?
     private var inFlight = false
     private var checkedCLI: URL?
-    private var lastRequestStartedAt: Date?
-
-    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) { self.home = home }
+    init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.home = home
+        self.pollStore = ClaudePollStore(home: home)
+    }
     private func account() -> (organization: String?, identity: String?) {
         guard let data = try? Data(contentsOf: home.appendingPathComponent(".claude.json")),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -48,41 +50,58 @@ actor ClaudeProvider {
         }
         return ClaudeReadResult(snapshot: candidates.max { $0.observedAt < $1.observedAt }, error: error, issue: lastIssue, nextRequestAt: nextRequestAt)
     }
-    func read(reconnect: Bool = false, minimumInterval: TimeInterval = 60) async -> ClaudeReadResult {
-        let cadence = max(60, minimumInterval)
+    func read(reconnect: Bool = false) async -> ClaudeReadResult {
         let current = account()
         let identity = [current.identity, current.organization].compactMap { $0 }.joined(separator: ":")
         if activeIdentity != identity {
-            latestLive = nil; nextRequestAt = .distantPast; lastError = nil; lastIssue = nil; failureCount = 0
-            lastRequestStartedAt = nil
+            latestLive = nil; lastError = nil; lastIssue = nil
             activeIdentity = identity
+            // Account changes must not discard a cooldown from an earlier read.
         }
         guard !inFlight else { return fallback(organization: current.organization, error: lastError) }
-        if reconnect { checkedCLI = nil; nextRequestAt = .distantPast }
-        // Another official Claude process may recover while we are backing off.
-        // A newly fetched account-matched cache is only a reason to recheck via
-        // get_usage, never permission to display disk values as live usage.
-        let now = Date()
-        if lastIssue == .usageUnavailable, now < nextRequestAt,
-           let lastRequestStartedAt, let cached = persistedUsage(identity: current.identity),
-           ClaudeCacheRecovery.shouldRecheck(observedAt: cached.observedAt,
-               lastRequestStartedAt: lastRequestStartedAt, now: now, minimumInterval: cadence) {
-            nextRequestAt = now
+        if reconnect {
+            checkedCLI = nil
+            // Setup may just have installed the missing helper. Rediscovery
+            // is local; the durable usage budget still applies below.
+            if lastIssue == .helperMissing { localRetryAt = .distantPast }
         }
-        if Date() < nextRequestAt {
-            if lastError == nil, let latestLive { return ClaudeReadResult(snapshot: latestLive, error: nil, nextRequestAt: nextRequestAt) }
+        if !reconnect, Date() < localRetryAt {
             return fallback(organization: current.organization, error: lastError)
         }
         inFlight = true; defer { inFlight = false }
-        lastIssue = nil
+        var lease: ClaudePollLease?
+        var attemptedRead = false
         do {
             if checkedCLI == nil { checkedCLI = try ClaudeHelper.existing() }
             guard let binary = checkedCLI else {
                 lastIssue = .helperMissing
                 throw UsageError.message("Claude Code is not available. Choose Connect Claude to set up the official helper, then check your saved sign-in.")
             }
+            if lastIssue == .helperMissing { lastIssue = nil; lastError = nil; localRetryAt = .distantPast }
+            if Date() < localRetryAt {
+                return await deferredResult(current: current, binary: binary, reconnect: reconnect)
+            }
+            // Reserve durably before launching the helper. Retry, wake, other
+            // copies and restarts all respect the same per-user request budget.
+            switch try pollStore.reserve(at: Date()) {
+            case .deferred(let state):
+                nextRequestAt = state.nextRequestAt
+                if state.failureCount == 0, lastError == nil, let latestLive {
+                    return ClaudeReadResult(snapshot: latestLive, error: nil, nextRequestAt: nextRequestAt)
+                }
+                if lastError == nil {
+                    lastError = state.failureCount > 0
+                        ? "Claude usage checks are cooling down after an unsuccessful refresh. Retrying automatically."
+                        : "Waiting for the next scheduled Claude usage check."
+                    lastIssue = .usageUnavailable
+                }
+                return await deferredResult(current: current, binary: binary, reconnect: reconnect)
+            case .ready(let reserved): lease = reserved
+            }
+            guard let lease else { throw UsageError.message("Claude usage could not be scheduled safely.") }
+            let before = persistedUsage(identity: current.identity)?.observedAt
             let startedAt = Date()
-            lastRequestStartedAt = startedAt
+            attemptedRead = true
             let data = try await Task.detached(priority: .utility) {
                 try ClaudeCLIReader(binary: binary).readUsage()
             }.value
@@ -90,38 +109,48 @@ actor ClaudeProvider {
             let updated = account()
             guard updated.organization == current.organization, updated.identity == current.identity else {
                 latestLive = nil
-                lastError = "Claude account changed. Refresh to read the active account."
+                lastError = "Claude account changed. Waiting to read the active account."
                 lastIssue = .usageUnavailable
-                nextRequestAt = .distantPast
+                finishFailure(lease)
                 return fallback(organization: updated.organization, error: lastError)
             }
-            // get_usage may answer from Claude Code's own cache, including on a
-            // failed network read. Preserve its account-matched observation time.
-            guard let observedAt = observationDate(matching: snapshot, identity: updated.identity),
-                  observedAt <= Date().addingTimeInterval(60) else {
-                throw UsageError.message("Claude Code returned usage without a verifiable sample time. A fresh reading is unavailable.")
+            // A successful control reply can hide a failed HTTP fetch. Match the
+            // account and values, then distinguish the CLI's <60-second cache
+            // shortcut from an expired cache returned after a failed refresh.
+            let observedAt = observationDate(matching: snapshot, identity: updated.identity)
+            let completedAt = Date()
+            let classification = ClaudeRefreshPolicy.classify(before: before, after: observedAt,
+                requestStartedAt: startedAt, completedAt: completedAt)
+            guard classification.isAccepted, let observedAt else {
+                if let observedAt, observedAt <= completedAt,
+                   observedAt >= (latestLive?.observedAt ?? .distantPast) {
+                    snapshot.observedAt = observedAt
+                    snapshot.source = .cached; snapshot.sourceName = "Claude Code CLI cached reading"
+                    latestLive = snapshot
+                }
+                lastError = "Claude Code did not provide a fresh, verifiable usage reading. Retrying after a cooldown."
+                lastIssue = .usageUnavailable
+                finishFailure(lease)
+                return fallback(organization: current.organization, error: lastError)
             }
             snapshot.observedAt = observedAt
-            guard Date().timeIntervalSince(observedAt) < 120 else {
-                snapshot.source = .cached; snapshot.sourceName = "Claude Code CLI cached reading"
-                latestLive = snapshot
-                lastError = "Claude Code returned an older cached reading. A fresh usage reading is unavailable."
+            let state = try pollStore.complete(lease, outcome: .success(observedAt: observedAt), at: completedAt)
+            nextRequestAt = state.nextRequestAt
+            guard state.failureCount == 0 else {
+                lastError = "Claude usage checks are cooling down. Retrying automatically."
                 lastIssue = .usageUnavailable
-                failureCount += 1
-                nextRequestAt = Date().addingTimeInterval(max(cadence, transientRetryDelay))
-                return ClaudeReadResult(snapshot: snapshot, error: lastError, issue: lastIssue, nextRequestAt: nextRequestAt)
+                return fallback(organization: current.organization, error: lastError)
             }
-            latestLive = snapshot; failureCount = 0; lastError = nil; lastIssue = nil
-            // Claude Code's locally inspected cache lasts 60 seconds. Read
-            // after both that observation and our own previous request, with
-            // a small margin so a timer firing early cannot reuse it again.
-            nextRequestAt = max(startedAt, observedAt).addingTimeInterval(cadence + 0.5)
+            latestLive = snapshot; lastError = nil; lastIssue = nil
             return ClaudeReadResult(snapshot: snapshot, error: nil, nextRequestAt: nextRequestAt)
         } catch {
-            failureCount += 1
+            // Reservation starts backoff even if the app quits mid-request.
+            finishFailure(lease)
             // Only our own fixed messages can reach the UI, never raw CLI output.
-            lastError = (error as? UsageError)?.localizedDescription ?? "Claude Code usage could not be read. Try again later."
-            if let binary = checkedCLI {
+            lastError = (error as? UsageError)?.localizedDescription
+                ?? (attemptedRead ? "Claude Code usage could not be read or its next check saved. Retrying after a cooldown."
+                    : "Claude usage checks are paused because the local polling schedule could not be saved. Try again later.")
+            if attemptedRead, let binary = checkedCLI {
                 let auth = await Task.detached(priority: .utility) { ClaudeAuthStatus.read(binary: binary) }.value
                 switch auth {
                 case .signedOut:
@@ -136,20 +165,49 @@ actor ClaudeProvider {
                     lastIssue = .usageUnavailable
                 }
             } else if lastIssue != .helperMissing { lastIssue = .usageUnavailable }
-            let delay = lastIssue == .usageUnavailable ? transientRetryDelay : 300
-            nextRequestAt = Date().addingTimeInterval(max(cadence, delay))
             let updated = account()
             guard updated.organization == current.organization, updated.identity == current.identity else {
                 latestLive = nil; lastIssue = .usageUnavailable
-                lastError = "Claude account changed. Refresh to read the active account."
-                nextRequestAt = .distantPast
+                lastError = "Claude account changed. Waiting to read the active account."
                 return fallback(organization: updated.organization, error: lastError)
             }
             return fallback(organization: current.organization, error: lastError)
         }
     }
-    private var transientRetryDelay: TimeInterval {
-        min(300, 60 * pow(2, Double(max(0, min(3, failureCount - 1)))))
+    private func deferredResult(current: (organization: String?, identity: String?),
+                                binary: URL, reconnect: Bool) async -> ClaudeReadResult {
+        if reconnect {
+            // Explicit verification may follow a completed login. Refresh only
+            // the CLI's authentication classification while usage is deferred;
+            // an old signed-out result must not start another browser login.
+            lastError = "Waiting for the next scheduled Claude usage check."
+            lastIssue = .usageUnavailable
+            let auth = await Task.detached(priority: .utility) { ClaudeAuthStatus.read(binary: binary) }.value
+            switch auth {
+            case .signedOut:
+                lastIssue = .signInRequired
+                lastError = "Claude Code reports no saved sign-in. Connect your Claude subscription to see usage."
+            case .otherAuthentication:
+                lastIssue = .subscriptionRequired
+                lastError = "Claude Code is using a different authentication method. Connect a Claude subscription to see its plan usage."
+            case .signedIn, .unknown: break
+            }
+        }
+        let updated = account()
+        if updated.organization != current.organization || updated.identity != current.identity {
+            latestLive = nil; lastIssue = .usageUnavailable
+            lastError = "Claude account changed. Waiting to read the active account."
+        }
+        return fallback(organization: updated.organization, error: lastError)
+    }
+    private func finishFailure(_ lease: ClaudePollLease?) {
+        if let lease, let state = try? pollStore.complete(lease, outcome: .failure, at: Date()) {
+            nextRequestAt = state.nextRequestAt
+        } else {
+            // Storage/lock failures are fail-closed: no helper is launched.
+            localRetryAt = Date().addingTimeInterval(300)
+            nextRequestAt = max(nextRequestAt, localRetryAt)
+        }
     }
     private func observationDate(matching snapshot: UsageSnapshot, identity: String?) -> Date? {
         guard let cached = persistedUsage(identity: identity),
