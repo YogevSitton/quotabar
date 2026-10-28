@@ -20,8 +20,8 @@ Follow the Git workflow in `CONTRIBUTING.md`:
 - Never commit or push to `main`. Work on a branch, preferably named `<type>/<short-topic>` (tool-generated names are fine), and open a pull request.
 - Title the pull request as a Conventional Commit (`fix(claude): ...`, `feat(popup): ...`); it becomes the squash-merged commit on `main`.
 - Add an Unreleased entry to `CHANGELOG.md` for user-visible changes.
-- Do not create tags, releases, version bumps (`release-version.json`), Stable promotions, signing keys, secrets, variables, environments or Pages settings, and do not enable publishing, unless the maintainer asks. Merges to `main` become public Preview builds once publishing is active.
-- Do not merge a pull request unless the maintainer asks.
+- Do not create tags, releases, version bumps (`release-version.json`), Stable promotions, signing keys, secrets, variables, environments or Pages settings, and do not enable publishing, unless the maintainer asks.
+- Do not merge a pull request unless the maintainer asks. Preview publishing is active: every eligible merge to `main` runs the release workflow and publishes a public `preview-<build>` prerelease, so a request to merge is also a request to publish.
 
 ## Build and verify
 
@@ -87,4 +87,4 @@ On 27 October 2026, one explicitly requested read-only Codex CLI query confirmed
 
 On 28 October 2026, an explicitly authorized temporary diagnostic build of 0.3.0 captured a successful normal Claude refresh followed by HTTP 429 responses through official helper 2.1.310. The helper returned a successful control response with unchanged cached usage, including a sample more than 122 seconds old. Only sanitized categories, timing and matching booleans were recorded; model cost and model API duration stayed zero. Static inspection found that the helper's remembered HTTP-failure hold is local to its subprocess, so it does not survive QuotaBar's next helper launch. This diagnoses the earlier behavior; the new polling and persistent-budget change has not been verified live. See `docs/VERIFICATION.md` for current build status. These diagnostic exceptions do not authorize reset actions or future live diagnostics.
 
-The updater, helper, signed metadata and release workflow are compiled and statically reviewed only. Preview publishing was enabled on 28 October 2026 after boundary commit `a12f999b5610fc3e7750d259f7640b9c81c6f563`; the first signed publication remains pending, and no update has been installed, denied, rolled back or recovered on a real Mac. For wider binary distribution, account connection reliability, real-provider parity, Developer ID signing/notarization and qualified update handling remain to be completed. The project uses the MIT License; provider names and marks retain their owners' rights.
+The updater, helper, signed metadata and release workflow are compiled and statically reviewed only. Preview publishing is enabled; see the Current state section of `docs/UPDATES.md` and `docs/VERIFICATION.md` for its status. No update has been installed, denied, rolled back or recovered on a real Mac. For wider binary distribution, account connection reliability, real-provider parity, Developer ID signing/notarization and qualified update handling remain to be completed. The project uses the MIT License; provider names and marks retain their owners' rights.

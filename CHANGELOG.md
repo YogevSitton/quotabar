@@ -8,7 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Added
 
-- In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Preview publishing is enabled for eligible future merges to `main`; Stable promotion and installation qualification remain pending.
+- In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Preview builds are published automatically from `main`.
 - Release downloads include signed update metadata alongside the zip and its checksum.
 
 ### Changed
@@ -23,7 +23,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Security
 
-- Pin the maintainer's public verification key for future signed updates. Preview publishing is enabled; the first signed publication and installation qualification remain pending. Builds made from source now check the public update feeds on the normal schedule and can link to a newer release, but never download or install it.
+- Pin the maintainer's public verification key for signed updates. Builds made from source now check the public update feeds on the normal schedule and can link to a newer release, but never download or install it.
 
 ## [0.3.0] - 2026-10-27
 

@@ -8,11 +8,11 @@ Use Codex, Claude, or both. Independent community project, with no analytics or 
 
 ## Status
 
-The latest Stable release is **0.3.0**. Earlier development builds used higher internal version numbers.
+The latest public release is **0.3.0**. Earlier development builds used higher internal version numbers.
 
 This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
-The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Preview publishing is enabled for eligible future merges to `main`; the first signed Preview and real-Mac installation and recovery qualification remain pending. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
+The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Preview builds are published automatically from eligible merges to `main`; installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
@@ -147,7 +147,7 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
 - Packaged releases are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
-- Preview publishing is enabled, but the first signed publication and installation, permission prompts and recovery remain unqualified on real Macs.
+- Preview builds publish automatically from `main`, but installation, permission prompts and recovery remain unqualified on real Macs.
 
 ## Optional checksum verification
 

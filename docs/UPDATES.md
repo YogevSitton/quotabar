@@ -4,8 +4,8 @@ This is the canonical policy and runbook for QuotaBar's releases, update channel
 
 ## Current state
 
-- **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest Stable release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
-- **Preview publishing enabled (28 October 2026):** the public verification key is committed, the `release-signing` and `stable-approval` environments are configured, and GitHub Pages uses GitHub Actions with HTTPS enforced. `QUOTABAR_PREVIEW_SINCE` is `a12f999b5610fc3e7750d259f7640b9c81c6f563` and `QUOTABAR_PUBLISHING` is `enabled`. Only eligible merges after that boundary publish; the first signed Preview is pending. The signing secret's presence was checked by name only, so matching it to the public key remains unverified. Stable promotion has not been performed.
+- **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest public release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
+- **Preview publishing enabled (28 October 2026):** the public verification key is committed, the `release-signing` and `stable-approval` environments are configured, and GitHub Pages uses GitHub Actions with HTTPS enforced. `QUOTABAR_PREVIEW_SINCE` is `a12f999b5610fc3e7750d259f7640b9c81c6f563` and `QUOTABAR_PUBLISHING` is `enabled`. Only eligible merges after that boundary publish; [Verification status](VERIFICATION.md) records the outcome of the first publication. The signing secret's presence was checked by name only, so matching it to the public key remains unverified. Stable promotion has not been performed.
 - **Not yet qualified:** installation, permission prompts, relaunch, recovery and multi-Mac behavior have not been tried on a real Mac. See [Verification status](VERIFICATION.md). Compiling the code is not evidence that an update installs.
 
 ## One public repository
@@ -190,7 +190,7 @@ Status (28 October 2026): steps 1-5 are done, including merged public-key PR #23
 6. Optionally turn on GitHub's immutable releases (free). Draft-then-publish stays compatible with it.
 7. Confirm in your billing settings that Actions usage for this public repository shows no charge.
 
-**C. Preview activation.** Completed on 28 October 2026 with boundary `a12f999b5610fc3e7750d259f7640b9c81c6f563`. The following steps also describe how to activate after a future pause. After the public-key pull request has merged:
+**C. Preview activation.** Done on 28 October 2026; see [Current state](#current-state). A first activation, after the public-key pull request has merged, takes two steps. To resume after a pause, follow **To resume** below.
 
 1. Copy the current `main` tip commit SHA into the repository variable **`QUOTABAR_PREVIEW_SINCE`**.
 2. Set **`QUOTABAR_PUBLISHING`** to `enabled`.
