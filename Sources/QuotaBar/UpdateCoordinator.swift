@@ -189,7 +189,7 @@ import QuotaUpdateSupport
         case .conflictingIdentity:
             status = .failed("The Stable and Preview feeds disagree about the same build. Nothing will be installed.")
         case .unavailable(let invalid):
-            status = .unavailable(selected == .stable ? "No Stable release is published yet." : "No updates are published for this channel yet.")
+            status = .unavailable(selected == .stable ? "No Stable release with in-app updates is published yet. Earlier releases are on the Releases page." : "No updates are published for this channel yet.")
             note = invalidNote(invalid)
         case .candidate(let manifest, let invalid):
             note = invalidNote(invalid)
