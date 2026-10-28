@@ -19,9 +19,9 @@ labels: bug
 ## Environment
 
 - macOS version:
-- Mac (Apple Silicon model):
+- Mac model and chip (Apple Silicon is required; Intel is unverified):
 - QuotaBar version and build (More > Updates..., or Finder > Get Info):
-- Installed from: Stable release / Preview build / 0.1.0 zip / built from source (commit):
+- Installed from: Stable release / Preview build / pre-updater release (through 0.3.0) / built from source (commit):
 - Update channel, if this is about updates (Stable or Preview):
 - Codex CLI version (`codex --version`), if relevant:
 - Claude Code CLI version (`claude --version`), if relevant:

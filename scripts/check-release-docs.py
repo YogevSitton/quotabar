@@ -18,7 +18,7 @@ CANONICAL_TERMS = ['QUOTABAR_PREVIEW_SINCE', 'QUOTABAR_PUBLISHING', 'release-sig
                    'App Management', 'quarantine', 'release-version.json', 'Latest', 'Install and Relaunch']
 # Historical text that must be preserved as written: everything from a heading
 # onwards (CHANGELOG release sections) or before it (the publication audit).
-HISTORICAL_FROM = {'CHANGELOG.md': '## [0.1.0]'}
+HISTORICAL_FROM = {'CHANGELOG.md': '## [0.3.0]'}
 HISTORICAL_BEFORE = {'docs/PUBLICATION.md': '## Release checks'}
 # Patterns are assembled from fragments so this file never matches itself.
 STALE = [

@@ -4,7 +4,7 @@ This is the canonical policy and runbook for QuotaBar's releases, update channel
 
 ## Current state
 
-- **Shipped:** v0.1.0, the first public preview, published as a GitHub prerelease with `QuotaBar-0.1.0.zip` and its `.sha256`. It does not include the updater; moving to an updater build is one manual download.
+- **Shipped:** v0.1.0, v0.2.0 and v0.3.0, with v0.3.0 the latest public release. These releases predate the updater; moving to an updater-enabled release is one manual download. Existing downloads and release tags stay as published.
 - **Implemented and compiled, not yet switched on:** the updater in the app, the signed metadata and the release workflow described below. No signing key, secret, variable, environment or Pages site has been set up, and the release workflow has never run.
 - **Not yet qualified:** installation, permission prompts, relaunch, recovery and multi-Mac behavior have not been tried on a real Mac. See [Verification status](VERIFICATION.md). Compiling the code is not evidence that an update installs.
 
@@ -22,7 +22,7 @@ Source, pull requests, issues and every download live in the public [YogevSitton
 | GitHub release | Full release, marked Latest | Prerelease, never Latest |
 | Tag | `v<version>`, such as `v0.2.0` | `preview-<build>`, such as `preview-41` |
 
-Stable is a curated channel, not a claim of 1.0 maturity: while versions are 0.x, every release is an early preview.
+Stable is a curated update channel, not a claim of 1.0 maturity. Stable releases do not carry a preview label; Preview builds are explicitly labeled prereleases.
 
 **Preview eligibility.** A `main` revision is published to Preview only when all of these hold:
 
@@ -36,12 +36,12 @@ Pull requests, forks and other branches never publish. A failed or unverified bu
 
 **Stable promotion** reuses the exact bytes of an already published, verified Preview. Nothing is rebuilt; only the release tag, the asset name and the signed metadata change. A merge, a version bump or a Preview publication never promotes Stable on its own.
 
-## Installing for the first time, and moving from 0.1.0
+## Installing for the first time, and moving from releases through 0.3.0
 
 1. Open the repository's [Releases](https://github.com/YogevSitton/quotabar/releases).
-   - For Stable, use the release marked **Latest**. Until the first Stable promotion, there is none.
+   - For Stable, use the release marked **Latest**. Currently that is the pre-updater v0.3.0 release. To get the updater, wait for the first updater-enabled Stable release or deliberately choose Preview.
    - For Preview, use the newest `preview-<build>` prerelease.
-2. Download the zip and its `.sha256`. In the download folder, run `shasum -a 256 -c <zip name>.sha256` and continue only if it prints `OK`.
+2. Download the zip and extract it in Finder. For optional Terminal checksum verification, also download its `.sha256` and run `shasum -a 256 -c <zip name>.sha256` in the download folder; if you perform this check, continue only if it prints `OK`.
 3. Quit any running QuotaBar, extract the zip, and move `QuotaBar.app` into `/Applications` (or `~/Applications`), replacing the old copy.
 4. Open it. macOS will likely block this first ad-hoc signed download. If you decide to allow it, use **System Settings > Privacy & Security > Open Anyway**. See [Apple's guidance](https://support.apple.com/en-us/102445).
 
@@ -138,7 +138,7 @@ QuotaBar is ad-hoc signed and not notarized, because that needs a paid Apple Dev
   - Stable: `v<version>` with `QuotaBar-<version>.zip`, the same bytes as the promoted Preview.
   - Each also has the `.sha256` and `QuotaBar-update.json`.
   - Contributor and CI packaging writes `dist/QuotaBar-<version>.zip`.
-- **Never moved.** Published tags, releases and assets are never moved, replaced or deleted. A broken build is fixed by a newer build, and a display version is promoted to Stable only once. The historical v0.1.0 release stays as published, a prerelease, so the first Stable promotion becomes the first GitHub Latest.
+- **Never moved.** Published tags, releases and assets are never moved, replaced or deleted. A broken build is fixed by a newer build, and a display version is promoted to Stable only once. The historical v0.1.0, v0.2.0 and v0.3.0 releases stay as published. The first updater-enabled Stable promotion replaces the existing GitHub Latest selection; it does not alter old releases.
 
 ## Contributor packaging versus trusted publishing
 
@@ -161,7 +161,8 @@ QuotaBar is ad-hoc signed and not notarized, because that needs a paid Apple Dev
 
 **Feeds are rebuilt per channel:**
 
-- With no Latest release, `stable.json` is absent; with no Preview release, `preview.json` is absent. The first Preview therefore deploys `preview.json` alone.
+- With no updater-enabled Stable release, `stable.json` is absent; with no Preview release, `preview.json` is absent. Only the known pre-updater tags `v0.1.0`, `v0.2.0` and `v0.3.0` may lack metadata without failing deployment. The first Preview therefore deploys `preview.json` alone, even while v0.3.0 remains GitHub Latest.
+- Stable promotion accepts those same three historical releases as its baseline (builds 28, 29 and 30). Every later Stable release must have verified signed metadata; missing or invalid metadata fails closed.
 - A release that exists but has missing or unverifiable metadata, or a mismatched digest, fails the deployment and leaves the previous feeds live. Nothing unsigned or placeholder is ever published.
 
 Every job is gated by the repository variable `QUOTABAR_PUBLISHING == enabled`, which is unset by default. Merging the workflow, or this document, activates nothing.
@@ -192,14 +193,14 @@ These are separate, explicit owner actions. They are not part of any code change
 1. Copy the current `main` tip commit SHA into the repository variable **`QUOTABAR_PREVIEW_SINCE`**.
 2. Set **`QUOTABAR_PUBLISHING`** to `enabled`.
 
-The next eligible merge after that boundary publishes `preview-<build>` and deploys `preview.json` alone, because Stable is still absent. Re-runs or late completions of CI for the boundary commit or anything older are rejected.
+The next eligible merge after that boundary publishes `preview-<build>` and deploys `preview.json` alone, because an updater-enabled Stable release is still absent. Re-runs or late completions of CI for the boundary commit or anything older are rejected.
 
 - **To pause,** unset `QUOTABAR_PUBLISHING`.
 - **To resume,** first set a new `QUOTABAR_PREVIEW_SINCE` equal to the `main` tip at that time, then re-enable. Merges made during the pause are never published retroactively.
 
 **D. Qualification.** Use isolated Macs, or macOS user accounts without the Codex or Claude command-line tools. Providers that are not installed are hidden and never polled, so no provider account or reset is involved. On those, install a Preview manually and opt into Preview, then observe:
 
-- migration from 0.1.0;
+- migration from the pre-updater releases, including the current 0.3.0;
 - check, download, install and relaunch;
 - App Management denial and approval;
 - launch at login;
@@ -212,7 +213,7 @@ Record the results in [Verification status](VERIFICATION.md) through a pull requ
 
 **E. First Stable.**
 
-1. Merge a `chore(release): 0.x.y` pull request that sets `displayVersion` and moves the Unreleased changelog entries under `## [0.x.y]`.
+1. Merge a `chore(release): 0.x.y` pull request for a new version after 0.3.0 (for example 0.4.0) that sets `displayVersion`, updates the README Status, download link and checksum example, and moves the Unreleased changelog entries under `## [0.x.y]`. Never reuse the already published v0.3.0 tag.
 2. When its Preview build is published, run the **Release** workflow with `preview_tag` and `display_version`.
 3. Approve the `stable-approval` environment.
 

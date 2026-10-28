@@ -28,7 +28,7 @@ None of this is meant to be bureaucratic. The goal is a `main` branch people can
 3. **Title the pull request as a [Conventional Commit](https://www.conventionalcommits.org/).** The title becomes the single commit on `main` and feeds the changelog, so it is the one message that has to be right. A CI check validates the format.
 4. **Fill in the template**, link the issue (`Closes #12`) and describe what you verified.
 5. **Wait for CI to pass**, then for review. The maintainer reviews every outside contribution. While there is a single maintainer, the maintainer's own pull requests may be merged once CI is green, but still go through a pull request so the change is visible and revertible.
-6. **Squash and merge.** The branch is deleted automatically. Once publishing is active, the merge becomes a public Preview build if it is eligible (see [Versions and releases](#versions-and-releases)).
+6. **Squash and merge.** The branch is deleted automatically.
 
 ### Pull request titles
 
@@ -49,7 +49,7 @@ None of this is meant to be bureaucratic. The goal is a `main` branch people can
 | `chore` | Anything else that does not touch the app | none |
 | `revert` | Reverting an earlier change | depends |
 
-Scopes are optional; useful ones are `codex`, `claude`, `menubar`, `popup`, `details`, `core`, `updates` and `release`. Mark a breaking change with `!`, such as `feat(core)!: drop macOS 13 support`, and explain it in the description.
+Scopes are optional; useful ones are `codex`, `claude`, `menubar`, `popup`, `details`, `core` and `release`. Mark a breaking change with `!`, such as `feat(core)!: drop macOS 13 support`, and explain it in the description.
 
 Examples:
 
@@ -67,19 +67,22 @@ Keep the description short and lowercase-first; no trailing period.
 - Add or update synthetic-fixture tests for behavior changes in `Sources/QuotaCore/`.
 - Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) for anything a user would notice (`feat`, `fix`, `perf`, breaking changes). Write it for users, not for developers.
 - Update `docs/VERIFICATION.md` when a change affects what has or has not been verified.
-- Screenshots must not show emails, names, account or organization IDs, or other personal data.
+- Screenshots must not show emails, names, account or organization IDs, private authorization links, or other personal data. Prefer offline renders of the current UI with synthetic data, and label them as examples. Record their source revision and capture method in [the screenshot guide](docs/SCREENSHOTS.md); strip image metadata and visually review each image before committing it.
 - If an AI assistant wrote a meaningful part of the change, say so in the description. The same rules and the same review apply.
 
 ## Build and review
 
-Requires macOS 14+ and Xcode/Swift 5.9 or newer.
+For toolchain setup and a first build, follow [Build from source](README.md#build-from-source). Requires macOS 14+ and Swift 5.9 or newer. Local build verification has covered Apple Silicon; Intel remains unverified.
+
+Run these commands from the repository root. They build and inspect the app without launching it:
 
 ```sh
 ./scripts/build.sh
 swift build --build-tests --disable-sandbox
-python3 scripts/audit-public-tree.py
+python3 scripts/audit-public-tree.py --public-docs
 python3 scripts/check-workflow-trust.py
 python3 scripts/check-release-docs.py
+codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
 `./scripts/build.sh` must leave Git-tracked files unchanged. If you change the app icon drawing, run `./scripts/build-icon.sh` and commit the regenerated artwork in the same pull request.
@@ -87,6 +90,8 @@ python3 scripts/check-release-docs.py
 Contributor and pull-request builds need no secret: `./scripts/build.sh` and `./scripts/package-release.sh` produce an ad-hoc signed source build that never installs updates. Never add signing keys, publication tokens, release uploads or update installation to pull-request validation; only the trusted release workflow signs and publishes (see [docs/UPDATES.md](docs/UPDATES.md)).
 
 Do not execute tests, live diagnostics, sign-in or reset actions under the current verification restriction, and do not run the updater, its helper, `QuotaReleaseTool` or the release workflow. The maintainer must explicitly change that restriction first. Never paste raw provider output or identifiers into an issue or pull request.
+
+Offline documentation renders may use synthetic fixtures without starting provider monitoring, loading account or recovery files, or invoking any controls. They demonstrate presentation only and do not establish live-provider or reset verification.
 
 CI compiles the app and test targets on macOS, audits the public tree, checks workflow trust rules and release documentation, packages the app without secrets and checks the pull request title; it does not execute tests. Workflows from first-time contributors wait for maintainer approval before running.
 
@@ -98,7 +103,7 @@ CI compiles the app and test targets on macOS, audits the public tree, checks wo
 
 ## Versions and releases
 
-QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, releases are public previews: a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only.
+QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `0.x`, a minor bump (`0.2.0`) may include breaking changes, and patch bumps (`0.1.1`) are fixes only. Stable and Preview are update channels; Stable public releases do not carry a preview label.
 
 Releases come from this public repository on two channels. [docs/UPDATES.md](docs/UPDATES.md) is the full policy and owner runbook.
 
@@ -107,7 +112,7 @@ Releases come from this public repository on two channels. [docs/UPDATES.md](doc
 
 To prepare a Stable release:
 
-1. Open a `chore(release): 0.x.y` pull request that sets `displayVersion` in `release-version.json` and moves the **Unreleased** changelog entries under `## [0.x.y]` with the date. Build numbers come from public history automatically; never edit versions in scripts.
+1. Open a `chore(release): 0.x.y` pull request that sets `displayVersion` in `release-version.json`, updates the README Status, download link and checksum example, and moves the **Unreleased** changelog entries under `## [0.x.y]` with the date. Choose a new version after the latest public release; never reuse a published tag. Build numbers come from public history automatically; never edit versions in scripts.
 2. After it merges and its Preview build is published, the maintainer runs the Release workflow's Stable promotion for that Preview and approves it.
 
 Do not create tags, releases, version bumps, promotions, keys, secrets, variables or environments unless the maintainer asks. Tags, releases and assets are never moved, replaced or deleted once published. A broken release is fixed by a newer build.

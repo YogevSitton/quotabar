@@ -21,6 +21,23 @@ public struct UsageWindow: Equatable {
     }
 }
 
+/// An absent limit is distinct from an unreadable or unreported window.
+public enum UsageLimit: Equatable {
+    case limited(UsageWindow)
+    case noLimit
+    case unavailable
+
+    public var window: UsageWindow? {
+        if case .limited(let window) = self { return window }
+        return nil
+    }
+    public var remaining: Int? { window?.remaining }
+    public func current(at now: Date) -> UsageLimit {
+        if let window, window.awaitingReset(at: now) { return .unavailable }
+        return self
+    }
+}
+
 public struct UsagePace: Equatable {
     public let expectedUsed: Double
     public let percentagePointsOverBudget: Double
@@ -32,6 +49,11 @@ public struct UsagePace: Equatable {
 
 public enum ResetExpiryUrgency: Int, Comparable {
     case normal, soon, imminent
+    /// Orange within 3 days, red within 24 hours; a past expiry is not urgent.
+    public init(timeLeft: TimeInterval) {
+        guard timeLeft > 0 else { self = .normal; return }
+        self = timeLeft <= 86400 ? .imminent : timeLeft <= 3 * 86400 ? .soon : .normal
+    }
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
@@ -51,12 +73,14 @@ public struct ResetOffer: Identifiable, Equatable {
     public init(id: String, title: String, expiresAt: Date?, detail: String? = nil, expiryText: String? = nil) {
         self.id = id; self.title = title; self.expiresAt = expiresAt; self.detail = detail; self.expiryText = expiryText
     }
-    public func expiryUrgency(at now: Date) -> ResetExpiryUrgency {
-        guard remainingCount.map({ $0 > 0 }) ?? true, let expiresAt else { return .normal }
+    /// Time left on an offer that still has credit; nil when unknown, used up or past.
+    public func timeUntilExpiry(at now: Date) -> TimeInterval? {
+        guard remainingCount.map({ $0 > 0 }) ?? true, let expiresAt else { return nil }
         let timeLeft = expiresAt.timeIntervalSince(now)
-        guard timeLeft > 0 else { return .normal }
-        if timeLeft <= 3600 { return .imminent }
-        return timeLeft <= 86400 ? .soon : .normal
+        return timeLeft > 0 ? timeLeft : nil
+    }
+    public func expiryUrgency(at now: Date) -> ResetExpiryUrgency {
+        timeUntilExpiry(at: now).map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
     }
 }
 
@@ -85,7 +109,11 @@ public struct UsageSnapshot {
     public var cooldownUntil: Date?
     public var additionalWindows: [NamedUsageWindow] = []
     public var extraUsage: ExtraUsage?
-    public var session: UsageWindow?
+    public var sessionLimit: UsageLimit
+    public var session: UsageWindow? {
+        get { sessionLimit.window }
+        set { sessionLimit = newValue.map(UsageLimit.limited) ?? .unavailable }
+    }
     public var weekly: UsageWindow?
     public var plan: String?
     public var resetCount: Int?
@@ -102,13 +130,28 @@ public struct UsageSnapshot {
             return left == right ? $0.id < $1.id : left < right
         }
     }
+    /// The soonest expiry among offers that still have credit.
+    public func nextResetExpiry(at now: Date) -> Date? {
+        offers.filter { $0.timeUntilExpiry(at: now) != nil }.compactMap(\.expiresAt).min()
+    }
     public func isCurrent(at now: Date, maximumAge: TimeInterval, hasConnectionError: Bool) -> Bool {
         let age = now.timeIntervalSince(observedAt)
         return source == .live && !hasConnectionError && age >= -60 && age < maximumAge
     }
+    public func currentSessionLimit(at now: Date, maximumAge: TimeInterval, hasConnectionError: Bool) -> UsageLimit {
+        guard isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: hasConnectionError) else { return .unavailable }
+        return sessionLimit.current(at: now)
+    }
+    /// Match every displayed usage value before adopting a cache's timestamp.
+    /// Unavailable values make no claim; a no-limit claim must match explicitly.
+    public func hasMatchingUsage(in cached: UsageSnapshot) -> Bool {
+        (sessionLimit == .unavailable || sessionLimit == cached.sessionLimit)
+            && (weekly == nil || weekly == cached.weekly)
+    }
     public init(session: UsageWindow? = nil, weekly: UsageWindow? = nil, plan: String? = nil,
                 resetCount: Int? = nil, offers: [ResetOffer] = [], resetNote: String? = nil, observedAt: Date = Date()) {
-        self.session = session; self.weekly = weekly; self.plan = plan; self.resetCount = resetCount
+        self.sessionLimit = session.map(UsageLimit.limited) ?? .unavailable
+        self.weekly = weekly; self.plan = plan; self.resetCount = resetCount
         self.offers = offers; self.resetNote = resetNote; self.observedAt = observedAt
     }
 }
@@ -136,7 +179,8 @@ public enum UsageParser {
         guard let bucket = mapped?["codex"] ?? root["rateLimits"] as? [String: Any] else { throw UsageError.message("Codex did not return subscription limits.") }
         let windows = [bucket["primary"], bucket["secondary"]].compactMap { $0 as? [String: Any] }
         func window(_ duration: Double) -> UsageWindow? {
-            guard let raw = windows.first(where: { number($0["windowDurationMins"]) == duration }), let used = number(raw["usedPercent"]) else { return nil }
+            guard let raw = windows.first(where: { number($0["windowDurationMins"]) == duration }),
+                  let used = number(raw["usedPercent"]), (0...100).contains(used) else { return nil }
             return UsageWindow(used: used, resetsAt: unix(raw["resetsAt"]))
         }
         let summary = root["rateLimitResetCredits"] as? [String: Any]
@@ -151,6 +195,15 @@ public enum UsageParser {
         var snapshot = UsageSnapshot(session: window(300), weekly: window(10080), plan: bucket["planType"] as? String,
             resetCount: number(summary?["availableCount"]).map { max(0, Int($0)) }, offers: offers,
             resetNote: summary == nil ? "Reset availability not reported by Codex." : nil, observedAt: now)
+        // Pro currently has no five-hour cap. The verified app-server shape is
+        // a weekly window plus an explicit null, which can occupy either slot.
+        // An omitted/malformed slot, unknown plan, or missing weekly value is
+        // insufficient evidence. A reported five-hour window always wins.
+        if snapshot.plan == "pro", snapshot.session == nil, snapshot.weekly != nil,
+           windows.count == 1,
+           bucket["primary"] is NSNull || bucket["secondary"] is NSNull {
+            snapshot.sessionLimit = .noLimit
+        }
         snapshot.accountID = root["accountId"] as? String
         return snapshot
     }

@@ -14,6 +14,11 @@ struct Dashboard: View {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
         return available >= 488 ? 2 : available >= 434 ? 1 : 0
     }
+    private var appVersion: String? {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !version.isEmpty else { return nil }
+        return version
+    }
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
@@ -73,7 +78,18 @@ struct Dashboard: View {
                         }
                         if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
                     }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: fixedHeight == nil ? nil : .infinity, alignment: .top)
-            }.frame(width: contentWidth, height: fixedHeight).background(.regularMaterial)
+            }.frame(width: contentWidth, height: fixedHeight)
+                .overlay(alignment: .bottomTrailing) {
+                    if let version = appVersion {
+                        // Use the existing bottom padding without adding a footer
+                        // row or changing the content height used by the popover.
+                        Text("v\(version)")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                            .accessibilityLabel("QuotaBar version \(version)")
+                            .padding(.trailing, 16).padding(.bottom, 2)
+                    }
+                }
+                .background(.regularMaterial)
         }
     }
 }
@@ -107,6 +123,7 @@ private struct CompactProviderCard: View {
             }.padding(.bottom, 2)
             if current, let snapshot {
                 UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false,
+                         noLimit: snapshot.sessionLimit == .noLimit,
                          duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
                          duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
@@ -128,7 +145,7 @@ private struct CompactProviderCard: View {
                                 if urgency != .normal {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.system(size: 10)).foregroundStyle(expiryColor(urgency))
-                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 1 hour" : "Reset expires within 24 hours")
+                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 24 hours" : "Reset expires within 3 days")
                                 }
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
                                     .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
@@ -289,6 +306,7 @@ struct ProviderCard: View {
     }
     @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical,
+                 noLimit: snapshot.sessionLimit == .noLimit,
                  duration: 5 * 3600, observedAt: snapshot.observedAt)
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
                  duration: 7 * 86400, observedAt: snapshot.observedAt)
@@ -349,7 +367,7 @@ struct ProviderCard: View {
             HStack(spacing: 5) {
                 if urgency != .normal {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(expiryColor(urgency))
-                    Text(urgency == .imminent ? "Expires within 1 hour" : "Expires within 24 hours")
+                    Text(urgency == .imminent ? "Expires within 24 hours" : "Expires within 3 days")
                         .foregroundStyle(expiryColor(urgency))
                 }
                 Text(offer.title).font(.system(size: 12, weight: .medium))
@@ -386,6 +404,7 @@ private struct UsageRow: View {
     let color: Color
     let now: Date
     let stale: Bool
+    var noLimit = false
     var duration: TimeInterval? = nil
     var observedAt: Date? = nil
     var compact = false
@@ -404,6 +423,19 @@ private struct UsageRow: View {
         return "\(status). \(window.used.formatted(.number.precision(.fractionLength(0...1))))% of quota used; \(elapsed)% of this window's time elapsed. The white tick is the even-use target: \(reference)% left. The colored bar is your actual \(window.remaining)% left. The target approaches zero as reset time approaches. This comparison assumes even use across the window; it is not a forecast."
     }
     var body: some View {
+        if noLimit, window == nil {
+            HStack(spacing: 6) {
+                Text("∞").font(.system(size: 13, weight: .semibold)).accessibilityHidden(true)
+                Text(stale ? "No 5-hour limit at saved reading" : "No 5-hour limit")
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(stale ? .secondary : .primary)
+        } else {
+            meteredBody
+        }
+    }
+    private var meteredBody: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(.system(size: 12, weight: .medium))

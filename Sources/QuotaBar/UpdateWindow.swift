@@ -45,7 +45,7 @@ private struct UpdatesView: View {
                     Picker("Channel", selection: $coordinator.channel) {
                         Text("Stable").tag(UpdateChannel.stable)
                         Text("Preview").tag(UpdateChannel.preview)
-                    }.pickerStyle(.segmented).frame(maxWidth: 260)
+                    }.pickerStyle(.segmented).frame(maxWidth: 260).disabled(isBusy)
                     Text(coordinator.channel == .stable
                          ? "Stable gets builds the maintainer selects. It is the default."
                          : "Preview follows changes merged into main. Builds are public but less tested.")

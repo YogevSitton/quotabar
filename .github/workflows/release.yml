@@ -242,8 +242,17 @@ jobs:
           latest_status="$(curl -sS -o "$stage/latest.json" -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest")"
           if [[ "$latest_status" == 200 ]]; then
             latest_tag="$(jq -r '.tag_name' "$stage/latest.json")"
-            gh release download "$latest_tag" --repo "$GITHUB_REPOSITORY" --pattern QuotaBar-update.json --dir "$stage/latest"
-            latest_build="$("$tool" verify --envelope "$stage/latest/QuotaBar-update.json" --public-key "$public_key" --channel stable --tag "$latest_tag" | sed -n 's/^build=//p')"
+            # These immutable releases shipped before signed update metadata.
+            # Do not broaden this exception to unknown tags or missing assets.
+            case "$latest_tag" in
+              v0.1.0) latest_build=28 ;;
+              v0.2.0) latest_build=29 ;;
+              v0.3.0) latest_build=30 ;;
+              *)
+                gh release download "$latest_tag" --repo "$GITHUB_REPOSITORY" --pattern QuotaBar-update.json --dir "$stage/latest"
+                latest_build="$("$tool" verify --envelope "$stage/latest/QuotaBar-update.json" --public-key "$public_key" --channel stable --tag "$latest_tag" | sed -n 's/^build=//p')"
+                ;;
+            esac
             (( build > latest_build )) || { echo "::error::Build $build is not newer than Stable build $latest_build."; exit 1; }
           elif [[ "$latest_status" != 404 ]]; then
             echo "::error::Could not read the current Stable release (HTTP $latest_status)."; exit 1
@@ -382,7 +391,13 @@ jobs:
           }
           latest_status="$(curl -sS -o "$work/latest.json" -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest")"
           if [[ "$latest_status" == 200 ]]; then
-            publish_channel stable "$(jq -r '.tag_name' "$work/latest.json")" "$(cat "$work/latest.json")"
+            latest_tag="$(jq -r '.tag_name' "$work/latest.json")"
+            case "$latest_tag" in
+              v0.1.0|v0.2.0|v0.3.0)
+                echo "::notice::$latest_tag predates the updater; stable.json stays absent."
+                ;;
+              *) publish_channel stable "$latest_tag" "$(cat "$work/latest.json")" ;;
+            esac
           elif [[ "$latest_status" == 404 ]]; then
             echo "::notice::No Stable release yet; stable.json stays absent."
           else

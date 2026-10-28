@@ -119,7 +119,8 @@ import Combine
         do {
             let attempt = try CodexResetAttempt(snapshot: snapshot, offer: offer)
             let expiry = offer.expiresAt.map { $0.formatted(.dateTime.day().month().year().hour().minute().timeZone()) } ?? "Not reported"
-            let session = snapshot.session.map { "\($0.remaining)% remaining" } ?? "Unknown"
+            let session = snapshot.sessionLimit == .noLimit ? "No 5-hour limit"
+                : snapshot.session.map { "\($0.remaining)% remaining" } ?? "Unknown"
             let weekly = snapshot.weekly.map { "\($0.remaining)% remaining" } ?? "Unknown"
             guard confirmReset(title: "Use 1 saved Codex reset?",
                 message: "\(offer.title)\nExpires: \(expiry)\n\n5-hour usage: \(session)\nWeekly usage: \(weekly)\n\nIf accepted by Codex, this permanently consumes one saved reset. It cannot be undone. Only this selected credit will be requested.",
@@ -244,13 +245,13 @@ import Combine
         func entry(_ name: String, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
             let now = Date()
             let current = snapshot?.isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) == true
-            func quota(_ window: UsageWindow?) -> MenuBarQuota {
-                guard current, let window, let remaining = window.currentRemaining(at: now) else {
-                    return MenuBarQuota(remaining: nil, resetsAt: nil)
-                }
-                return MenuBarQuota(remaining: remaining, resetsAt: window.resetsAt)
+            func quota(_ limit: UsageLimit) -> MenuBarQuota {
+                MenuBarQuota(limit: current ? limit.current(at: now) : .unavailable)
             }
-            return MenuBarEntry(name: name, session: quota(snapshot?.session), weekly: quota(snapshot?.weekly))
+            let session = snapshot?.currentSessionLimit(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) ?? .unavailable
+            let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
+            return MenuBarEntry(name: name, session: MenuBarQuota(limit: session),
+                                weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
         if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }

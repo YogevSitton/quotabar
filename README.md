@@ -2,74 +2,115 @@
 
 A native macOS menu bar app for Codex (ChatGPT) and Claude subscription usage. See your remaining five-hour and weekly usage, scheduled reset times, and any reset credits and expiry dates the provider reports.
 
-Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI or Anthropic.
+Use Codex, Claude, or both. Independent community project, with no analytics or hosted backend. Not affiliated with or endorsed by OpenAI or Anthropic.
+
+[Install](#install) | [First launch](#first-launch-and-provider-setup) | [Usage](#usage) | [Screenshots](#screenshots) | [Troubleshooting](#troubleshooting)
 
 ## Status
 
-The first public preview is **0.1.0**. Earlier development builds used higher internal version numbers.
+The latest public release is **0.3.0**. Earlier development builds used higher internal version numbers.
 
-Builds after 0.1.0 include an in-app updater with a default **Stable** channel and an opt-in **Preview** channel, both published from this public repository. The updater and its release workflow are implemented but not yet switched on or tested on real Macs. See [Releases and in-app updates](docs/UPDATES.md).
+This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
+
+The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Publishing is implemented but not activated, and installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
 ## Install
 
-### Build from source
+Requires an **Apple Silicon Mac with macOS 14 or later**. You can use Codex, Claude, or both.
 
-Install Xcode or a Swift 5.9+ toolchain, then:
+**No Terminal is needed to install the downloaded app.**
 
-```sh
-git clone https://github.com/YogevSitton/quotabar.git
-cd quotabar
-./scripts/build.sh
-open dist/QuotaBar.app
-```
+1. Download [QuotaBar-0.3.0.zip](https://github.com/YogevSitton/quotabar/releases/download/v0.3.0/QuotaBar-0.3.0.zip) from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases).
+2. Double-click the ZIP in Finder to extract it.
+3. Drag **QuotaBar.app** into **Applications**.
+4. Open **QuotaBar** from Applications. Its icon appears in the menu bar at the top of your screen.
 
-The app has no external Swift package dependencies. Move `QuotaBar.app` into Applications before enabling launch at login.
+### If macOS blocks the app
 
-### Download a release
+Downloaded builds are not notarized by Apple. If macOS says the developer cannot be verified and you trust the download, first try opening the app, then go to **System Settings > Privacy & Security > Open Anyway** and confirm **Open**. See [Apple's explanation](https://support.apple.com/en-us/102445).
 
-Download a zip and its matching `.sha256` file from [Releases](https://github.com/YogevSitton/quotabar/releases): the release marked **Latest** for Stable (once one is published), or a `preview-<build>` prerelease for Preview. In the download folder, verify the checksum using the actual file name, for example:
-
-```sh
-shasum -a 256 -c QuotaBar-0.1.0.zip.sha256
-```
-
-Only continue if it prints `OK`. Extract the zip and move `QuotaBar.app` into Applications. The checksum detects corruption; it is not a substitute for Developer ID signing or notarization. macOS may block a downloaded build. See [Apple's guidance on opening apps from unidentified developers](https://support.apple.com/en-us/102445) before deciding whether to allow it.
+Continue with [First launch and provider setup](#first-launch-and-provider-setup) to connect your subscription.
 
 ### Updates
 
-0.1.0 predates the updater, so moving from 0.1.0 to a build with updates is one manual download and replacement as above. After that, **More > Updates...** opens a separate Updates window:
+Published versions through 0.3.0 predate the updater. To move to the first updater-enabled release, quit QuotaBar with the power button, download the new ZIP from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), extract it, replace the app in Applications, and reopen it. That first migration is manual.
 
-- Choose Stable (the default) or Preview on each Mac.
+In an updater-enabled release, **More > Updates...** opens a separate Updates window:
+
+- Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after publishing is activated.
 - Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
-- Nothing installs until you click **Install and Relaunch** for the exact build shown. Quitting, restarting or switching channels never installs anything, and switching from Preview to Stable never downgrades.
+- Nothing installs until you click **Install and Relaunch** for the exact build shown. Switching from Preview to Stable never downgrades.
 
-Update checks are anonymous: no GitHub account, token or command-line tool is needed. macOS may ask you to allow QuotaBar under App Management when it replaces itself, and may ask again on later updates. Builds made from source never install updates. See [Releases and in-app updates](docs/UPDATES.md) for channels, permissions and recovery, and [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+Update checks need no GitHub account, token or command-line tool. macOS may ask for App Management permission again on later updates. Builds made from source never install updates. See [Releases and in-app updates](docs/UPDATES.md) for setup, permissions and recovery, and [CHANGELOG.md](CHANGELOG.md) for version changes.
+
+## First launch and provider setup
+
+QuotaBar runs in the **menu bar at the top of your screen**. It has no Dock icon or main app window. Click its gauge icon or provider percentages to open the popup.
+
+Set up either provider below, or both. QuotaBar reuses the official tools' subscription sign-in; you do not paste passwords or API keys into QuotaBar.
+
+### Codex
+
+1. Install the ChatGPT/Codex desktop app or the official Codex CLI. OpenAI's [desktop setup](https://developers.openai.com/codex/quickstart/) and [CLI setup](https://learn.chatgpt.com/docs/codex/cli) explain those options.
+2. Sign in through that official app or CLI with your **ChatGPT subscription**. API-key-only authentication cannot provide subscription usage.
+3. Open QuotaBar's popup. It detects supported installations automatically and reads the existing sign-in. There is no separate Codex sign-in button in QuotaBar.
+
+### Claude
+
+1. Install [Claude Desktop](https://claude.com/download) or the [official Claude Code CLI](https://code.claude.com/docs/en/setup#install-claude-code). QuotaBar's usage reader requires Claude Code **2.1.309 or later**.
+2. Open QuotaBar's popup. It automatically checks for an existing **Claude Code subscription sign-in**. Being signed in only to Claude Desktop does not necessarily provide that CLI sign-in.
+3. If **Connect Claude** appears, click it. QuotaBar prepares a verified official helper if needed, checks the saved sign-in, and opens the official browser login only when required. Finish authorization in your browser. Progress, cancel and errors stay in the popup; **Sign-in help** opens optional recovery help.
+
+To change Claude accounts later, sign in to the other account in Claude Code; QuotaBar follows that sign-in. A provider with no detected local installation is hidden. Startup, polling and retrying usage never open browser sign-in or download a helper.
+
+### Check that setup worked
+
+After a successful read, each connected provider shows its applicable five-hour and weekly remaining percentages in the popup and menu bar, for example `72%/61%`. A supported reading with no five-hour limit, currently Codex Pro, shows `∞/61%` and **No 5-hour limit** in the popup. Refresh runs automatically every minute and after wake, with longer waits after some errors. Missing or unverified values stay unavailable; see [Troubleshooting](#troubleshooting) if a card or reading is missing.
+
+To start QuotaBar automatically, open the popup's **More** (ellipsis) menu and enable **Launch at login** after moving the app into Applications.
 
 ## Usage
 
-Each connected provider has its transparent logo followed by `5h%/weekly%`, such as `93%/91%`. These are **remaining** percentages. When five-hour usage is exhausted, its reset countdown replaces the percentage, such as `2h13m/45%`. When the weekly window is exhausted, only its weekly countdown appears. Percentages gradually turn red between 50% and 10% remaining; countdowns stay uncolored. A dash means a current value is unavailable.
+Each connected provider has its transparent logo followed by `5h%/weekly%`, such as `93%/91%`. These are **remaining** percentages. A supported reading with no five-hour limit shows `∞` in the first position, such as `∞/61%`; the weekly limit still applies. When five-hour usage is exhausted, its reset countdown replaces the percentage, such as `2h13m/45%`. When the weekly window is exhausted, only its weekly countdown appears. Percentages gradually turn red between 50% and 10% remaining; infinity and countdowns stay uncolored. A dash means a current value is unavailable.
 
-Click the menu bar item to open the compact popup. Installed providers appear side by side with their five-hour and weekly meters, automatic reset times and reported reset credits. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional/model limits and extra usage are intentionally not displayed.
+When a reported manual reset expires within 3 days, a small countdown chip follows that provider's percentages: orange with the days left (`2d`), then red with the hours or minutes left (`18h`, `45m`) in its last 24 hours. The time is rounded down, so it never overstates how long you have. Hover over the menu bar item to see each provider's next reset expiry with its date and countdown.
 
-A subtle white tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
+Click the menu bar item to open the compact popup. Installed providers appear side by side with their applicable five-hour and weekly meters, automatic reset times and reported reset credits. **No 5-hour limit** replaces the five-hour meter and reset time when supported by the reading. Reset and expiry times include a countdown on the same line; the timezone is in the tooltip. The popup does not scroll. Longer inventories, descriptions, saved readings and recovery information open in a separate resizable Details window through contextual links. Additional/model limits and extra usage are intentionally not displayed.
 
-Reported manual reset offers expiring within 24 hours have an orange warning icon and highlighted expiry; within 1 hour they turn red. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning.
+A subtle contrasting tick on each current usage meter marks the remaining quota expected for even use across that window. Hover over the meter for the comparison and percentages; there is no separate pace label. The comparison uses the reading's original timestamp. This reference approaches zero near reset time, even when your actual balance remains high. It assumes even use, allows a two-percentage-point tolerance, and is not a forecast. Saved readings, expired windows, and missing or inconsistent reset times show no pace marker.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login** and **Updates...**, which opens the separate Updates window. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. Changing percentages does not change its width.
+Reported manual reset offers expiring within 3 days have an orange warning icon and highlighted expiry; within 24 hours they turn red, matching the menu bar chip. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning or menu bar chip.
 
-Screenshots are omitted until current, privacy-reviewed captures are available.
+The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login** and **Updates...**, which opens the separate Updates window. The app version appears at the bottom right of the popup. Refresh runs automatically every minute and after wake; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
 
-## Connect your providers
+## Screenshots
 
-**Codex:** Install the Codex CLI or the ChatGPT/Codex desktop app and sign in there with your ChatGPT subscription. QuotaBar detects the bundled CLI and common standalone install locations, including npm, nvm, Volta, Bun and pnpm. It reuses the CLI's existing sign-in through its local app server. API-key-only authentication does not provide subscription usage.
+Source UI rendered offline with synthetic usage and reset offers. These examples show the pace markers and reset-expiry warnings added in 0.2.0, but predate the bottom-right version label, and the menu bar reset countdown chip and 3-day warning tier added in 0.3.0. They also predate the Updates menu entry and separate Updates window. They are not live account readings or evidence of reset redemption.
 
-**Claude:** Install Claude Desktop or a standalone Claude Code CLI. The usage reader requires Claude Code 2.1.309 or later. QuotaBar automatically checks its saved subscription sign-in. If needed, **Connect Claude** prepares a verified official helper and starts the official browser sign-in after checking the existing login. Progress, cancel and errors stay in the popup; optional **Sign-in help** opens a separate recovery window. Finish browser authorization yourself. To change accounts, sign in to the other account in Claude Code; QuotaBar follows it.
+![Light menu bar with Codex 72%/61% and Claude 58%/76% remaining](docs/screenshots/menubar-light.png)
 
-Startup, polling and retrying usage never start browser sign-in or download a helper. Missing usage is not treated as proof that you are signed out. Network, version, service and stale-cache errors offer retry. Providers with no detected local installation are hidden and are not polled.
+![Light popup with side-by-side Codex and Claude usage, pace ticks, automatic reset countdowns and a Codex reset expiry warning](docs/screenshots/popup-light.png)
 
-The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage).
+See [dark appearance, saved-reading examples and image provenance](docs/SCREENSHOTS.md).
+
+## Troubleshooting
+
+| What you see | What to do |
+| --- | --- |
+| A provider is missing | Check that its desktop app or CLI is installed in a supported location. Wait about 30 seconds or reopen the popup for installation detection. See [installation discovery details](docs/PROVIDER-INTEGRATIONS.md). |
+| Codex has no current values | Check the detected official app or CLI's subscription sign-in. An API-key-only account cannot supply subscription limits. |
+| Claude shows **Connect Claude** | Follow the [Claude setup steps](#claude) and finish the official browser flow if requested. |
+| Claude shows a usage error | Use **Retry usage** or wait for the automatic retry. An old cache, unavailable service or incompatible CLI does not by itself mean you need to sign in again. |
+| A card shows **Saved reading** | Its timestamp and percentages describe an earlier sample. Those values never supply current menu bar percentages. **Last saved reading** opens historical details. |
+| An optional checksum check says a file is missing | Check that Terminal is in the folder containing both downloads, with the exact filenames shown in the command. If your browser automatically extracted and removed the ZIP, download the original ZIP again. |
+| An optional checksum check says `FAILED` | Do not open that download. Download both matching files again from the same release and repeat the check. |
+| An optional source build fails | Make sure Xcode has finished setup and the selected toolchain includes Swift 5.9+ and a macOS 14+ SDK. Keep the error message for a bug report, with personal paths redacted. |
+
+The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage), where you can check your account directly.
+
+For help, use the [bug template](.github/ISSUE_TEMPLATE/bug_report.md). Include your macOS version, Mac chip, QuotaBar version and what happened. Remove personal data from screenshots; never include raw CLI replies or private authorization links. Report security issues privately, following [SECURITY.md](SECURITY.md).
 
 ## Freshness and privacy
 
@@ -77,11 +118,11 @@ Monitoring sends read-only control requests through the official CLIs, with no u
 
 Claude reads use only `initialize`, `get_binary_version` and `get_usage`, always with `skip_behaviors: true`. The reader disables project settings, tools, hooks, external MCP servers, telemetry, automatic updates and session persistence. A bounded `claude auth status` check can classify a failure using its authentication method and exit status; raw replies are not logged.
 
-Claude Code may return a cached reading. QuotaBar matches non-secret account/cache metadata in `~/.claude.json` and preserves its original `fetchedAtMs`. Missing provenance or a sample older than two minutes cannot supply current percentages. Expired quota windows require a fresh reading. Missing or malformed values stay unknown.
+Claude Code may return a cached reading. QuotaBar matches non-secret account/cache metadata in `~/.claude.json` and preserves its original `fetchedAtMs`. Missing provenance or a sample older than two minutes cannot supply current percentages. Expired quota windows require a fresh reading. Missing or malformed values stay unknown, and Claude's undocumented `five_hour: null` is not treated as no limit. No-limit handling uses narrow provider-specific response rules; see [provider integration details](docs/PROVIDER-INTEGRATIONS.md#five-hour-limit-applicability).
 
 Transient Claude failures retry automatically with a one-to-five-minute backoff. The newest account-matched reading remains clearly labeled **Saved reading**, with its original timestamp; it never supplies current menu percentages. Optional status-line snapshots and local Claude usage history supply historical percentages only. See [provider integration details](docs/PROVIDER-INTEGRATIONS.md).
 
-There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. A confirmed Codex reset stores local recovery metadata, never credentials. Update checks download public, signed files from GitHub without any account data; update state stays in `~/Library/Application Support/QuotaBar/Updates`.
+There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. A confirmed Codex reset stores local recovery metadata, never credentials.
 
 ### Optional status-line exporter
 
@@ -105,8 +146,40 @@ An uncertain result blocks new requests. **Review saved reset request** requires
 - Missing provider fields remain unknown; full reset-credit parity is not promised.
 - Account connection reliability has not been validated across a broad range of accounts and installations.
 - Builds have been checked only on Apple Silicon. Intel support is unverified.
-- Packaged builds are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
-- The update channels are implemented but not yet activated, and installation, permission prompts and recovery have not been tested on real Macs.
+- Packaged releases are ad-hoc signed, not notarized. Developer ID signing and notarization remain future work.
+- The update channels are implemented but publishing is not activated. Installation, permission prompts and recovery remain unqualified on real Macs.
+
+## Optional checksum verification
+
+This extra check compares the ZIP against the release's published checksum. **It is optional and requires Terminal.** It does not replace Developer ID signing or notarization.
+
+Download the matching `QuotaBar-0.3.0.zip.sha256` file from the same [release](https://github.com/YogevSitton/quotabar/releases/tag/v0.3.0) and keep it beside the ZIP. If both files are in Downloads, open **Terminal** from **Applications > Utilities** and run:
+
+```sh
+cd ~/Downloads
+shasum -a 256 -c QuotaBar-0.3.0.zip.sha256
+```
+
+The expected result is `QuotaBar-0.3.0.zip: OK`. For a different release or folder, use its matching filename or folder. If you choose to run this check and it reports `FAILED`, download both matching files again before opening the app.
+
+## Build from source
+
+This is an optional alternative for development or Unreleased changes. To install the ready-made app, use the [ZIP download](#install) above.
+
+1. Install [Xcode](https://developer.apple.com/xcode/resources/) with Swift 5.9 or newer, choosing a version compatible with your macOS. Open Xcode once and finish its setup. An existing Swift 5.9+ toolchain with Apple's command-line tools and a macOS 14+ SDK also works.
+2. Open Terminal and run the following commands, one line at a time. Start in the folder where you want to keep the source code:
+
+   ```sh
+   git clone https://github.com/YogevSitton/quotabar.git
+   cd quotabar
+   ./scripts/build.sh
+   open dist
+   ```
+
+   A successful build prints `Built .../dist/QuotaBar.app`. The last command opens the output folder in Finder. If the build fails, fix the reported error before continuing.
+3. Drag **QuotaBar.app** from that folder into **Applications**, then open it from Applications. Continue with [First launch and provider setup](#first-launch-and-provider-setup).
+
+The app has no external Swift package dependencies. If you already cloned the repository, use that checkout instead of cloning again. Contributor build and verification steps are in [CONTRIBUTING.md](CONTRIBUTING.md#build-and-review).
 
 ## Development
 
@@ -121,7 +194,7 @@ python3 scripts/check-release-docs.py
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
-Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere. Version and build numbers come from `release-version.json` and public history. `scripts/package-release.sh` creates a zip and SHA-256 checksum and verifies the extracted app's signature; it needs no secret and uploads nothing. Only the release workflow signs and publishes ([details](docs/UPDATES.md)). Normal builds use committed artwork. `scripts/build-icon.sh` explicitly regenerates artwork and strips metadata. [Assets/ICON.md](Assets/ICON.md) records its provenance.
+Set `QUOTABAR_BUILD_PATH` to put build intermediates elsewhere. `scripts/package-release.sh` creates a zip and SHA-256 checksum and verifies the extracted app's signature; it uploads nothing. Normal builds use committed artwork. `scripts/build-icon.sh` explicitly regenerates artwork and strips metadata. [Assets/ICON.md](Assets/ICON.md) records its provenance.
 
 Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/YogevSitton/quotabar/security/advisories/new), following [SECURITY.md](SECURITY.md). Use redacted or synthetic examples in issues.
 

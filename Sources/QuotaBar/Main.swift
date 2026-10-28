@@ -43,7 +43,6 @@ import QuotaUpdateSupport
     private var outsideClickMonitor: Any?
     private var renderedMenuDescription: String?
     private var renderedMenuAppearance: NSAppearance.Name?
-    private var renderedMenuProviderCount = 0
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance prevents duplicate menu items and unnecessary polling.
         if let id = Bundle.main.bundleIdentifier,
@@ -94,28 +93,31 @@ import QuotaUpdateSupport
         let description = entries.map(\.description).joined(separator: "; ")
         let now = Date()
         let segments = entries.map { $0.menuSegments(at: now) }
+        let chips = entries.map { $0.resetChip(at: now) }
         let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")
         let appearance = button.effectiveAppearance
-        // A provider connecting/disconnecting must not move the anchor while
-        // its popup is open. Apply that width change when the popup closes.
-        let canChangeImage = !popover.isShown || renderedMenuProviderCount == entries.count
-        if canChangeImage && (renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name) {
-            button.attributedTitle = NSAttributedString(string: "")
+        if renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name {
+            let image: NSImage
             if entries.isEmpty {
-                let image = AppArtwork.icon.copy() as! NSImage
+                image = AppArtwork.icon.copy() as! NSImage
                 image.size = NSSize(width: 20, height: 20)
-                button.image = image
             } else {
-                button.image = MenuBarArtwork.image(entries: entries, segments: segments, appearance: appearance)
+                image = MenuBarArtwork.image(entries: entries, segments: segments, chips: chips, appearance: appearance)
             }
-            renderedMenuDescription = renderKey
-            renderedMenuAppearance = appearance.name
-            renderedMenuProviderCount = entries.count
+            // The item fits its content, so a width change must not move the
+            // anchor while the popup is open. Apply it when the popup closes.
+            if !popover.isShown || button.image?.size.width == image.size.width {
+                button.attributedTitle = NSAttributedString(string: "")
+                button.image = image
+                renderedMenuDescription = renderKey
+                renderedMenuAppearance = appearance.name
+            }
         }
         button.toolTip = entries.isEmpty
             ? "QuotaBar\nConnect an installed provider"
-            : (["QuotaBar - usage remaining"] + entries.map(\.tooltipSection)).joined(separator: "\n\n")
-        button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining.")
+            : (["QuotaBar - usage remaining"] + entries.map { $0.tooltipSection(at: now) }).joined(separator: "\n\n")
+        let expiring = zip(entries, chips).compactMap { entry, chip in chip.map { " \(entry.name) reset expires in \($0.spoken)." } }
+        button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining." + expiring.joined())
     }
     @objc private func woke() { state.refresh(); updates.didWake() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
