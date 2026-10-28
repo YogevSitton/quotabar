@@ -143,6 +143,26 @@ public struct UpdateRetryState: Equatable, Sendable {
         return delay
     }
 
+    /// Whether the next feed request in the same check may start: never after
+    /// an earlier feed in this check failed, and never inside a rate-limit wait.
+    public func allowsNextFeed(afterCycleFailures failures: [UpdateFetchFailure], at now: Date) -> Bool {
+        failures.isEmpty && allowsRequest(at: now)
+    }
+
+    /// Records every failure from one check. The latest rate-limit deadline
+    /// wins regardless of order; otherwise one transient step is taken. Returns
+    /// the delay before the next automatic check, or nil when nothing failed.
+    public mutating func record(_ failures: [UpdateFetchFailure], now: Date, random: Double) -> TimeInterval? {
+        guard !failures.isEmpty else { return nil }
+        var delay: TimeInterval?
+        for failure in failures { if case .rateLimited = failure { delay = record(failure, now: now, random: random) } }
+        if delay != nil, let rateLimitedUntil {
+            return max(UpdateFetchFailure.minimumRateLimitWait, rateLimitedUntil.timeIntervalSince(now))
+        }
+        if failures.contains(.transient) { return record(.transient, now: now, random: random) }
+        return record(failures[0], now: now, random: random)
+    }
+
     /// Clears waits after a cycle that needed nothing more or finished its download.
     public mutating func recordSuccess() {
         rateLimitedUntil = nil; transientAttempts = 0

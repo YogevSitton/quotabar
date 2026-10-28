@@ -108,6 +108,40 @@ final class UpdateScheduleTests: XCTestCase {
         XCTAssertEqual(retry.record(.transient, now: now, random: 0), 300)
     }
 
+    func testFeedRateLimitSuppressesTheNextFeedRequestInTheSameCheck() {
+        var retry = UpdateRetryState()
+        XCTAssertTrue(retry.allowsNextFeed(afterCycleFailures: [], at: now))
+        // Stable answered 429 Retry-After 7200: Preview must not be requested.
+        let stable = UpdateFetchFailure.classify(status: 429, headers: ["Retry-After": "7200"], now: now)!
+        XCTAssertFalse(retry.allowsNextFeed(afterCycleFailures: [stable], at: now))
+        // Any earlier failure ends the check, and so does an active wait.
+        XCTAssertFalse(retry.allowsNextFeed(afterCycleFailures: [.transient], at: now))
+        XCTAssertEqual(retry.record([stable], now: now, random: 0), 7_200)
+        XCTAssertFalse(retry.allowsNextFeed(afterCycleFailures: [], at: now.addingTimeInterval(3_600)))
+        XCTAssertTrue(retry.allowsNextFeed(afterCycleFailures: [], at: now.addingTimeInterval(7_200)))
+    }
+
+    func testCheckKeepsTheLatestRateLimitDeadlineInEitherOrder() {
+        let short = UpdateFetchFailure.rateLimited(until: now.addingTimeInterval(60))
+        let long = UpdateFetchFailure.rateLimited(until: now.addingTimeInterval(7_200))
+        for failures in [[short, long], [long, short]] {
+            var retry = UpdateRetryState()
+            XCTAssertEqual(retry.record(failures, now: now, random: 0), 7_200)
+            XCTAssertEqual(retry.rateLimitedUntil, now.addingTimeInterval(7_200))
+            XCTAssertEqual(retry.transientAttempts, 0)
+        }
+        // A rate limit outranks a transient failure in the same check.
+        var mixed = UpdateRetryState()
+        XCTAssertEqual(mixed.record([.transient, long], now: now, random: 0), 7_200)
+        // Nothing failed: no delay, nothing recorded.
+        var clean = UpdateRetryState()
+        XCTAssertNil(clean.record([], now: now, random: 0))
+        XCTAssertEqual(clean, UpdateRetryState())
+        // Transient-only checks keep the backoff progression.
+        XCTAssertEqual(clean.record([.transient], now: now, random: 0), 300)
+        XCTAssertEqual(clean.record([.transient], now: now, random: 0), 900)
+    }
+
     func testSameBuildConflictIsRejectedAcrossChannelsAfterSwitching() throws {
         // Preview build 50 (commit A, hash A) was seen; the Mac then switched to Stable.
         let seenPreview = try UpdateManifestTests.preview(build: 50)

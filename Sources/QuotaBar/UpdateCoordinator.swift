@@ -144,18 +144,22 @@ import QuotaUpdateSupport
         let previous = status
         status = .checking; lastAttempt = now
         let selected = channel
+        var failures: [UpdateFetchFailure] = []
         let stableFetch = await client.feed(.stable)
-        let previewFetch = selected == .preview ? await client.feed(.preview) : .absent
+        if case .failed(let failure) = stableFetch { failures.append(failure) }
+        // A failed Stable request, above all a rate limit, ends this check before
+        // any further request to the same host.
+        let previewFetch: UpdateFeedClient.FeedFetch = selected == .preview
+            && retry.allowsNextFeed(afterCycleFailures: failures, at: Date()) ? await client.feed(.preview) : .absent
+        if case .failed(let failure) = previewFetch { failures.append(failure) }
         lastCheck = Date()
 
-        let failures = [stableFetch, previewFetch].compactMap { fetch -> UpdateFetchFailure? in
-            if case .failed(let failure) = fetch { return failure }; return nil
-        }
-        if let failure = failures.first(where: { if case .rateLimited = $0 { return true }; return false }) ?? failures.first {
-            if case .rateLimited = failure { note = "GitHub asked QuotaBar to wait before checking again. Your installed app is unchanged." }
-            else { note = "Could not reach the update feed. QuotaBar will retry; your installed app is unchanged." }
+        if let delay = retry.record(failures, now: Date(), random: .random(in: 0...1)) {
+            if failures.contains(where: { if case .rateLimited = $0 { return true }; return false }) {
+                note = "GitHub asked QuotaBar to wait before checking again. Your installed app is unchanged."
+            } else { note = "Could not reach the update feed. QuotaBar will retry; your installed app is unchanged." }
             status = previous == .checking ? .idle : previous
-            scheduleNext(after: retry.record(failure, now: Date(), random: .random(in: 0...1)))
+            scheduleNext(after: delay)
             return
         }
         note = nil
