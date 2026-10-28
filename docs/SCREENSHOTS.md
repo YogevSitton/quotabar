@@ -36,6 +36,18 @@ The preview did not launch the normal app delegate, start polling, load account 
 
 These are content renders, without the macOS menu bar, popover arrow, window shadow or desktop. They demonstrate presentation, not live provider behavior, popup anchoring or successful reset redemption. See [verification status](VERIFICATION.md) for those limits.
 
+## Unreleased Antigravity examples
+
+These two examples use source revision [`2a21981`](https://github.com/YogevSitton/quotabar/commit/2a21981fb244d8c975937a8501a00f1dff936eab), rendered on 28 October 2026. Every quota, group label and reset offer is synthetic. In particular, the weekly-only Gemini 4 Argon example demonstrates missing-window handling; it is not evidence of the actual plan or quota shape.
+
+![Synthetic three-provider popup with a selected Gemini 4 Argon quota group](screenshots/antigravity-synthetic-light.png)
+
+![Synthetic narrow popup with saved readings and an explicit quota-group choice after the old group disappeared](screenshots/antigravity-synthetic-recovery.png)
+
+An isolated AppKit harness linked the actual SwiftUI views and testable object files while excluding `Main.o`. It constructed `AppState(loadLocalState: false)`, so no installation discovery, login-item status, local preferences or recovery records were loaded. It never called `start()` or any provider, sign-in, reset, update or other control. The example dates are relative to the render clock, approximately 22:44 Europe/London. The harness has no packaged app version metadata, so the conditional bottom-right version label is absent.
+
+Eight views were checked at 1020- and 800-point widths, in light and dark appearances, with healthy and missing/stale readings. Their measured content heights were 349-382 points under a 600-point cap. The two saved examples were visually reviewed for clipping, labels and private data after the missing-selection placeholder was fixed; PNG metadata was stripped. These are content renders without a real popover anchor, not live connection or provider validation.
+
 ## Maintaining the images
 
 - Use the source revision being documented and record it here. Keep release and Unreleased examples clearly distinguished.
