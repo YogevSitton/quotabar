@@ -76,6 +76,20 @@ final class UsageIndicatorTests: XCTestCase {
         }
     }
 
+    func testExpiryColorGraduallyReachesRedAtTwelveHours() {
+        let samples: [(TimeInterval, Double)] = [
+            (3 * 86400, 0), (86401, 0), (24 * 3600, 0),
+            (21 * 3600, 0.25), (18 * 3600, 0.5), (15 * 3600, 0.75),
+            (12 * 3600, 1), (3600, 1), (1, 1)
+        ]
+        for (timeLeft, expected) in samples {
+            XCTAssertEqual(ResetExpiryUrgency.redBlendFraction(timeLeft: timeLeft), expected, accuracy: 0.000001)
+        }
+        for timeLeft in [0, -1, -.infinity, .infinity, .nan] as [TimeInterval] {
+            XCTAssertEqual(ResetExpiryUrgency.redBlendFraction(timeLeft: timeLeft), 0)
+        }
+    }
+
     func testNextExpiryIgnoresPastUnknownAndUsedOffers() {
         func offer(_ id: String, _ seconds: TimeInterval?, count: Int? = 1) -> ResetOffer {
             var offer = ResetOffer(id: id, title: "Usage reset", expiresAt: seconds.map { sampleTime.addingTimeInterval($0) })

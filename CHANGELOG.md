@@ -19,6 +19,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- Manual reset countdown tags and expiry warnings gradually blend from their existing yellow-orange color at 24 hours left to full red at 12 hours, instead of abruptly turning red at 24 hours.
 - Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.
 - Share and persist Claude's request deadline across QuotaBar copies for the same local user. Retry, restart, wake, sign-in verification and account changes no longer bypass the waiting period.
 

@@ -134,17 +134,19 @@ private struct CompactProviderCard: View {
                 }
                 if name != "Claude" || snapshot.showsResetCredits {
                     Divider()
-                    let urgency = snapshot.offers.map { $0.expiryUrgency(at: now) }.max() ?? .normal
+                    let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
+                    let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
                     Label(urgency == .normal ? "Available resets" : "Resets - expiring soon",
                           systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(expiryColor(urgency, fallback: color)).font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
                     ForEach(Array(snapshot.orderedResetOffers(at: now).prefix(resetRowLimit))) { offer in
                         let urgency = offer.expiryUrgency(at: now)
+                        let tint = expiryColor(offer.timeUntilExpiry(at: now))
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 if urgency != .normal {
                                     Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 10)).foregroundStyle(expiryColor(urgency))
+                                        .font(.system(size: 10)).foregroundStyle(tint)
                                         .accessibilityLabel(urgency == .imminent ? "Reset expires within 24 hours" : "Reset expires within 3 days")
                                 }
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
@@ -158,10 +160,10 @@ private struct CompactProviderCard: View {
                             }
                             Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(shortCountdown($0, now: now)))" : "" } ?? ""))
                                 .font(.system(size: 10, weight: urgency == .normal ? .regular : .semibold))
-                                .foregroundStyle(expiryColor(urgency))
+                                .foregroundStyle(tint)
                                 .lineLimit(1).help(expiryHelp(offer))
                         }
-                        .background(expiryColor(urgency).opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
+                        .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
                     }
                     if snapshot.offers.isEmpty {
                         Text(snapshot.resetCount == 0 ? "No resets available" : "Expiry details not reported")
@@ -363,12 +365,13 @@ struct ProviderCard: View {
     }
     private func offerRow(_ offer: ResetOffer) -> some View {
         let urgency = isCurrent ? offer.expiryUrgency(at: now) : .normal
+        let tint = expiryColor(isCurrent ? offer.timeUntilExpiry(at: now) : nil)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 if urgency != .normal {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(expiryColor(urgency))
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(tint)
                     Text(urgency == .imminent ? "Expires within 24 hours" : "Expires within 3 days")
-                        .foregroundStyle(expiryColor(urgency))
+                        .foregroundStyle(tint)
                 }
                 Text(offer.title).font(.system(size: 12, weight: .medium))
             }
@@ -381,7 +384,7 @@ struct ProviderCard: View {
                 if offer.usableNow == false { Text(offer.unavailableReason ?? "Not usable right now").foregroundStyle(.secondary) }
             }
             if let expiry = offer.expiresAt {
-                Text(expiryText(expiry)).foregroundStyle(expiryColor(urgency))
+                Text(expiryText(expiry)).foregroundStyle(tint)
                     .fontWeight(urgency == .normal ? .regular : .semibold)
                     .help(expiry.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
             } else if let expiryText = offer.expiryText {
@@ -494,12 +497,10 @@ private struct UsageBar: View {
     }
 }
 
-private func expiryColor(_ urgency: ResetExpiryUrgency, fallback: Color = .secondary) -> Color {
-    switch urgency {
-    case .normal: return fallback
-    case .soon: return .orange
-    case .imminent: return .red
-    }
+private func expiryColor(_ timeLeft: TimeInterval?, fallback: Color = .secondary) -> Color {
+    guard let timeLeft, ResetExpiryUrgency(timeLeft: timeLeft) != .normal else { return fallback }
+    let fraction = ResetExpiryUrgency.redBlendFraction(timeLeft: timeLeft)
+    return Color(nsColor: NSColor.systemOrange.blended(withFraction: fraction, of: .systemRed) ?? .systemOrange)
 }
 
 /// Countdown for use in parentheses after a time, such as "1d:1h" or "2h:59m".

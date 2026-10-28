@@ -4,7 +4,7 @@ import QuotaCore
 struct MenuBarResetChip: Equatable {
     let text: String
     let spoken: String
-    let urgency: ResetExpiryUrgency
+    let redFraction: Double
 }
 
 struct MenuBarQuota {
@@ -68,10 +68,11 @@ struct MenuBarEntry {
         let urgency = ResetExpiryUrgency(timeLeft: timeLeft)
         guard urgency != .normal else { return nil }
         let minutes = max(1, Int(timeLeft / 60))
-        // Days while orange and hours once red, so the unit changes with the color.
-        if urgency == .soon { return MenuBarResetChip(text: "\(minutes / 1440)d", spoken: plural(minutes / 1440, "day"), urgency: urgency) }
-        if minutes >= 60 { return MenuBarResetChip(text: "\(minutes / 60)h", spoken: plural(minutes / 60, "hour"), urgency: urgency) }
-        return MenuBarResetChip(text: "\(minutes)m", spoken: plural(minutes, "minute"), urgency: urgency)
+        let redFraction = ResetExpiryUrgency.redBlendFraction(timeLeft: timeLeft)
+        // Keep the day-to-hour boundary at 24 hours as the tint starts blending.
+        if timeLeft > 86400 { return MenuBarResetChip(text: "\(minutes / 1440)d", spoken: plural(minutes / 1440, "day"), redFraction: redFraction) }
+        if minutes >= 60 { return MenuBarResetChip(text: "\(minutes / 60)h", spoken: plural(minutes / 60, "hour"), redFraction: redFraction) }
+        return MenuBarResetChip(text: "\(minutes)m", spoken: plural(minutes, "minute"), redFraction: redFraction)
     }
     private func plural(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s")" }
     func tooltipSection(at now: Date) -> String {
@@ -138,21 +139,36 @@ struct MenuBarEntry {
             return true
         }
     }
-    // Fixed fills keep the chip text readable in both appearances.
-    private static func chipText(_ text: String, urgency: ResetExpiryUrgency) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: chipFont, .foregroundColor: urgency == .imminent
-            ? NSColor.white : NSColor(srgbRed: 0.114, green: 0.114, blue: 0.122, alpha: 1)])
+    // Fixed sRGB endpoints keep the fill consistent in both appearances.
+    // Black or white text keeps at least 4.58:1 contrast throughout the blend.
+    private static func chipColors(redFraction: Double) -> (fill: NSColor, text: NSColor) {
+        let fraction = CGFloat(redFraction)
+        let fill = NSColor(srgbRed: 1 + (0.843 - 1) * fraction,
+                           green: 0.624 * (1 - fraction),
+                           blue: 0.039 + (0.082 - 0.039) * fraction, alpha: 1)
+        let luminance = relativeLuminance(fill)
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        let blackContrast = (luminance + 0.05) / 0.05
+        return (fill, whiteContrast > blackContrast ? .white : .black)
+    }
+    private static func relativeLuminance(_ color: NSColor) -> Double {
+        func linear(_ component: CGFloat) -> Double {
+            let value = Double(component)
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(color.redComponent) + 0.7152 * linear(color.greenComponent)
+            + 0.0722 * linear(color.blueComponent)
     }
     private static func chipWidth(_ chip: MenuBarResetChip) -> CGFloat {
-        ceil(chipText(chip.text, urgency: chip.urgency).size().width + 2 * chipPadding)
+        ceil((chip.text as NSString).size(withAttributes: [.font: chipFont]).width + 2 * chipPadding)
     }
     private static func drawChip(_ chip: MenuBarResetChip, at x: CGFloat) {
-        let text = chipText(chip.text, urgency: chip.urgency)
+        let colors = chipColors(redFraction: chip.redFraction)
+        let text = NSAttributedString(string: chip.text, attributes: [.font: chipFont, .foregroundColor: colors.text])
         let textSize = text.size()
         let height = ceil(textSize.height + 3)
         let rect = NSRect(x: x, y: ((22 - height) / 2).rounded(), width: chipWidth(chip), height: height)
-        (chip.urgency == .imminent ? NSColor(srgbRed: 0.843, green: 0, blue: 0.082, alpha: 1)
-            : NSColor(srgbRed: 1, green: 0.624, blue: 0.039, alpha: 1)).setFill()
+        colors.fill.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
         text.draw(at: NSPoint(x: rect.minX + chipPadding, y: rect.minY + (height - textSize.height) / 2))
     }
