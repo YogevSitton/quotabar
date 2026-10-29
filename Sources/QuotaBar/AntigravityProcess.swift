@@ -8,7 +8,10 @@ enum AntigravityProcess {
     enum ProcessError: Error {
         case launchFailed
         case timedOut
+        /// Cancelled after the child may have started; its phase is unknown.
         case cancelled
+        /// Thrown only before posix_spawn: the child provably never ran.
+        case cancelledBeforeLaunch
         case oversizedResponse
         case inputUnavailable
     }
@@ -23,7 +26,7 @@ enum AntigravityProcess {
         private let lock = NSLock()
         private var value = false
         func cancel() { lock.lock(); value = true; lock.unlock() }
-        fileprivate var isCancelled: Bool {
+        var isCancelled: Bool {
             lock.lock(); defer { lock.unlock() }; return value
         }
     }
@@ -91,8 +94,12 @@ enum AntigravityProcess {
             throw ProcessError.launchFailed
         }
         try profile.validateForLaunch()
-        if cancel?.isCancelled == true { throw ProcessError.cancelled }
-        let loginFD = try loginInput?.duplicateSlave()
+        if cancel?.isCancelled == true { throw ProcessError.cancelledBeforeLaunch }
+        // Cancel also closes the login input, so a failed duplicate after a
+        // cancellation is that cancellation, still before any launch.
+        let loginFD: Int32?
+        do { loginFD = try loginInput?.duplicateSlave() }
+        catch let failure { throw cancel?.isCancelled == true ? ProcessError.cancelledBeforeLaunch : failure }
         defer { if let loginFD { Darwin.close(loginFD) } }
 
         var input = try makePipe()
@@ -135,6 +142,7 @@ enum AntigravityProcess {
         defer { for pointer in argv + env { free(pointer) } }
         guard argv.allSatisfy({ $0 != nil }), env.allSatisfy({ $0 != nil }) else { throw ProcessError.launchFailed }
         var argvPointers = argv + [nil], envPointers = env + [nil]
+        if cancel?.isCancelled == true { throw ProcessError.cancelledBeforeLaunch }
         var pid: pid_t = 0
         let spawnResult = posix_spawn(&pid, binary.path, &actions, &attributes, &argvPointers, &envPointers)
         guard spawnResult == 0, pid > 0 else { throw ProcessError.launchFailed }

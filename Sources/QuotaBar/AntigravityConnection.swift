@@ -48,7 +48,7 @@ import Combine
                     // the card with the same schedule rather than dropping it.
                     let message = "Waiting until \(next.formatted(date: .omitted, time: .shortened)) before checking Antigravity again."
                     error = message; status = ""
-                    outcome = .failure(message, .usageUnavailable, nextRequestAt: next)
+                    outcome = .failure(message, .connectionIncomplete, nextRequestAt: next)
                 case .failure(let message, _, _): error = message; status = ""
                 }
                 finished(outcome)

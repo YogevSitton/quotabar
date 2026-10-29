@@ -144,7 +144,7 @@ import Combine
         if antigravityIssue == .profileUnavailable { antigravityIssue = nil }
         refreshAntigravity()
     }
-    private func applyAntigravity(_ result: AntigravityReadResult) {
+    func applyAntigravity(_ result: AntigravityReadResult) {
         antigravityRetryTimer?.invalidate(); antigravityNextRequestAt = nil
         switch result {
         case .success(let snapshot, let next):
@@ -156,13 +156,26 @@ import Combine
             if issue == .signInRequired || issue == .helperMissing { antigravity = nil }
             else { antigravity?.source = .cached }
         }
-        if interval > 0, let next = antigravityNextRequestAt {
-            let timer = Timer(timeInterval: max(1, next.timeIntervalSinceNow), repeats: false) { [weak self] _ in
-                Task { @MainActor in self?.refreshAntigravity() }
-            }
-            antigravityRetryTimer = timer
-            RunLoop.main.add(timer, forMode: .common)
+        scheduleAntigravityDeadline()
+        onChange?()
+    }
+    private func scheduleAntigravityDeadline() {
+        antigravityRetryTimer?.invalidate()
+        guard interval > 0, let next = antigravityNextRequestAt else { return }
+        let timer = Timer(timeInterval: max(1, next.timeIntervalSinceNow), repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.antigravityDeadlinePassed() }
         }
+        antigravityRetryTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+    func antigravityDeadlinePassed() {
+        guard let next = antigravityNextRequestAt else { return }
+        guard next <= Date() else { return scheduleAntigravityDeadline() }
+        // Publish the passed deadline so Connect re-enables now rather than at
+        // the popup's next 30-second tick. This never starts sign-in: refresh
+        // reads without login input and stays idle while monitoring is stopped.
+        antigravityNextRequestAt = nil
+        refreshAntigravity()
         onChange?()
     }
     func connectAntigravity() {

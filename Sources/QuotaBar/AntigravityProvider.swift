@@ -1,7 +1,9 @@
 import Foundation
 import QuotaCore
 
-enum AntigravityConnectionIssue: Equatable { case helperMissing, signInRequired, usageUnavailable, profileUnavailable }
+/// `connectionIncomplete` offers Connect again without declaring the user
+/// signed out: monitoring keeps its own retry on the same deadline.
+enum AntigravityConnectionIssue: Equatable { case helperMissing, signInRequired, connectionIncomplete, usageUnavailable, profileUnavailable }
 
 enum AntigravityReadResult {
     case success(AntigravitySnapshot, nextRequestAt: Date)
@@ -38,7 +40,18 @@ enum AntigravityProvider {
             needsSignIn = false
         }
 
-        mutating func recordFailure(_ error: Error, explicit: Bool, at now: Date) -> AntigravityReadResult {
+        /// The helper provably never started, so nothing was spent: report the
+        /// cancellation against this unchanged schedule.
+        func cancelledBeforeLaunch(at now: Date) -> AntigravityReadResult {
+            .failure("Antigravity connection was cancelled before the official CLI started.",
+                     needsSignIn ? .signInRequired : .connectionIncomplete,
+                     nextRequestAt: nextRequestAt > now ? nextRequestAt : nil)
+        }
+
+        /// `previous` is the schedule before `reserve`, so an attempt that made
+        /// no quota request can keep the earlier failure count.
+        mutating func recordFailure(_ error: Error, explicit: Bool, reservedFrom previous: Budget,
+                                    at now: Date) -> AntigravityReadResult {
             let wait = min(3600, interval * pow(2, Double(failures - 1)))
             nextRequestAt = now.addingTimeInterval(wait)
             needsSignIn = false
@@ -46,9 +59,12 @@ enum AntigravityProvider {
             switch error {
             case SignInIncomplete.authenticationRequired where !explicit:
                 // Only the monitored, non-interactive auth failure proves that
-                // /usage was not reached. Connect can resolve it immediately.
+                // /usage was not reached. Connect can resolve it immediately,
+                // and it is not a quota failure, so earlier failures still count
+                // but this attempt does not.
                 needsSignIn = true
                 nextRequestAt = now
+                failures = previous.failures
                 return .failure("Connect Antigravity to sign in through the official CLI.", .signInRequired, nextRequestAt: nil)
             case AntigravityProcess.ProcessError.cancelled where explicit:
                 needsSignIn = true
@@ -56,6 +72,11 @@ enum AntigravityProvider {
             case AntigravityProcess.ProcessError.timedOut where explicit:
                 needsSignIn = true
                 message = "Antigravity connection did not finish in time. Connect again after the waiting period."
+            case _ where explicit:
+                // Sign-in may have succeeded before /usage failed, and its output
+                // cannot tell a preamble from the final error. Neither declare the
+                // user signed out nor drop monitoring: offer Connect at the deadline.
+                message = "Antigravity's connection did not complete. Connect again after the waiting period; QuotaBar also retries automatically."
             case AntigravityProcess.ProcessError.timedOut:
                 message = "Antigravity did not finish in time. It will retry automatically without starting sign-in."
             case is UsageError:
@@ -63,9 +84,11 @@ enum AntigravityProvider {
             default:
                 message = "Antigravity's usage read failed. It will retry automatically."
             }
-            // An explicit Connect also performs /usage. Cancellation and timeout
-            // cannot prove which phase stopped, so preserve the full backoff.
-            return .failure(message, needsSignIn ? .signInRequired : .usageUnavailable, nextRequestAt: nextRequestAt)
+            // An explicit Connect also performs /usage. Cancellation, timeout and
+            // failed exits cannot prove which phase stopped, so keep the backoff.
+            let issue: AntigravityConnectionIssue = needsSignIn ? .signInRequired
+                : explicit ? .connectionIncomplete : .usageUnavailable
+            return .failure(message, issue, nextRequestAt: nextRequestAt)
         }
     }
 
@@ -97,8 +120,11 @@ enum AntigravityProvider {
             guard let binary = try AntigravityHelper.existing() else {
                 return .failure("Connect Antigravity to prepare its official CLI.", .helperMissing, nextRequestAt: nil)
             }
+            // Verification takes a moment; a Connect cancelled meanwhile never launched.
+            if cancellation?.isCancelled == true { return budget.cancelledBeforeLaunch(at: Date()) }
             // Reserve the attempt as a failure until it completes. Crashes
             // must not repeatedly reset the failure count or request deadline.
+            let previous = budget
             budget.reserve(at: now)
             try profile.writeState(JSONEncoder().encode(budget))
 
@@ -120,8 +146,13 @@ enum AntigravityProvider {
                 budget.nextRequestAt = max(Date().addingTimeInterval(1), now.addingTimeInterval(interval))
                 try profile.writeState(JSONEncoder().encode(budget))
                 return .success(snapshot, nextRequestAt: budget.nextRequestAt)
+            } catch AntigravityProcess.ProcessError.cancelledBeforeLaunch {
+                // The lease is still held, so restoring the earlier schedule
+                // cannot overwrite another copy's reservation.
+                try profile.writeState(JSONEncoder().encode(previous))
+                return previous.cancelledBeforeLaunch(at: Date())
             } catch {
-                let result = budget.recordFailure(error, explicit: loginInput != nil, at: Date())
+                let result = budget.recordFailure(error, explicit: loginInput != nil, reservedFrom: previous, at: Date())
                 try profile.writeState(JSONEncoder().encode(budget))
                 return result
             }

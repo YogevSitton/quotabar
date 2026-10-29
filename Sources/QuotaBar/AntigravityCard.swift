@@ -13,6 +13,7 @@ struct AntigravityCard: View {
     }
     private var needsConnection: Bool {
         state.antigravityIssue == .helperMissing || state.antigravityIssue == .signInRequired
+            || state.antigravityIssue == .connectionIncomplete
     }
     private var hasAdditionalBuckets: Bool {
         guard let group = state.selectedAntigravityGroup else { return false }

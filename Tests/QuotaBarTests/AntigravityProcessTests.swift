@@ -20,7 +20,7 @@ final class AntigravityProcessTests: XCTestCase {
             cancellation.cancel()
             XCTAssertThrowsError(try AntigravityProcess.run(binary: URL(fileURLWithPath: "/nonexistent/synthetic-never-launch"),
                 arguments: [], profile: lease, cancel: cancellation)) {
-                guard case AntigravityProcess.ProcessError.cancelled = $0 else { return XCTFail("Expected cancellation before spawn") }
+                guard case AntigravityProcess.ProcessError.cancelledBeforeLaunch = $0 else { return XCTFail("Expected cancellation before spawn") }
             }
         }
     }
