@@ -81,4 +81,20 @@ final class ClaudeRefreshPolicyTests: XCTestCase {
                 requestStartedAt: start, completedAt: date), .unverified)
         }
     }
+
+    func testRejectionReportsWhyAReadingWasNotAccepted() {
+        func rejection(before: TimeInterval?, after: TimeInterval?, completed: TimeInterval = 1) -> ClaudeRefreshRejection? {
+            ClaudeRefreshPolicy.rejection(before: before.map { start.addingTimeInterval($0) },
+                after: after.map { start.addingTimeInterval($0) }, requestStartedAt: start,
+                completedAt: start.addingTimeInterval(completed))
+        }
+        XCTAssertNil(rejection(before: -90, after: 0.5))
+        XCTAssertNil(rejection(before: -58, after: -58))
+        XCTAssertEqual(rejection(before: -1, after: nil), .missingSample)
+        XCTAssertEqual(rejection(before: -90, after: 0.5, completed: 120.5), .sampleTooOld)
+        XCTAssertEqual(rejection(before: -100, after: -60), .reusedSampleExpired)
+        XCTAssertEqual(rejection(before: -59, after: -59, completed: 1), .reusedSampleExpired)
+        XCTAssertEqual(rejection(before: -5, after: -10), .inconsistentTiming)
+        XCTAssertEqual(rejection(before: -5, after: -1, completed: -0.5), .inconsistentTiming)
+    }
 }

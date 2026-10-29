@@ -83,7 +83,7 @@ A subtle contrasting tick on each current usage meter marks the remaining quota 
 
 Reported manual reset offers expiring within 3 days have an orange warning icon and highlighted expiry; from 24 to 12 hours left they gradually blend to full red, matching the menu bar chip's transition. Exact expiry dates and countdowns remain visible. The reset heading also warns when an expiring offer is outside the inline row limit. Upcoming expiries appear before expired offers. Unknown expiry dates and historical inventories never receive a current expiring-soon warning or menu bar chip.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login** and **Updates...**, which opens the separate Updates window. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
+The header contains **Quit** (power) and **More** (ellipsis). More contains **Launch at login**, **Updates...** and **Logs...**. Updates and logs open in separate windows. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
 
 ## Screenshots
 
@@ -108,6 +108,10 @@ See [dark appearance, saved-reading examples and image provenance](docs/SCREENSH
 | An optional checksum check says `FAILED` | Do not open that download. Download both matching files again from the same release and repeat the check. |
 | An optional source build fails | Make sure Xcode has finished setup and the selected toolchain includes Swift 5.9+ and a macOS 14+ SDK. Keep the error message for a bug report, with personal paths redacted. |
 
+**More > Logs...** opens a local diagnostic history with **Copy logs** and **Clear logs** controls. It records app startup and wake, provider read outcomes, Claude helper stages and versions, cache validation decisions, retry deadlines and update state changes. History survives restarts and retains at most 400 events from the last seven days; when it is full, routine successful checks are removed before failures, rejected samples and state changes. Times are UTC. Opening or copying logs never triggers a provider request. Clearing logs leaves saved polling deadlines and reset recovery records intact.
+
+Logs use fixed event categories and validated timing/version fields. They contain no account identifiers, credentials, usage percentages, raw provider replies, paths or private authorization URLs, and nothing is uploaded automatically. The private local file is `~/Library/Application Support/QuotaBar/diagnostic-events.json`. A rejected Claude cache sample does not prove rate limiting: the supported CLI response may hide the underlying HTTP failure. Events begin with this build; logs cannot reconstruct an earlier failure.
+
 The external Usage buttons open [ChatGPT usage settings](https://chatgpt.com/settings/usage) and [Claude usage settings](https://claude.ai/settings/usage), where you can check your account directly.
 
 For help, use the [bug template](.github/ISSUE_TEMPLATE/bug_report.md). Include your macOS version, Mac chip, QuotaBar version and what happened. Remove personal data from screenshots; never include raw CLI replies or private authorization links. Report security issues privately, following [SECURITY.md](SECURITY.md).
@@ -122,7 +126,7 @@ Claude Code may return a cached reading even when its usage request fails. Quota
 
 Claude failures wait five minutes before retrying, doubling the delay after repeated failures up to one hour. The request deadline survives retries, restarts and account changes, and is shared by QuotaBar copies running as the same user on this Mac. The newest account-matched reading remains clearly labeled **Saved reading** during the wait, with its original timestamp; it never supplies current menu percentages. A failed refresh makes current percentages unavailable immediately, even within the four-minute display lifetime. This reduces QuotaBar's request pressure but cannot guarantee that Claude will never rate-limit requests. Optional status-line snapshots and local Claude usage history supply historical percentages only. See [provider integration details](docs/PROVIDER-INTEGRATIONS.md).
 
-There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. Claude request timing and retry state are stored locally without account identifiers or credentials. A confirmed Codex reset stores local recovery metadata, never credentials.
+There is no hosted backend or analytics. Quota snapshots stay in memory except for the separately enabled local status-line exporter. Claude request timing, retry state and the bounded diagnostic history are stored locally without account identifiers or credentials. A confirmed Codex reset stores local recovery metadata, never credentials.
 
 ### Optional status-line exporter
 

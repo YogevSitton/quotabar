@@ -44,7 +44,25 @@ import QuotaUpdateSupport
     }
 
     let installed = Installed.current
-    @Published private(set) var status: Status = .idle
+    @Published private(set) var status: Status = .idle {
+        didSet {
+            guard status != oldValue else { return }
+            let reason: DiagnosticEvent.Reason
+            switch status {
+            case .notConfigured: reason = .notConfigured
+            case .idle: reason = .idle
+            case .checking: reason = .checking
+            case .upToDate: reason = .upToDate
+            case .unavailable: reason = .unavailable
+            case .available: reason = .available
+            case .downloading: reason = .downloading
+            case .ready: reason = .ready
+            case .installing: reason = .installing
+            case .failed: reason = .failed
+            }
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .updates, kind: .updateState, reason: reason))
+        }
+    }
     @Published private(set) var note: String?
     @Published private(set) var lastCheck: Date?
     @Published private(set) var nextCheck: Date?
