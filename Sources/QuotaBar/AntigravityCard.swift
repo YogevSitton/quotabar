@@ -230,7 +230,7 @@ private struct AntigravityBucketDetails: View {
                 }
                 if let reset = bucket.resetsAt {
                     let when = reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-                    Text(historical ? "Reset reported for \(when)" : "Auto reset: \(when) (\(shortCountdown(reset, now: now)))")
+                    Text(historical ? "Reset reported for \(when)" : "Auto reset: \(when) (\(countdown(reset, now: now, style: .short)))")
                         .font(.caption).foregroundStyle(.secondary)
                         .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }

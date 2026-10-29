@@ -31,14 +31,15 @@ struct MenuBarQuota {
     }
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
-    func tooltipLine(_ label: String) -> String {
+    func tooltipLine(_ label: String, at now: Date) -> String {
         if limit == .noLimit { return "\(label): No limit" }
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
         let value = remaining.map { "\($0)% left" } ?? "Unavailable"
+        // Rounded up like the menu bar and popup countdowns for the same reset.
         let reset = resetsAt.map {
-            $0.formatted(.dateTime.weekday(.abbreviated).hour().minute().timeZone(.specificName(.short)))
-        } ?? "not reported"
-        return "\(label): \(value) · resets \(reset)"
+            $0 > now ? "resets in \(countdown($0, now: now, style: .totalHours))" : "reset due"
+        } ?? "reset not reported"
+        return "\(label): \(value) · \(reset)"
     }
 }
 
@@ -49,8 +50,9 @@ struct MenuBarEntry {
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
     var quotaGroup: String? = nil
-    var description: String {
-        ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window"), weekly.tooltipLine("Weekly window")]).joined(separator: "; ")
+    func description(at now: Date) -> String {
+        ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window", at: now),
+                                                     weekly.tooltipLine("Weekly window", at: now)]).joined(separator: "; ")
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
@@ -79,10 +81,11 @@ struct MenuBarEntry {
     private func plural(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s")" }
     func tooltipSection(at now: Date) -> String {
         let expiry = nextResetExpiry.map {
-            let when = $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute().timeZone(.specificName(.short)))
-            return "Next reset expires \(when) (\(shortCountdown($0, now: now)))"
+            // Rounded down like the chip, so it never overstates the time left.
+            $0 > now ? "Next reset expires in \(countdown($0, now: now, style: .totalHours, roundingDown: true))" : "Next reset expired"
         }
-        return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h"), weekly.tooltipLine("Weekly")] + [expiry].compactMap { $0 }).joined(separator: "\n")
+        return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)]
+                + [expiry].compactMap { $0 }).joined(separator: "\n")
     }
 }
 

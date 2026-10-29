@@ -39,9 +39,10 @@ import QuotaUpdateSupport
     private var state: AppState!
     private var updates: UpdateCoordinator!
     private var updateWindow: UpdateWindow!
+    private let logsWindow = LogsWindow()
     private var timer: Timer?
     private var outsideClickMonitor: Any?
-    private var renderedMenuDescription: String?
+    private var renderedMenuKey: String?
     private var renderedMenuAppearance: NSAppearance.Name?
     private var renderedMenuChips: [MenuBarResetChip?]?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -51,6 +52,10 @@ import QuotaUpdateSupport
             NSApp.terminate(nil); return
         }
         NSApp.applicationIconImage = AppArtwork.icon
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String).flatMap(Int.init)
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .started,
+            version: version.flatMap { DiagnosticEvent.isVersion($0) ? $0 : nil }, build: build))
         // Confirms a just-finished update for this exact app and build. It
         // only records the acknowledgment; startup never installs anything.
         if let build = UInt64(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") {
@@ -62,6 +67,10 @@ import QuotaUpdateSupport
         state.showUpdates = { [weak self] in
             self?.popover.performClose(nil)
             self?.updateWindow.show()
+        }
+        state.showLogs = { [weak self] in
+            self?.popover.performClose(nil)
+            self?.logsWindow.show()
         }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "QuotaBar"
@@ -91,14 +100,16 @@ import QuotaUpdateSupport
     private func updateLabel() {
         guard let button = statusItem.button else { return }
         let entries = state.menuEntries
-        let description = entries.map(\.description).joined(separator: "; ")
         let now = Date()
+        let description = entries.map { $0.description(at: now) }.joined(separator: "; ")
         let segments = entries.map { $0.menuSegments(at: now) }
         let chips = entries.map { $0.resetChip(at: now) }
-        let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")
+        // Key only what the image draws. The description carries minute
+        // countdowns for the tooltip and accessibility, set on every pass below.
+        let renderKey = entries.map { "\($0.name) \($0.menuLabel(at: now))" }.joined(separator: "|")
         let appearance = button.effectiveAppearance
         // The expiry tint can advance while the rounded countdown stays the same.
-        if renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name || renderedMenuChips != chips {
+        if renderedMenuKey != renderKey || renderedMenuAppearance != appearance.name || renderedMenuChips != chips {
             let image: NSImage
             if entries.isEmpty {
                 image = AppArtwork.icon.copy() as! NSImage
@@ -111,7 +122,7 @@ import QuotaUpdateSupport
             if !popover.isShown || button.image?.size.width == image.size.width {
                 button.attributedTitle = NSAttributedString(string: "")
                 button.image = image
-                renderedMenuDescription = renderKey
+                renderedMenuKey = renderKey
                 renderedMenuAppearance = appearance.name
                 renderedMenuChips = chips
             }
@@ -122,7 +133,10 @@ import QuotaUpdateSupport
         let expiring = zip(entries, chips).compactMap { entry, chip in chip.map { " \(entry.name) reset expires in \($0.spoken)." } }
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining." + expiring.joined())
     }
-    @objc private func woke() { state.refresh(); updates.didWake() }
+    @objc private func woke() {
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .woke))
+        state.refresh(); updates.didWake()
+    }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showPopover()
         return true

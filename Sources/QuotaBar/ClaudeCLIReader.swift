@@ -4,12 +4,25 @@ import QuotaCore
 // Claude Code owns authentication and its usage request. QuotaBar sends control
 // messages only: no user turn, prompt, tool execution, or reset request exists here.
 final class ClaudeCLIReader {
+    struct Failure: LocalizedError {
+        let reason: DiagnosticEvent.Reason
+        let phase: DiagnosticEvent.Phase
+        let message: String
+        var errorDescription: String? { message }
+    }
+    private final class TimeoutFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        func mark() { lock.lock(); value = true; lock.unlock() }
+        var wasReached: Bool { lock.lock(); defer { lock.unlock() }; return value }
+    }
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
     private var buffer = Data()
     private var sequence = 0
     private var timeout: DispatchWorkItem?
+    private let timeoutFlag = TimeoutFlag()
 
     init(binary: URL) throws {
         process.executableURL = binary
@@ -27,9 +40,14 @@ final class ClaudeCLIReader {
         process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
         process.currentDirectoryURL = URL(fileURLWithPath: NSTemporaryDirectory())
         do {
-            try process.run()
+            do { try process.run() }
+            catch {
+                throw Failure(reason: .launchFailed, phase: .launch,
+                    message: "Claude Code could not be started. Retry or check its installation.")
+            }
             let child = process
-            let deadline = DispatchWorkItem { if child.isRunning { child.terminate() } }
+            let flag = timeoutFlag
+            let deadline = DispatchWorkItem { if child.isRunning { flag.mark(); child.terminate() } }
             timeout = deadline
             DispatchQueue.global().asyncAfter(deadline: .now() + 45, execute: deadline)
             _ = try request("initialize", fields: ["hooks": [:]])
@@ -37,8 +55,10 @@ final class ClaudeCLIReader {
             guard let version = info["version"] as? String,
                   version.range(of: "^[0-9]+\\.[0-9]+\\.[0-9]+$", options: .regularExpression) != nil,
                   version.compare("2.1.309", options: .numeric) != .orderedAscending else {
-                throw UsageError.message("Update Claude Code to 2.1.309 or later to read subscription usage through its CLI.")
+                throw Failure(reason: .unsupportedVersion, phase: .version,
+                    message: "Update Claude Code to 2.1.309 or later to read subscription usage through its CLI.")
             }
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .helperReady, version: version))
         } catch { close(); throw error }
     }
     deinit { close() }
@@ -54,6 +74,15 @@ final class ClaudeCLIReader {
     }
     // Keep the protocol allowlist closed even if a future caller supplies input.
     private func request(_ subtype: String, fields: [String: Any] = [:]) throws -> [String: Any] {
+        let phase: DiagnosticEvent.Phase = subtype == "initialize" ? .initialize : subtype == "get_binary_version" ? .version : .usage
+        do { return try exchange(subtype, fields: fields, phase: phase) }
+        catch let failure as Failure { throw failure }
+        catch {
+            throw Failure(reason: .readerIO, phase: phase,
+                message: "Claude Code's usage connection could not be read. Retry later.")
+        }
+    }
+    private func exchange(_ subtype: String, fields: [String: Any], phase: DiagnosticEvent.Phase) throws -> [String: Any] {
         guard ["initialize", "get_binary_version", "get_usage"].contains(subtype) else {
             throw UsageError.message("Unsupported Claude quota-reader operation.")
         }
@@ -73,16 +102,20 @@ final class ClaudeCLIReader {
                 guard message["type"] as? String == "control_response",
                       let response = message["response"] as? [String: Any], response["request_id"] as? String == id else { continue }
                 guard response["subtype"] as? String == "success", let result = response["response"] as? [String: Any] else {
-                    throw UsageError.message("Claude Code could not return usage through its experimental CLI interface. Check your connection or update Claude Code.")
+                    throw Failure(reason: .protocolFailure, phase: phase,
+                        message: "Claude Code could not return usage through its experimental CLI interface. Check your connection or update Claude Code.")
                 }
                 return result
             }
             let chunk = output.fileHandleForReading.availableData
             guard !chunk.isEmpty else {
-                throw UsageError.message("Claude Code ended before returning usage. Retry or update Claude Code.")
+                throw Failure(reason: timeoutFlag.wasReached ? .helperTimeout : .helperEnded, phase: phase,
+                    message: "Claude Code ended before returning usage. Retry or update Claude Code.")
             }
             received += chunk.count
-            guard received <= 2_000_000 else { throw UsageError.message("Claude Code returned an oversized quota response.") }
+            guard received <= 2_000_000 else {
+                throw Failure(reason: .oversizedReply, phase: phase, message: "Claude Code returned an oversized quota response.")
+            }
             buffer.append(chunk)
         }
     }

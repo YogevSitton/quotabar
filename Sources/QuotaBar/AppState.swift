@@ -41,6 +41,7 @@ import Combine
     @Published var settingsError: String?
     /// Opens the separate Updates window; set by the app delegate.
     var showUpdates: () -> Void = {}
+    var showLogs: () -> Void = {}
     private let claudeProvider = ClaudeProvider()
     @Published private(set) var claudeConnection: ClaudeConnectionWindow?
     private var claudeConnectionUpdates: AnyCancellable?
@@ -94,7 +95,11 @@ import Combine
         if installation.antigravity { refreshAntigravity() }
         guard installation.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
+            let started = Date()
             let result = Result { try CodexProvider.read() }
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .codex,
+                kind: (try? result.get()) == nil ? .readFailed : .readSucceeded,
+                durationMS: DiagnosticEvent.durationMS(from: started)))
             DispatchQueue.main.async {
                 self.refreshingCodex = false
                 switch result {
@@ -117,7 +122,10 @@ import Combine
             self.refreshingClaude = false; self.onChange?()
         }
     }
-    func retryClaude() { refreshClaude(reconnect: true) }
+    func retryClaude() {
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .retryRequested))
+        refreshClaude(reconnect: true)
+    }
 
     var antigravityMaximumAge: TimeInterval { AntigravityProvider.maximumAge }
     var selectedAntigravityGroup: AntigravityQuotaGroup? {
@@ -297,7 +305,10 @@ import Combine
         }
         return connection
     }
-    func connectClaude() { ensureClaudeConnection().connect() }
+    func connectClaude() {
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .connectionRequested))
+        ensureClaudeConnection().connect()
+    }
     func showClaudeConnectionHelp() { ensureClaudeConnection().show(recheck: false) }
     var hasClaudeConnectionActivity: Bool {
         guard let model = claudeConnection?.model else { return false }
@@ -334,7 +345,10 @@ import Combine
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             launchAtLogin = SMAppService.mainApp.status == .enabled
             if enabled && !launchAtLogin { settingsError = "Allow QuotaBar in System Settings → General → Login Items." }
-        } catch { settingsError = "Login item could not be changed: \(error.localizedDescription)" }
+        } catch {
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .loginSettingFailed))
+            settingsError = "Login item could not be changed: \(error.localizedDescription)"
+        }
     }
     func openCodex() {
         NSWorkspace.shared.open(URL(string: "https://chatgpt.com/settings/usage")!)
@@ -342,7 +356,10 @@ import Combine
     func updateInstallation() {
         let detected = ProviderInstallation.detect()
         let changed = installation.codex != detected.codex || installation.claude != detected.claude || installation.antigravity != detected.antigravity
-        if changed { installation = detected; onChange?() }
+        if changed {
+            installation = detected; onChange?()
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .installationChanged))
+        }
     }
     var menuEntries: [MenuBarEntry] {
         func entry(_ provider: Provider, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
