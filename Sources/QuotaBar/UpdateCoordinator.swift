@@ -46,6 +46,7 @@ import QuotaUpdateSupport
     let installed = Installed.current
     @Published private(set) var status: Status = .idle {
         didSet {
+            guard status != oldValue else { return }
             let reason: DiagnosticEvent.Reason
             switch status {
             case .notConfigured: reason = .notConfigured

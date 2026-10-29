@@ -4,13 +4,14 @@ import QuotaCore
 
 /// Best-effort diagnostics never change provider polling or its saved budget.
 /// The separate lock coordinates copies; reads/clears never touch polling state.
+/// Writes run on a private serial queue so callers never wait for file I/O.
 final class DiagnosticLog: @unchecked Sendable {
     static let shared = DiagnosticLog()
     static let maximumEvents = 400
     static let maximumBytes = 262_144
     static let retention: TimeInterval = 7 * 24 * 60 * 60
     private let directory: URL
-    private let mutex = NSLock()
+    private let queue = DispatchQueue(label: "QuotaBar.DiagnosticLog", qos: .utility)
     private let stateName = "diagnostic-events.json"
 
     init(directory: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -20,37 +21,48 @@ final class DiagnosticLog: @unchecked Sendable {
 
     func record(_ event: DiagnosticEvent) {
         guard event.isValid else { return }
-        try? locked { fd in
-            // Recover a damaged diagnostic file on the next event. It is not
-            // operational state and must never prevent normal monitoring.
-            let previous = (try? load(fd)) ?? []
-            let events = Array((retained(previous, at: event.date) + [event]).suffix(Self.maximumEvents))
-            try save(events, fd)
+        queue.async { [self] in
+            try? locked { fd in
+                // Recover a damaged diagnostic file on the next event. It is not
+                // operational state and must never prevent normal monitoring.
+                let previous = (try? load(fd)) ?? []
+                try save(retained(previous + [event], at: event.date), fd)
+            }
         }
     }
 
+    /// Runs after every event recorded earlier from any thread.
     func events(at now: Date = Date()) throws -> [DiagnosticEvent] {
-        try locked { fd in
-            let saved = try load(fd)
-            let events = retained(saved, at: now)
-            if events != saved { try save(events, fd) }
-            return events
+        try queue.sync {
+            try locked { fd in
+                let saved = try load(fd)
+                let events = retained(saved, at: now)
+                if events != saved { try save(events, fd) }
+                return events
+            }
         }
     }
 
-    func clear() throws { try locked { try save([], $0) } }
+    func clear() throws { try queue.sync { try locked { try save([], $0) } } }
 
     private func retained(_ events: [DiagnosticEvent], at now: Date) -> [DiagnosticEvent] {
         // A concurrent caller may have captured an earlier timestamp before
         // acquiring the lock. Keep newer entries, also across clock rollback.
-        Array(events.filter { $0.isValid && now.timeIntervalSince($0.date) < Self.retention }
-            .suffix(Self.maximumEvents))
+        let current = events.filter { $0.isValid && now.timeIntervalSince($0.date) < Self.retention }
+        // Polling succeeds several times a minute. Evict the oldest routine
+        // events first so failures stay for the whole retention period.
+        var excess = current.count - Self.maximumEvents
+        var kept: [DiagnosticEvent] = []
+        for event in current {
+            if excess > 0, event.isRoutine { excess -= 1 } else { kept.append(event) }
+        }
+        return Array(kept.suffix(Self.maximumEvents))
     }
 
     enum StoreError: Error { case unavailable, busy, invalidFile }
 
     private func locked<T>(_ body: (Int32) throws -> T) throws -> T {
-        mutex.lock(); defer { mutex.unlock() }
+        dispatchPrecondition(condition: .onQueue(queue))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
         let fd = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -92,10 +104,17 @@ final class DiagnosticLog: @unchecked Sendable {
             guard count > 0 else { throw StoreError.unavailable }
             total += count
         }
+        // Skip entries this build cannot decode, such as a category added by a
+        // newer build, instead of discarding the whole history.
         guard total <= Self.maximumBytes,
-              let events = try? JSONDecoder().decode([DiagnosticEvent].self, from: Data(bytes.prefix(total))),
-              events.count <= Self.maximumEvents, events.allSatisfy(\.isValid) else { throw StoreError.invalidFile }
-        return events
+              let entries = try? JSONDecoder().decode([Entry].self, from: Data(bytes.prefix(total))),
+              entries.count <= Self.maximumEvents else { throw StoreError.invalidFile }
+        return entries.compactMap { $0.event.flatMap { $0.isValid ? $0 : nil } }
+    }
+
+    private struct Entry: Decodable {
+        let event: DiagnosticEvent?
+        init(from decoder: Decoder) throws { event = try? DiagnosticEvent(from: decoder) }
     }
 
     private func save(_ events: [DiagnosticEvent], _ directoryFD: Int32) throws {
@@ -114,6 +133,7 @@ final class DiagnosticLog: @unchecked Sendable {
                 total += count
             }
         }
-        guard renameat(directoryFD, name, directoryFD, stateName) == 0 else { throw StoreError.unavailable }
+        // Flush before the rename so a crash cannot leave a truncated history.
+        guard fsync(fd) == 0, renameat(directoryFD, name, directoryFD, stateName) == 0 else { throw StoreError.unavailable }
     }
 }

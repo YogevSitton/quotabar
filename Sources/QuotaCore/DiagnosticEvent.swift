@@ -14,7 +14,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         case freshSample, recentCache, missingProvenance, valuesMismatch, sampleTooOld
         case reusedSampleExpired, inconsistentTiming, helperMissing, launchFailed
         case unsupportedVersion, protocolFailure, helperEnded, helperTimeout, oversizedReply
-        case readerIO, invalidUsage, signedIn, signedOut, otherAuthentication, unknownAuthentication
+        case readerIO, helperCheckFailed, invalidUsage, signedIn, signedOut, otherAuthentication, unknownAuthentication
         case pollStoreBusy, pollStoreInvalid, pollStoreUnavailable, cooldown, scheduled, pendingRequest
         case idle, notConfigured, checking, upToDate, unavailable, available, downloading, ready, installing, failed
     }
@@ -52,6 +52,23 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
             && (failureCount.map { (0...5).contains($0) } ?? true)
             && (version.map(Self.isVersion) ?? true)
             && (build.map { (0...1_000_000_000).contains($0) } ?? true)
+    }
+
+    /// Elapsed milliseconds, clamped to the range `isValid` accepts.
+    public static func durationMS(from start: Date, to end: Date = Date()) -> Int {
+        min(3_600_000, max(0, Int(end.timeIntervalSince(start) * 1_000)))
+    }
+
+    /// Healthy, repetitive outcomes. When the history is full they are
+    /// evicted before failures, rejections and state changes.
+    public var isRoutine: Bool {
+        switch kind {
+        case .readStarted, .readSucceeded, .helperReady: return true
+        case .readDeferred: return reason == .scheduled || reason == .pendingRequest
+        case .authenticationChecked: return reason == .signedIn
+        case .updateState: return reason == .checking || reason == .upToDate || reason == .idle
+        default: return false
+        }
     }
 
     public static func isVersion(_ value: String) -> Bool {

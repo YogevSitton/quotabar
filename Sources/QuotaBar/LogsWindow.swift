@@ -5,6 +5,7 @@ import QuotaCore
 
 @MainActor final class LogsWindow {
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
     func show() {
         if window == nil {
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 480),
@@ -14,6 +15,17 @@ import QuotaCore
             panel.title = "QuotaBar logs"
             panel.contentViewController = NSHostingController(rootView: LogsView())
             panel.center(); window = panel
+            // Release the view on close so its refresh timer stops reading the
+            // log file; the next show() builds a fresh one.
+            closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification,
+                object: panel, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if let closeObserver = self.closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+                    self.closeObserver = nil
+                    self.window = nil
+                }
+            }
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
@@ -36,7 +48,7 @@ private struct LogsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Local diagnostic history").font(.headline)
-            Text("Keeps up to 400 events for 7 days across restarts. No account identifiers, credentials, usage percentages or raw provider replies. Opening logs does not run a usage check.")
+            Text("Keeps up to 400 events for 7 days across restarts, dropping routine successful checks before failures. No account identifiers, credentials, usage percentages or raw provider replies. Opening logs does not run a usage check.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Copy logs") {

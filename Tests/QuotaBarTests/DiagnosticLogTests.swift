@@ -15,6 +15,8 @@ final class DiagnosticLogTests: XCTestCase {
         try withLog { log, directory in
             let event = DiagnosticEvent(area: .claude, kind: .readFailed, reason: .helperTimeout, date: now)
             log.record(event)
+            // Records are written asynchronously; reading waits for them.
+            XCTAssertEqual(try log.events(at: now), [event])
             let file = directory.appendingPathComponent("diagnostic-events.json")
             let mode = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber
             XCTAssertEqual(mode?.intValue, 0o600)
@@ -60,6 +62,39 @@ final class DiagnosticLogTests: XCTestCase {
         }
     }
 
+    func testRoutineEventsAreEvictedBeforeFailures() throws {
+        try withLog { log, _ in
+            let failure = DiagnosticEvent(area: .claude, kind: .readFailed, reason: .helperTimeout, date: now)
+            log.record(failure)
+            for index in 1...(DiagnosticLog.maximumEvents + 50) {
+                log.record(DiagnosticEvent(area: .codex, kind: .readSucceeded,
+                    date: now.addingTimeInterval(Double(index))))
+            }
+            let events = try log.events(at: now.addingTimeInterval(1_000))
+            XCTAssertEqual(events.count, DiagnosticLog.maximumEvents)
+            XCTAssertEqual(events.first, failure)
+            XCTAssertEqual(events.last?.date, now.addingTimeInterval(Double(DiagnosticLog.maximumEvents + 50)))
+        }
+    }
+
+    func testUnknownEntriesFromAnotherBuildDoNotEraseHistory() throws {
+        try withLog { log, directory in
+            let kept = DiagnosticEvent(area: .claude, kind: .readFailed, reason: .helperEnded, date: now)
+            log.record(kept)
+            XCTAssertEqual(try log.events(at: now), [kept])
+            let file = directory.appendingPathComponent("diagnostic-events.json")
+            var entries = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [[String: Any]])
+            var future = entries[0]
+            future["reason"] = "addedByNewerBuild"
+            entries.append(future)
+            try JSONSerialization.data(withJSONObject: entries).write(to: file)
+            XCTAssertEqual(try log.events(at: now), [kept])
+            let next = DiagnosticEvent(area: .app, kind: .woke, date: now.addingTimeInterval(1))
+            log.record(next)
+            XCTAssertEqual(try log.events(at: now), [kept, next])
+        }
+    }
+
     func testDelayedEventOrClockRollbackDoesNotEraseNewerHistory() throws {
         try withLog { log, _ in
             let newer = DiagnosticEvent(area: .app, kind: .started, date: now.addingTimeInterval(1))
@@ -80,6 +115,7 @@ final class DiagnosticLogTests: XCTestCase {
                                                        withDestinationURL: target)
             XCTAssertThrowsError(try log.events(at: now))
             log.record(DiagnosticEvent(area: .app, kind: .started, date: now))
+            XCTAssertThrowsError(try log.events(at: now))
             XCTAssertEqual(try Data(contentsOf: target), marker)
         }
     }

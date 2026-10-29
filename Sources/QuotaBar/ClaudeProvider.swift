@@ -74,11 +74,13 @@ actor ClaudeProvider {
         var lease: ClaudePollLease?
         var attemptedRead = false
         var phase: DiagnosticEvent.Phase = .launch
+        var failureLogged = false
         do {
             if checkedCLI == nil { checkedCLI = try ClaudeHelper.existing() }
             guard let binary = checkedCLI else {
                 lastIssue = .helperMissing
                 DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .readFailed, reason: .helperMissing))
+                failureLogged = true
                 throw UsageError.message("Claude Code is not available. Choose Connect Claude to set up the official helper, then check your saved sign-in.")
             }
             if lastIssue == .helperMissing { lastIssue = nil; lastError = nil; localRetryAt = .distantPast }
@@ -141,12 +143,13 @@ actor ClaudeProvider {
                 requestStartedAt: startedAt, completedAt: completedAt)
             guard classification.isAccepted, let observedAt else {
                 let reason: DiagnosticEvent.Reason
-                if cached == nil { reason = .missingProvenance }
-                else if !cacheMatches { reason = .valuesMismatch }
-                else if let observedAt, completedAt.timeIntervalSince(observedAt) >= 120 { reason = .sampleTooOld }
-                else if let observedAt, observedAt < startedAt, completedAt.timeIntervalSince(observedAt) >= 60 {
-                    reason = .reusedSampleExpired
-                } else { reason = .inconsistentTiming }
+                switch ClaudeRefreshPolicy.rejection(before: before, after: observedAt,
+                    requestStartedAt: startedAt, completedAt: completedAt) {
+                case .missingSample, nil: reason = cached == nil ? .missingProvenance : .valuesMismatch
+                case .sampleTooOld: reason = .sampleTooOld
+                case .reusedSampleExpired: reason = .reusedSampleExpired
+                case .inconsistentTiming: reason = .inconsistentTiming
+                }
                 DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .sampleRejected, reason: reason,
                     sampleAgeSeconds: cacheAge(cached?.observedAt, at: completedAt),
                     cacheAdvanced: cached.flatMap { sample in before.map { sample.observedAt > $0 } }))
@@ -175,7 +178,7 @@ actor ClaudeProvider {
             latestLive = snapshot; lastError = nil; lastIssue = nil
             DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .readSucceeded,
                 reason: classification == .newSample ? .freshSample : .recentCache,
-                durationMS: min(3_600_000, max(0, Int(completedAt.timeIntervalSince(startedAt) * 1_000))),
+                durationMS: DiagnosticEvent.durationMS(from: startedAt, to: completedAt),
                 sampleAgeSeconds: cacheAge(observedAt, at: completedAt),
                 failureCount: state.failureCount, nextAttemptAt: state.nextRequestAt))
             return ClaudeReadResult(snapshot: snapshot, error: nil, nextRequestAt: nextRequestAt)
@@ -186,9 +189,14 @@ actor ClaudeProvider {
             case ClaudePollStore.StoreError.busy: reason = .pollStoreBusy
             case ClaudePollStore.StoreError.invalidState: reason = .pollStoreInvalid
             case ClaudePollStore.StoreError.unavailable: reason = .pollStoreUnavailable
-            default: reason = phase == .savingSchedule ? .pollStoreUnavailable : .invalidUsage
+            default:
+                switch phase {
+                case .launch: reason = .helperCheckFailed
+                case .savingSchedule: reason = .pollStoreUnavailable
+                default: reason = .invalidUsage
+                }
             }
-            if lastIssue != .helperMissing {
+            if !failureLogged {
                 DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .readFailed, reason: reason,
                     phase: (error as? ClaudeCLIReader.Failure)?.phase ?? phase))
             }

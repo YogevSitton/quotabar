@@ -73,11 +73,10 @@ import Combine
         guard installation.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
             let started = Date()
-            DiagnosticLog.shared.record(DiagnosticEvent(area: .codex, kind: .readStarted))
             let result = Result { try CodexProvider.read() }
             DiagnosticLog.shared.record(DiagnosticEvent(area: .codex,
                 kind: (try? result.get()) == nil ? .readFailed : .readSucceeded,
-                durationMS: min(3_600_000, max(0, Int(Date().timeIntervalSince(started) * 1_000)))))
+                durationMS: DiagnosticEvent.durationMS(from: started)))
             DispatchQueue.main.async {
                 self.refreshingCodex = false
                 switch result {

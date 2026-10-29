@@ -24,6 +24,13 @@ final class DiagnosticEventTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(DiagnosticEvent.self, from: JSONSerialization.data(withJSONObject: object)))
     }
 
+    func testDurationIsClampedToTheValidRange() {
+        let start = Date(timeIntervalSince1970: 1_792_800_000)
+        XCTAssertEqual(DiagnosticEvent.durationMS(from: start, to: start.addingTimeInterval(1.5)), 1_500)
+        XCTAssertEqual(DiagnosticEvent.durationMS(from: start, to: start.addingTimeInterval(-1)), 0)
+        XCTAssertEqual(DiagnosticEvent.durationMS(from: start, to: start.addingTimeInterval(7_200)), 3_600_000)
+    }
+
     func testInvalidNumericFieldsAndDatesAreRejected() {
         XCTAssertFalse(DiagnosticEvent(area: .claude, kind: .readFailed, durationMS: -1).isValid)
         XCTAssertFalse(DiagnosticEvent(area: .claude, kind: .readFailed, failureCount: 6).isValid)
