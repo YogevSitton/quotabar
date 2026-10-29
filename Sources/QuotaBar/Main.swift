@@ -42,7 +42,7 @@ import QuotaUpdateSupport
     private let logsWindow = LogsWindow()
     private var timer: Timer?
     private var outsideClickMonitor: Any?
-    private var renderedMenuDescription: String?
+    private var renderedMenuKey: String?
     private var renderedMenuAppearance: NSAppearance.Name?
     private var renderedMenuChips: [MenuBarResetChip?]?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -100,14 +100,16 @@ import QuotaUpdateSupport
     private func updateLabel() {
         guard let button = statusItem.button else { return }
         let entries = state.menuEntries
-        let description = entries.map(\.description).joined(separator: "; ")
         let now = Date()
+        let description = entries.map { $0.description(at: now) }.joined(separator: "; ")
         let segments = entries.map { $0.menuSegments(at: now) }
         let chips = entries.map { $0.resetChip(at: now) }
-        let renderKey = description + "|" + entries.map { $0.menuLabel(at: now) }.joined(separator: "|")
+        // Key only what the image draws. The description carries minute
+        // countdowns for the tooltip and accessibility, set on every pass below.
+        let renderKey = entries.map { "\($0.name) \($0.menuLabel(at: now))" }.joined(separator: "|")
         let appearance = button.effectiveAppearance
         // The expiry tint can advance while the rounded countdown stays the same.
-        if renderedMenuDescription != renderKey || renderedMenuAppearance != appearance.name || renderedMenuChips != chips {
+        if renderedMenuKey != renderKey || renderedMenuAppearance != appearance.name || renderedMenuChips != chips {
             let image: NSImage
             if entries.isEmpty {
                 image = AppArtwork.icon.copy() as! NSImage
@@ -120,7 +122,7 @@ import QuotaUpdateSupport
             if !popover.isShown || button.image?.size.width == image.size.width {
                 button.attributedTitle = NSAttributedString(string: "")
                 button.image = image
-                renderedMenuDescription = renderKey
+                renderedMenuKey = renderKey
                 renderedMenuAppearance = appearance.name
                 renderedMenuChips = chips
             }

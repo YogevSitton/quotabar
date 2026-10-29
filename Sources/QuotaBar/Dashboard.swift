@@ -159,7 +159,7 @@ private struct CompactProviderCard: View {
                                         .disabled(canReset?(offer) != true)
                                 }
                             }
-                            Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(shortCountdown($0, now: now)))" : "" } ?? ""))
+                            Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(countdown($0, now: now, style: .short)))" : "" } ?? ""))
                                 .font(.system(size: 10, weight: urgency == .normal ? .regular : .semibold))
                                 .foregroundStyle(tint)
                                 .lineLimit(1).help(expiryHelp(offer))
@@ -362,7 +362,7 @@ struct ProviderCard: View {
     }
     private func expiryText(_ expiry: Date) -> String {
         let date = expiry.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-        return "\(expiry <= now ? "Expired" : "Expires") \(date)\(expiry > now ? " (\(shortCountdown(expiry, now: now)))" : "")"
+        return "\(expiry <= now ? "Expired" : "Expires") \(date)\(expiry > now ? " (\(countdown(expiry, now: now, style: .short)))" : "")"
     }
     private func offerRow(_ offer: ResetOffer) -> some View {
         let urgency = isCurrent ? offer.expiryUrgency(at: now) : .normal
@@ -461,7 +461,7 @@ private struct UsageRow: View {
                     // The countdown follows the reset time to keep the popup
                     // short; the timezone stays in the tooltip.
                     let when = reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-                    Text(stale ? "Reset reported for \(when)" : "Auto reset: \(when) (\(shortCountdown(reset, now: now)))")
+                    Text(stale ? "Reset reported for \(when)" : "Auto reset: \(when) (\(countdown(reset, now: now, style: .short)))")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(stale ? .secondary : .primary)
                         .lineLimit(compact ? 1 : nil).minimumScaleFactor(0.85)
                         .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
@@ -504,19 +504,26 @@ private func expiryColor(_ timeLeft: TimeInterval?, fallback: Color = .secondary
     return Color(nsColor: NSColor.systemOrange.blended(withFraction: fraction, of: .systemRed) ?? .systemOrange)
 }
 
-/// Countdown for use in parentheses after a time, such as "1d:1h" or "2h:59m".
-func shortCountdown(_ date: Date, now: Date) -> String {
-    let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
-    if minutes < 1 { return "<1m" }
-    if minutes >= 1440 { return "\(minutes / 1440)d:\((minutes % 1440) / 60)h" }
-    if minutes >= 60 { return "\(minutes / 60)h:\(minutes % 60)m" }
-    return "\(minutes)m"
+enum CountdownStyle {
+    /// In parentheses after a time, such as "1d:1h" or "2h:59m".
+    case short
+    /// In a sentence, such as "1d 1h" or "2h 59m".
+    case long
+    /// Menu bar hover text in total hours rather than days, such as "35h 20m" or "35h".
+    case totalHours
 }
 
-func countdown(_ date: Date, now: Date) -> String {
-    let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
-    if minutes < 1 { return "less than a minute" }
-    if minutes >= 1440 { return "\(minutes / 1440)d \((minutes % 1440) / 60)h" }
-    if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m" }
+/// Rounded up, matching the menu bar's exhausted-window countdown, unless the
+/// caller must never overstate the time left, as for reset expiry.
+func countdown(_ date: Date, now: Date, style: CountdownStyle = .long, roundingDown: Bool = false) -> String {
+    let exact = date.timeIntervalSince(now) / 60
+    let minutes = max(0, Int(roundingDown ? floor(exact) : ceil(exact)))
+    if minutes < 1 { return style == .short ? "<1m" : "less than a minute" }
+    let separator = style == .short ? ":" : " "
+    if minutes >= 1440, style != .totalHours { return "\(minutes / 1440)d\(separator)\((minutes % 1440) / 60)h" }
+    if minutes >= 60 {
+        if style == .totalHours, minutes % 60 == 0 { return "\(minutes / 60)h" }
+        return "\(minutes / 60)h\(separator)\(minutes % 60)m"
+    }
     return "\(minutes)m"
 }
