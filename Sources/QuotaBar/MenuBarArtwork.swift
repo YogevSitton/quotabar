@@ -35,9 +35,10 @@ struct MenuBarQuota {
         if limit == .noLimit { return "\(label): No limit" }
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
         let value = remaining.map { "\($0)% left" } ?? "Unavailable"
+        // Rounded up like the menu bar and popup countdowns for the same reset.
         let reset = resetsAt.map {
-            $0 > now ? "resets in \(hoverCountdown($0, now: now))" : "Reset due"
-        } ?? "Reset not reported"
+            $0 > now ? "resets in \(countdown($0, now: now, style: .totalHours))" : "reset due"
+        } ?? "reset not reported"
         return "\(label): \(value) · \(reset)"
     }
 }
@@ -77,20 +78,11 @@ struct MenuBarEntry {
     private func plural(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s")" }
     func tooltipSection(at now: Date) -> String {
         let expiry = nextResetExpiry.map {
-            $0 > now ? "Next reset expires in \(hoverCountdown($0, now: now))" : "Next reset expired"
+            // Rounded down like the chip, so it never overstates the time left.
+            $0 > now ? "Next reset expires in \(countdown($0, now: now, style: .totalHours, roundingDown: true))" : "Next reset expired"
         }
         return ([name, session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)] + [expiry].compactMap { $0 }).joined(separator: "\n")
     }
-}
-
-/// Total hours rather than calendar dates or days, rounded down.
-private func hoverCountdown(_ date: Date, now: Date) -> String {
-    let minutes = max(0, Int(date.timeIntervalSince(now) / 60))
-    if minutes < 1 { return "less than a minute" }
-    if minutes < 60 { return "\(minutes)m" }
-    let hours = minutes / 60
-    let remainder = minutes % 60
-    return remainder == 0 ? "\(hours)h" : "\(hours)h \(remainder)m"
 }
 
 @MainActor enum MenuBarArtwork {
