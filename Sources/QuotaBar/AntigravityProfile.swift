@@ -65,42 +65,18 @@ struct AntigravityProfile {
             }
             defer { Darwin.close(fd) }
             try AntigravityProfile.validateFile(fd)
-            var bytes = [UInt8](repeating: 0, count: 4_097)
-            var total = 0
-            while total < bytes.count {
-                let count = bytes.withUnsafeMutableBytes {
-                    Darwin.read(fd, $0.baseAddress!.advanced(by: total), $0.count - total)
-                }
-                if count < 0, errno == EINTR { continue }
-                guard count >= 0 else { throw ProfileError.unavailable }
-                if count == 0 { break }
-                total += count
+            guard let data = try PrivateFileIO.read(fd, limit: 4_096, failure: ProfileError.unavailable) else {
+                throw ProfileError.changedConfiguration
             }
-            guard total <= 4_096 else { throw ProfileError.changedConfiguration }
-            return Data(bytes.prefix(total))
+            return data
         }
 
         func writeState(_ data: Data) throws {
             guard !data.isEmpty, data.count <= 4_096 else { throw ProfileError.changedConfiguration }
             // Refuse an unexpected existing inode before replacing the entry.
             _ = try readState()
-            let name = ".request-budget-\(UUID().uuidString).tmp"
-            let fd = openat(rootFD, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-            guard fd >= 0 else { throw ProfileError.unavailable }
-            defer { Darwin.close(fd); unlinkat(rootFD, name, 0) }
-            try AntigravityProfile.validateFile(fd)
-            try data.withUnsafeBytes { bytes in
-                var offset = 0
-                while offset < bytes.count {
-                    let count = Darwin.write(fd, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
-                    if count < 0, errno == EINTR { continue }
-                    guard count > 0 else { throw ProfileError.unavailable }
-                    offset += count
-                }
-            }
-            guard fsync(fd) == 0,
-                  renameat(rootFD, name, rootFD, "request-budget.json") == 0,
-                  fsync(rootFD) == 0 else { throw ProfileError.unavailable }
+            try PrivateFileIO.replace("request-budget.json", in: rootFD, with: data, temporaryPrefix: ".request-budget-",
+                                      failure: ProfileError.unavailable) { try AntigravityProfile.validateFile($0) }
         }
 
         /// Recheck under the lease immediately before each child launch.
@@ -115,9 +91,6 @@ struct AntigravityProfile {
             }
             try AntigravityProfile.validateDirectory(current)
             try AntigravityProfile.configure(rootFD: current, create: false)
-            guard try FileManager.default.contentsOfDirectory(atPath: workingDirectory.path).isEmpty else {
-                throw ProfileError.changedConfiguration
-            }
         }
     }
 
@@ -213,6 +186,15 @@ struct AntigravityProfile {
         defer { Darwin.close(config) }
         let work = try directory("work", under: rootFD, create: create)
         defer { Darwin.close(work) }
+        // The CLI runs with this as its working directory. Anything it left
+        // there is cleared under the lease; a launch still requires it empty.
+        if create {
+            var budget = removalLimit
+            for name in try entryNames(in: work, limit: removalLimit) {
+                try remove(name, under: work, depth: 0, budget: &budget)
+            }
+        }
+        guard try entryNames(in: work, limit: 0).isEmpty else { throw ProfileError.changedConfiguration }
         let temporary = try directory("tmp", under: rootFD, create: create)
         defer { Darwin.close(temporary) }
         try controlledFile("settings.json", under: cli, data: settings, create: create)
@@ -225,17 +207,82 @@ struct AntigravityProfile {
         // A server-level plugin watcher starts before the CLI's default-
         // customization override. Its registries must remain empty on every
         // launch, including after the official CLI has populated this profile.
+        // Acquisition removes them from this private profile; the per-launch
+        // check (create == false) only refuses them.
         for parent in [gemini, config, cli] {
             for name in ["plugins", "skills", "workflows", "rules"] {
+                if create { try removeIfPresent(name, under: parent) }
                 try requireEmptyDirectoryIfPresent(name, under: parent)
             }
             for name in ["plugins.txt", "plugins.json", "skills.txt", "skills.json",
                          "workflows.json", "rules.json", "AGENTS.md", "GEMINI.md"] {
+                if create { try removeIfPresent(name, under: parent) }
                 try requireAbsent(name, under: parent)
             }
         }
         for name in [".agents", "AGENTS.md", "GEMINI.md"] {
+            if create { try removeIfPresent(name, under: rootFD) }
             try requireAbsent(name, under: rootFD)
+        }
+    }
+
+    /// Bounds cleanup so a pathological tree cannot stall a read. Exceeding
+    /// it leaves the remainder for the launch check to refuse.
+    private static let removalLimit = 10_000
+
+    private static func removeIfPresent(_ name: String, under directory: Int32) throws {
+        var budget = removalLimit
+        try remove(name, under: directory, depth: 0, budget: &budget)
+    }
+
+    /// Descriptor-relative and never follows a symlink: a link is removed
+    /// itself, so cleanup cannot reach outside the private profile.
+    private static func remove(_ name: String, under directory: Int32, depth: Int, budget: inout Int) throws {
+        var info = stat()
+        if fstatat(directory, name, &info, AT_SYMLINK_NOFOLLOW) != 0 {
+            if errno == ENOENT { return }
+            throw ProfileError.unavailable
+        }
+        budget -= 1
+        guard budget >= 0, depth < 32, info.st_uid == getuid() else { throw ProfileError.changedConfiguration }
+        if (info.st_mode & S_IFMT) == S_IFDIR {
+            let fd = openat(directory, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard fd >= 0 else { throw ProfileError.unavailable }
+            defer { Darwin.close(fd) }
+            for child in try entryNames(in: fd, limit: budget) {
+                try remove(child, under: fd, depth: depth + 1, budget: &budget)
+            }
+            guard unlinkat(directory, name, AT_REMOVEDIR) == 0 else { throw ProfileError.unavailable }
+        } else {
+            guard unlinkat(directory, name, 0) == 0 else { throw ProfileError.unavailable }
+        }
+    }
+
+    /// Names are collected before any removal so the stream is never read
+    /// while its directory changes. More than `limit` entries is refused.
+    private static func entryNames(in directory: Int32, limit: Int) throws -> [String] {
+        // A fresh open of "." starts at the first entry. A dup would share the
+        // caller's offset, so a second listing could wrongly look empty.
+        let copy = openat(directory, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        guard copy >= 0 else { throw ProfileError.unavailable }
+        guard let stream = fdopendir(copy) else {
+            Darwin.close(copy)
+            throw ProfileError.unavailable
+        }
+        defer { closedir(stream) }
+        var names: [String] = []
+        while true {
+            errno = 0
+            guard let entry = readdir(stream) else {
+                guard errno == 0 else { throw ProfileError.unavailable }
+                return names
+            }
+            let entryName = withUnsafePointer(to: &entry.pointee.d_name) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(NAME_MAX) + 1) { String(cString: $0) }
+            }
+            if entryName == "." || entryName == ".." { continue }
+            guard names.count < limit else { throw ProfileError.changedConfiguration }
+            names.append(entryName)
         }
     }
 
@@ -251,24 +298,9 @@ struct AntigravityProfile {
             if errno == ENOENT { return }
             throw ProfileError.unavailable
         }
-        do { try validateDirectory(fd) }
-        catch { Darwin.close(fd); throw error }
-        guard let stream = fdopendir(fd) else {
-            Darwin.close(fd)
-            throw ProfileError.unavailable
-        }
-        defer { closedir(stream) }
-        while true {
-            errno = 0
-            guard let entry = readdir(stream) else {
-                guard errno == 0 else { throw ProfileError.unavailable }
-                return
-            }
-            let entryName = withUnsafePointer(to: &entry.pointee.d_name) {
-                $0.withMemoryRebound(to: CChar.self, capacity: Int(NAME_MAX) + 1) { String(cString: $0) }
-            }
-            guard entryName == "." || entryName == ".." else { throw ProfileError.changedConfiguration }
-        }
+        defer { Darwin.close(fd) }
+        try validateDirectory(fd)
+        guard try entryNames(in: fd, limit: 0).isEmpty else { throw ProfileError.changedConfiguration }
     }
 
     private static func controlledFile(_ name: String, under directory: Int32, data: Data, create: Bool) throws {
@@ -282,18 +314,8 @@ struct AntigravityProfile {
         try validateFile(fd, requirePrivateMode: !create)
         var info = stat()
         guard fstat(fd, &info) == 0 else { throw ProfileError.unavailable }
-        var bytes = [UInt8](repeating: 0, count: data.count + 1)
-        var total = 0
-        while total < bytes.count {
-            let count = bytes.withUnsafeMutableBytes {
-                Darwin.read(fd, $0.baseAddress!.advanced(by: total), $0.count - total)
-            }
-            if count < 0, errno == EINTR { continue }
-            guard count >= 0 else { throw ProfileError.unavailable }
-            if count == 0 { break }
-            total += count
-        }
-        if Data(bytes.prefix(total)) == data, (info.st_mode & 0o7777) == 0o600 { return }
+        if try PrivateFileIO.read(fd, limit: data.count, failure: ProfileError.unavailable) == data,
+           (info.st_mode & 0o7777) == 0o600 { return }
         // The official CLI may persist defaults while authenticating. Restore
         // only this closed set of QuotaBar-owned, non-secret configuration files
         // under the cross-copy lock. Personal settings and policy are untouched.
@@ -302,21 +324,7 @@ struct AntigravityProfile {
     }
 
     private static func replaceControlledFile(_ name: String, under directory: Int32, data: Data) throws {
-        let temporary = ".config-\(UUID().uuidString).tmp"
-        let fd = openat(directory, temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-        guard fd >= 0 else { throw ProfileError.unavailable }
-        defer { Darwin.close(fd); unlinkat(directory, temporary, 0) }
-        try validateFile(fd)
-        try data.withUnsafeBytes { bytes in
-            var offset = 0
-            while offset < bytes.count {
-                let count = Darwin.write(fd, bytes.baseAddress!.advanced(by: offset), bytes.count - offset)
-                if count < 0, errno == EINTR { continue }
-                guard count > 0 else { throw ProfileError.unavailable }
-                offset += count
-            }
-        }
-        guard fsync(fd) == 0, renameat(directory, temporary, directory, name) == 0,
-              fsync(directory) == 0 else { throw ProfileError.unavailable }
+        try PrivateFileIO.replace(name, in: directory, with: data, temporaryPrefix: ".config-",
+                                  failure: ProfileError.unavailable) { try validateFile($0) }
     }
 }

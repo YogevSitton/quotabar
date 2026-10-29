@@ -9,11 +9,22 @@ import SwiftUI
     private static let antigravity = antigravityMark(color: .systemBlue)
     private static let antigravityMenu = antigravityMark(color: .black)
 
-    static func image(for name: String) -> NSImage {
-        (name == "Antigravity" ? antigravity : name == "Claude" ? claude : codex).copy() as! NSImage
+    static func image(for provider: Provider) -> NSImage {
+        let image: NSImage
+        switch provider {
+        case .codex: image = codex
+        case .claude: image = claude
+        case .antigravity: image = antigravity
+        }
+        return image.copy() as! NSImage
     }
-    static func menuImage(for name: String, appearance: NSAppearance) -> NSImage {
-        let mark = name == "Antigravity" ? antigravityMenu : name == "Claude" ? claudeMenu : codexMenu
+    static func menuImage(for provider: Provider, appearance: NSAppearance) -> NSImage {
+        let mark: NSImage
+        switch provider {
+        case .codex: mark = codexMenu
+        case .claude: mark = claudeMenu
+        case .antigravity: mark = antigravityMenu
+        }
         // Text attachments do not reliably apply NSImage template tinting.
         // Resolve the menu button's appearance explicitly, retaining the alpha mask.
         return NSImage(size: NSSize(width: 20, height: 20), flipped: false) { bounds in
@@ -72,10 +83,10 @@ import SwiftUI
 }
 
 struct ProviderIcon: View {
-    let name: String
+    let provider: Provider
     var size: CGFloat = 28
     var body: some View {
-        Image(nsImage: ProviderArtwork.image(for: name)).resizable().interpolation(.high)
-            .frame(width: size, height: size).accessibilityLabel(name)
+        Image(nsImage: ProviderArtwork.image(for: provider)).resizable().interpolation(.high)
+            .frame(width: size, height: size).accessibilityLabel(provider.rawValue)
     }
 }

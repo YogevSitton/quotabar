@@ -43,7 +43,8 @@ struct MenuBarQuota {
 }
 
 struct MenuBarEntry {
-    let name: String
+    let provider: Provider
+    var name: String { provider.rawValue }
     let session: MenuBarQuota
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
@@ -124,7 +125,7 @@ struct MenuBarEntry {
                 var x: CGFloat = 0
                 for (index, entry) in entries.enumerated() {
                     if index > 0 { x += providerGap }
-                    ProviderArtwork.menuImage(for: entry.name, appearance: appearance)
+                    ProviderArtwork.menuImage(for: entry.provider, appearance: appearance)
                         .draw(in: NSRect(x: x, y: 2, width: iconSize, height: iconSize))
                     x += iconSize + iconTextGap
                     let label = NSMutableAttributedString()

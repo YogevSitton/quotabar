@@ -94,46 +94,15 @@ public struct ClaudePollStore: Sendable {
         }
         defer { Darwin.close(fd) }
         try validateFile(fd)
-        var bytes = [UInt8](repeating: 0, count: 4_097)
-        var total = 0
-        while total < bytes.count {
-            let count = bytes.withUnsafeMutableBytes { buffer in
-                Darwin.read(fd, buffer.baseAddress!.advanced(by: total), buffer.count - total)
-            }
-            if count == 0 { break }
-            if count < 0 {
-                if errno == EINTR { continue }
-                throw StoreError.unavailable
-            }
-            total += count
-        }
-        guard total <= 4_096,
-              let state = try? JSONDecoder().decode(ClaudePollState.self, from: Data(bytes.prefix(total))),
+        guard let data = try PrivateFileIO.read(fd, limit: 4_096, failure: StoreError.unavailable),
+              let state = try? JSONDecoder().decode(ClaudePollState.self, from: data),
               state.isValid else { throw StoreError.invalidState }
         return state
     }
 
     private func save(_ state: ClaudePollState, _ directoryFD: Int32) throws {
         guard state.isValid else { throw StoreError.invalidState }
-        let data = try JSONEncoder().encode(state)
-        let temporaryName = ".claude-poll-\(UUID().uuidString).tmp"
-        let fd = openat(directoryFD, temporaryName, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-        guard fd >= 0 else { throw StoreError.unavailable }
-        defer {
-            Darwin.close(fd)
-            unlinkat(directoryFD, temporaryName, 0)
-        }
-        try data.withUnsafeBytes { bytes in
-            var total = 0
-            while total < bytes.count {
-                let count = Darwin.write(fd, bytes.baseAddress!.advanced(by: total), bytes.count - total)
-                if count < 0, errno == EINTR { continue }
-                guard count > 0 else { throw StoreError.unavailable }
-                total += count
-            }
-        }
-        guard fsync(fd) == 0,
-              renameat(directoryFD, temporaryName, directoryFD, stateName) == 0,
-              fsync(directoryFD) == 0 else { throw StoreError.unavailable }
+        try PrivateFileIO.replace(stateName, in: directoryFD, with: JSONEncoder().encode(state),
+                                  temporaryPrefix: ".claude-poll-", failure: StoreError.unavailable)
     }
 }

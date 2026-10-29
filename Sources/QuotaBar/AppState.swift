@@ -123,11 +123,14 @@ import Combine
     var selectedAntigravityGroup: AntigravityQuotaGroup? {
         antigravity?.selectedGroup(named: selectedAntigravityGroupName)
     }
+    /// Polling waits for an explicit action: Connect for setup and sign-in,
+    /// Retry for an unverifiable private profile.
+    var antigravityStopped: Bool {
+        antigravityIssue == .helperMissing || antigravityIssue == .signInRequired || antigravityIssue == .profileUnavailable
+    }
     func refreshAntigravity() {
         guard installation.antigravity, !refreshingAntigravity, antigravityConnection?.busy != true,
-              antigravityNextRequestAt.map({ $0 <= Date() }) ?? true else { return }
-        // Failed setup and signed-out states need the explicit connection action.
-        if antigravityIssue == .helperMissing || antigravityIssue == .signInRequired || antigravityIssue == .profileUnavailable { return }
+              antigravityNextRequestAt.map({ $0 <= Date() }) ?? true, !antigravityStopped else { return }
         refreshingAntigravity = true
         DispatchQueue.global(qos: .utility).async {
             let result = AntigravityProvider.read()
@@ -290,7 +293,7 @@ import Combine
     var hasCodexResetNotice: Bool {
         pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil
     }
-    func showDetails(for provider: String) {
+    func showDetails(for provider: Provider) {
         if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
         providerDetails?.show(provider: provider)
     }
@@ -329,7 +332,7 @@ import Combine
         if changed { installation = detected; onChange?() }
     }
     var menuEntries: [MenuBarEntry] {
-        func entry(_ name: String, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
+        func entry(_ provider: Provider, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
             let now = Date()
             let current = snapshot?.isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) == true
             func quota(_ limit: UsageLimit) -> MenuBarQuota {
@@ -337,22 +340,22 @@ import Combine
             }
             let session = snapshot?.currentSessionLimit(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) ?? .unavailable
             let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
-            return MenuBarEntry(name: name, session: MenuBarQuota(limit: session),
+            return MenuBarEntry(provider: provider, session: MenuBarQuota(limit: session),
                                 weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
-        if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }
+        if installation.codex { entries.append(entry(.codex, codex, error: codexError, maximumAge: max(600, interval * 120))) }
         if installation.claude && !needsClaudeConnection {
-            entries.append(entry("Claude", claude, error: claudeError, maximumAge: claudeMaximumAge))
+            entries.append(entry(.claude, claude, error: claudeError, maximumAge: claudeMaximumAge))
         }
-        if installation.antigravity, antigravityIssue != .helperMissing, antigravityIssue != .signInRequired {
+        if installation.antigravity, !antigravityStopped {
             let now = Date()
             let current = antigravity?.isCurrent(at: now, maximumAge: antigravityMaximumAge, hasConnectionError: antigravityError != nil) == true
             let group = selectedAntigravityGroup
             func quota(_ window: UsageWindow?) -> MenuBarQuota {
                 MenuBarQuota(limit: current ? (window.map { .limited($0).current(at: now) } ?? .unavailable) : .unavailable)
             }
-            entries.append(MenuBarEntry(name: "Antigravity", session: quota(group?.session), weekly: quota(group?.weekly), quotaGroup: group?.name))
+            entries.append(MenuBarEntry(provider: .antigravity, session: quota(group?.session), weekly: quota(group?.weekly), quotaGroup: group?.name))
         }
         return entries
     }

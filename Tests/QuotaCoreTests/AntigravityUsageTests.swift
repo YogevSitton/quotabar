@@ -100,6 +100,13 @@ final class AntigravityUsageTests: XCTestCase {
         XCTAssertThrowsError(try UsageParser.antigravity(report([]), observedAt: now))
     }
 
+    func testAbsentEmptyAndNullErrorFieldsAreSuccessfulEnvelopes() throws {
+        let groups = [group(buckets: [["name": "Quota", "remaining_fraction": 0.5]])]
+        for change in [[:], ["error": ""], ["error": NSNull()]] as [[String: Any]] {
+            XCTAssertEqual(try UsageParser.antigravity(report(groups, changes: change), observedAt: now).groups.count, 1)
+        }
+    }
+
     func testAmbiguousGroupsAndBucketIDsFailInsteadOfSilentlySelecting() throws {
         let first = group("Same", buckets: [["name": "Quota", "remaining_fraction": 0.5]])
         XCTAssertThrowsError(try UsageParser.antigravity(report([first, first]), observedAt: now))
@@ -137,8 +144,9 @@ final class AntigravityUsageTests: XCTestCase {
         XCTAssertFalse(snapshot.isCurrent(at: now.addingTimeInterval(300), maximumAge: 300, hasConnectionError: false))
         XCTAssertFalse(snapshot.isCurrent(at: now, maximumAge: 300, hasConnectionError: true))
         XCTAssertFalse(snapshot.isCurrent(at: now.addingTimeInterval(-1), maximumAge: 300, hasConnectionError: false))
-        XCTAssertNotNil(bucket.currentWindow(at: resetsAt.addingTimeInterval(-1)))
-        XCTAssertNil(bucket.currentWindow(at: resetsAt))
+        let window = try XCTUnwrap(bucket.usageWindow)
+        XCTAssertEqual(UsageLimit.limited(window).current(at: resetsAt.addingTimeInterval(-1)), .limited(window))
+        XCTAssertEqual(UsageLimit.limited(window).current(at: resetsAt), .unavailable)
         XCTAssertEqual(bucket.usageWindow?.remaining, 0) // Historical values are retained.
         snapshot.source = .cached
         XCTAssertFalse(snapshot.isCurrent(at: now, maximumAge: 300, hasConnectionError: false))

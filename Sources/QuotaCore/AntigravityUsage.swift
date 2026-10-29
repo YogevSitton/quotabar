@@ -110,11 +110,6 @@ public struct AntigravityQuotaBucket: Equatable, Identifiable {
         let remainingPercent = NSDecimalNumber(decimal: decimal * 100).doubleValue
         return UsageWindow(used: 100 - remainingPercent, resetsAt: resetsAt)
     }
-
-    public func currentWindow(at now: Date) -> UsageWindow? {
-        guard let usageWindow, !usageWindow.awaitingReset(at: now) else { return nil }
-        return usageWindow
-    }
 }
 
 public extension UsageParser {
@@ -126,13 +121,14 @@ public extension UsageParser {
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               root["status"] as? String == "SUCCESS",
               AntigravityValue.number(root["num_turns"]) == 0,
-              root["error"] == nil || root["error"] as? String == "",
+              root["error"] == nil || root["error"] is NSNull || root["error"] as? String == "",
               let command = root["command"] as? [String: Any], command["name"] as? String == "usage",
               let report = command["data"] as? [String: Any],
               let rows = report["groups"] as? [[String: Any]], !rows.isEmpty else {
             throw UsageError.message("Antigravity did not return a successful usage command report.")
         }
         var names = Set<String>()
+        let dates = AntigravityDateParser()
         let groups = try rows.map { row -> AntigravityQuotaGroup in
             guard let name = AntigravityValue.text(row["name"]), names.insert(name).inserted,
                   let buckets = row["buckets"] as? [[String: Any]] else {
@@ -153,7 +149,7 @@ public extension UsageParser {
                     window: AntigravityValue.text(bucket["window"]), disabled: disabled,
                     remainingFraction: AntigravityValue.number(bucket["remaining_fraction"]),
                     remainingAmount: AntigravityValue.count(bucket["remaining_amount"]),
-                    resetsAt: AntigravityValue.date(bucket["reset_time"]))
+                    resetsAt: dates.date(bucket["reset_time"]))
             }
             return AntigravityQuotaGroup(name: name, description: AntigravityValue.text(row["description"]), buckets: parsed)
         }
@@ -187,12 +183,20 @@ private enum AntigravityValue {
         guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
     }
+}
 
-    static func date(_ value: Any?) -> Date? {
-        guard let text = text(value) else { return nil }
+/// Built once per report rather than per bucket; never shared across reads.
+private struct AntigravityDateParser {
+    private let fractional: ISO8601DateFormatter = {
         let parser = ISO8601DateFormatter()
         parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = parser.date(from: text) ?? ISO8601DateFormatter().date(from: text),
+        return parser
+    }()
+    private let whole = ISO8601DateFormatter()
+
+    func date(_ value: Any?) -> Date? {
+        guard let text = AntigravityValue.text(value),
+              let date = fractional.date(from: text) ?? whole.date(from: text),
               date.timeIntervalSince1970.isFinite else { return nil }
         return date
     }

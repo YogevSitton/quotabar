@@ -13,7 +13,6 @@ struct AntigravityCard: View {
     }
     private var needsConnection: Bool {
         state.antigravityIssue == .helperMissing || state.antigravityIssue == .signInRequired
-            || state.antigravityIssue == .profileUnavailable
     }
     private var hasAdditionalBuckets: Bool {
         guard let group = state.selectedAntigravityGroup else { return false }
@@ -23,7 +22,7 @@ struct AntigravityCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                ProviderIcon(name: "Antigravity", size: 22)
+                ProviderIcon(provider: .antigravity, size: 22)
                 Text("Antigravity").font(.system(size: 15, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 2)
                 Button(action: state.openAntigravity) { Image(systemName: "arrow.up.right.square") }
@@ -36,6 +35,13 @@ struct AntigravityCard: View {
             } else if needsConnection {
                 if let error = state.antigravityError { compactError(error) }
                 Button("Connect Antigravity...", action: state.connectAntigravity)
+                    .font(.system(size: 12)).controlSize(.small)
+                    .disabled(state.refreshingAntigravity)
+            } else if state.antigravityIssue == .profileUnavailable {
+                // Connect cannot repair the private profile. Retry rechecks it
+                // and still respects the saved request schedule.
+                if let error = state.antigravityError { compactError(error) }
+                Button("Retry", action: state.retryAntigravity)
                     .font(.system(size: 12)).controlSize(.small)
                     .disabled(state.refreshingAntigravity)
             } else {
@@ -75,7 +81,7 @@ struct AntigravityCard: View {
                             .help("Request started \(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))")
                     }
                     if hasAdditionalBuckets {
-                        Button("View reported quotas...", action: { state.showDetails(for: "Antigravity") })
+                        Button("View reported quotas...", action: { state.showDetails(for: .antigravity) })
                             .font(.system(size: 11)).buttonStyle(.link)
                     }
                 } else if state.antigravity != nil {
@@ -93,7 +99,7 @@ struct AntigravityCard: View {
                     }
                     Button("Retry usage", action: state.retryAntigravity).font(.system(size: 11)).buttonStyle(.link)
                     if state.antigravity != nil {
-                        Button("Last saved reading...", action: { state.showDetails(for: "Antigravity") })
+                        Button("Last saved reading...", action: { state.showDetails(for: .antigravity) })
                             .font(.system(size: 11)).buttonStyle(.link)
                     }
                 }
@@ -154,7 +160,7 @@ struct AntigravityDetailsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                ProviderIcon(name: "Antigravity", size: 24)
+                ProviderIcon(provider: .antigravity, size: 24)
                 Text("Antigravity usage").font(.headline)
                 Spacer()
                 Button("Usage help", action: state.openAntigravity).font(.caption)

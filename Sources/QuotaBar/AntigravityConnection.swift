@@ -40,14 +40,18 @@ import Combine
                         continuation.resume(returning: AntigravityProvider.read(loginInput: input, cancellation: cancellation))
                     }
                 }
+                var outcome = result
                 switch result {
                 case .success: status = "Antigravity is connected."
                 case .deferred(let next):
-                    status = "Waiting until \(next.formatted(date: .omitted, time: .shortened)) before checking Antigravity again."
-                    error = status
+                    // This summary hides once the flow ends, so hand the reason to
+                    // the card with the same schedule rather than dropping it.
+                    let message = "Waiting until \(next.formatted(date: .omitted, time: .shortened)) before checking Antigravity again."
+                    error = message; status = ""
+                    outcome = .failure(message, .usageUnavailable, nextRequestAt: next)
                 case .failure(let message, _, _): error = message; status = ""
                 }
-                finished(result)
+                finished(outcome)
             } catch {
                 status = ""
                 self.error = Task.isCancelled ? "Antigravity connection cancelled." : "The official Antigravity helper could not be prepared. Try Connect Antigravity again."

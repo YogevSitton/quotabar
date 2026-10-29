@@ -13,8 +13,6 @@ enum AntigravityProcess {
         case inputUnavailable
     }
 
-    enum OutputStream { case standardOutput, standardError }
-
     struct Result {
         let stdout: Data
         let stderr: Data
@@ -66,7 +64,9 @@ enum AntigravityProcess {
 
         func sendCode(_ code: String) throws {
             let bytes = Array(code.utf8)
-            guard !bytes.isEmpty, bytes.count <= 4_096,
+            // Canonical mode keeps at most MAX_CANON bytes per line, newline
+            // included; a longer code would be truncated without an error.
+            guard !bytes.isEmpty, bytes.count < Int(MAX_CANON),
                   !bytes.contains(where: { $0 < 32 || $0 == 127 }) else { throw ProcessError.inputUnavailable }
             lock.lock(); defer { lock.unlock() }
             guard master >= 0 else { throw ProcessError.inputUnavailable }
@@ -84,8 +84,7 @@ enum AntigravityProcess {
 
     static func run(binary: URL, arguments: [String], profile: AntigravityProfile.Lease,
                     timeout: TimeInterval = 45, loginInput: LoginInput? = nil,
-                    cancel: Cancellation? = nil,
-                    onOutput: ((Data, OutputStream) -> Void)? = nil) throws -> Result {
+                    cancel: Cancellation? = nil) throws -> Result {
         guard timeout.isFinite, timeout > 0, timeout <= 180,
               binary.isFileURL, binary.path.hasPrefix("/"),
               !([binary.path] + arguments).contains(where: { $0.utf8.contains(0) }) else {
@@ -155,16 +154,16 @@ enum AntigravityProcess {
         while true {
             if cancel?.isCancelled == true { throw ProcessError.cancelled }
             guard DispatchTime.now().uptimeNanoseconds < deadline else { throw ProcessError.timedOut }
-            try drain(&output[0], into: &stdout, limit: 2_000_000, stream: .standardOutput, callback: onOutput)
-            try drain(&error[0], into: &stderr, limit: 128_000, stream: .standardError, callback: onOutput)
+            try drain(&output[0], into: &stdout, limit: 2_000_000)
+            try drain(&error[0], into: &stderr, limit: 128_000)
 
             var info = siginfo_t()
             let status = waitid(P_PID, id_t(pid), &info, WEXITED | WNOHANG | WNOWAIT)
             if status < 0, errno != EINTR { throw ProcessError.launchFailed }
             if status == 0, info.si_pid == pid {
                 kill(-pid, SIGKILL)
-                try drain(&output[0], into: &stdout, limit: 2_000_000, stream: .standardOutput, callback: onOutput)
-                try drain(&error[0], into: &stderr, limit: 128_000, stream: .standardError, callback: onOutput)
+                try drain(&output[0], into: &stdout, limit: 2_000_000)
+                try drain(&error[0], into: &stderr, limit: 128_000)
                 var childStatus: Int32 = 0
                 var waited: pid_t
                 repeat { waited = waitpid(pid, &childStatus, 0) } while waited < 0 && errno == EINTR
@@ -210,8 +209,7 @@ enum AntigravityProcess {
         }
     }
 
-    private static func drain(_ fd: inout Int32, into output: inout Data, limit: Int,
-                              stream: OutputStream, callback: ((Data, OutputStream) -> Void)?) throws {
+    private static func drain(_ fd: inout Int32, into output: inout Data, limit: Int) throws {
         guard fd >= 0 else { return }
         var buffer = [UInt8](repeating: 0, count: 8_192)
         while true {
@@ -221,9 +219,7 @@ enum AntigravityProcess {
             guard count >= 0 else { throw ProcessError.launchFailed }
             if count == 0 { Darwin.close(fd); fd = -1; return }
             guard count <= limit - output.count else { throw ProcessError.oversizedResponse }
-            let chunk = Data(buffer.prefix(count))
-            output.append(chunk)
-            callback?(chunk, stream)
+            output.append(contentsOf: buffer.prefix(count))
         }
     }
 

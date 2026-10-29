@@ -129,6 +129,40 @@ final class AntigravityProfileTests: XCTestCase {
         }
     }
 
+    func testNextAcquisitionClearsLeftoversWithoutFollowingLinks() throws {
+        try fixture { user, policy in
+            var lease: AntigravityProfile.Lease? = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            let fm = FileManager.default
+            let gemini = lease!.geminiDirectory, work = lease!.workingDirectory, home = lease!.home
+            lease = nil
+            let outside = user.appendingPathComponent("synthetic-outside", isDirectory: true)
+            try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+            let kept = outside.appendingPathComponent("kept.txt")
+            try Data("synthetic outside file".utf8).write(to: kept)
+            let token = gemini.appendingPathComponent("synthetic-token-placeholder")
+            try Data("synthetic fixture - not a credential".utf8).write(to: token)
+            try fm.createDirectory(at: work.appendingPathComponent("nested/deeper"), withIntermediateDirectories: true)
+            try Data("synthetic".utf8).write(to: work.appendingPathComponent("nested/deeper/file"))
+            try fm.createSymbolicLink(at: work.appendingPathComponent("link"), withDestinationURL: outside)
+            try fm.createDirectory(at: gemini.appendingPathComponent("skills"), withIntermediateDirectories: false,
+                                   attributes: [.posixPermissions: 0o700])
+            try Data("synthetic skill".utf8).write(to: gemini.appendingPathComponent("skills/example.md"))
+            try fm.createSymbolicLink(at: gemini.appendingPathComponent("config/plugins"), withDestinationURL: outside)
+            try Data("[]".utf8).write(to: gemini.appendingPathComponent("quotabar/plugins.json"))
+            try fm.createDirectory(at: home.appendingPathComponent(".agents/rules"), withIntermediateDirectories: true)
+
+            let second = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            XCTAssertTrue(try fm.contentsOfDirectory(atPath: work.path).isEmpty)
+            for removed in ["skills", "config/plugins", "quotabar/plugins.json"] {
+                XCTAssertFalse(fm.fileExists(atPath: gemini.appendingPathComponent(removed).path), removed)
+            }
+            XCTAssertFalse(fm.fileExists(atPath: home.appendingPathComponent(".agents").path))
+            XCTAssertEqual(try Data(contentsOf: kept), Data("synthetic outside file".utf8))
+            XCTAssertEqual(try Data(contentsOf: token), Data("synthetic fixture - not a credential".utf8))
+            try second.validateForLaunch()
+        }
+    }
+
     func testGlobalPluginRegistrationsCannotBecomeActiveAfterCLIStartup() throws {
         for root in ["", "config/", "quotabar/"] {
             try fixture { user, policy in

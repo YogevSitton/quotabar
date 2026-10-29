@@ -1,5 +1,11 @@
 import AppKit
 
+/// Display identity for each integration. Exhaustive switches keep a new
+/// provider from silently inheriting another provider's artwork or details.
+enum Provider: String {
+    case codex = "Codex", claude = "Claude", antigravity = "Antigravity"
+}
+
 struct ProviderInstallation {
     let codex: Bool
     let claude: Bool

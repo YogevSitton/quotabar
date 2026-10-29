@@ -7,7 +7,7 @@ import SwiftUI
     private let state: AppState
     private var window: NSWindow?
     init(state: AppState) { self.state = state }
-    func show(provider: String) {
+    func show(provider: Provider) {
         let view = ProviderDetailsView(state: state, provider: provider)
         if let window {
             window.contentViewController = NSHostingController(rootView: view)
@@ -20,7 +20,7 @@ import SwiftUI
             panel.contentViewController = NSHostingController(rootView: view)
             panel.center(); window = panel
         }
-        window?.title = "\(provider) usage details"
+        window?.title = "\(provider.rawValue) usage details"
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -28,18 +28,19 @@ import SwiftUI
 
 private struct ProviderDetailsView: View {
     @ObservedObject var state: AppState
-    let provider: String
+    let provider: Provider
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if provider == "Antigravity" {
+                    switch provider {
+                    case .antigravity:
                         AntigravityDetailsView(state: state, now: context.date)
-                    } else if provider == "Claude" {
-                        ProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
+                    case .claude:
+                        ProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude)
-                    } else {
-                        ProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
+                    case .codex:
+                        ProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
                             error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                             canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
                         CodexResetStatus(state: state)

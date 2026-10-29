@@ -46,9 +46,9 @@ struct Dashboard: View {
                         let paired = columns > 1
                         HStack(alignment: .top, spacing: 10) {
                             if state.installation.codex {
-                                    CompactProviderCard(name: "Codex", color: .teal, snapshot: state.codex,
+                                    CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
-                                                 resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Codex") },
+                                                 resetRowLimit: resetRowLimit, details: { state.showDetails(for: .codex) },
                                                  resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.hasCodexResetNotice ? "Reset request needs attention" : nil,
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
@@ -57,15 +57,15 @@ struct Dashboard: View {
                                 ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
                             } else if state.installation.claude && !state.needsClaudeConnection {
-                                CompactProviderCard(name: "Claude", color: .orange, snapshot: state.claude,
+                                CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: "Claude") }, retry: state.retryClaude,
+                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
                                              nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             } else if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
                                     HStack(spacing: 8) {
-                                        ProviderIcon(name: "Claude", size: 24)
+                                        ProviderIcon(provider: .claude, size: 24)
                                         Text("Connect Claude…")
                                     }
                                 }.controlSize(.large)
@@ -100,7 +100,8 @@ struct Dashboard: View {
 }
 
 private struct CompactProviderCard: View {
-    let name: String
+    let provider: Provider
+    private var name: String { provider.rawValue }
     let color: Color
     let snapshot: UsageSnapshot?
     let error: String?
@@ -119,7 +120,7 @@ private struct CompactProviderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                ProviderIcon(name: name, size: 22)
+                ProviderIcon(provider: provider, size: 22)
                 Text(name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                 if let plan = snapshot?.plan { Text(plan.capitalized).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 2)
@@ -132,12 +133,12 @@ private struct CompactProviderCard: View {
                          duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
                          duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
-                if name != "Claude" {
+                if provider != .claude {
                     Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }
-                if name != "Claude" || snapshot.showsResetCredits {
+                if provider != .claude || snapshot.showsResetCredits {
                     Divider()
                     let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
                     let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
@@ -157,7 +158,7 @@ private struct CompactProviderCard: View {
                                 Text(offer.title).font(.system(size: 11, weight: .medium))
                                     .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                if name == "Codex", offer.supportsDirectRedemption, let useReset {
+                                if provider == .codex, offer.supportsDirectRedemption, let useReset {
                                     Button("Use reset…") { useReset(offer) }
                                         .font(.system(size: 10)).controlSize(.small)
                                         .disabled(canReset?(offer) != true)
@@ -183,7 +184,7 @@ private struct CompactProviderCard: View {
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
                 Text(error ?? "Current usage cannot be verified.").font(.caption).foregroundStyle(.secondary)
                     .lineLimit(2).help(error ?? "Current usage cannot be verified.")
-                if name == "Claude", let snapshot {
+                if provider == .claude, let snapshot {
                     Text("Saved reading · \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange)
                     UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true, compact: true)
@@ -208,7 +209,7 @@ private struct CompactProviderCard: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.06)))
     }
     private func expiry(_ offer: ResetOffer) -> String {
-        let count = name == "Claude" ? offer.remainingCount.map { "\($0) left · " } ?? "" : ""
+        let count = provider == .claude ? offer.remainingCount.map { "\($0) left · " } ?? "" : ""
         guard let date = offer.expiresAt else { return count + (offer.expiryText ?? "Expiry not reported") }
         let prefix = date <= now ? "Expired" : "Expires"
         return "\(count)\(prefix) \(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))"
@@ -239,7 +240,8 @@ struct CodexResetStatus: View {
 }
 
 struct ProviderCard: View {
-    let name: String
+    let provider: Provider
+    private var name: String { provider.rawValue }
     let color: Color
     let snapshot: UsageSnapshot?
     let error: String?
@@ -296,7 +298,7 @@ struct ProviderCard: View {
     }
     private var providerHeading: some View {
         HStack {
-            ProviderIcon(name: name)
+            ProviderIcon(provider: provider)
             Text(name).font(.system(size: 17, weight: .semibold)).lineLimit(1)
             if let plan = snapshot?.plan { Text(plan.capitalized).font(.caption).foregroundStyle(.secondary) }
             if isCurrent { Text("Live").font(.caption).foregroundStyle(color) }
@@ -319,7 +321,7 @@ struct ProviderCard: View {
                  duration: 7 * 86400, observedAt: snapshot.observedAt)
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        if name != "Claude" || snapshot.showsResetCredits { resets }
+        if provider != .claude || snapshot.showsResetCredits { resets }
     }
     @ViewBuilder private var resets: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -345,7 +347,7 @@ struct ProviderCard: View {
                     Text("\(count) available · expiry details not reported").font(.caption).foregroundStyle(.secondary)
                 }
                 if isCurrent && (snapshot.resetCount ?? 0) > 0 {
-                    if name == "Claude" {
+                    if provider == .claude {
                         Button("Use a reset on Claude ↗", action: open)
                             .help("Open Claude Usage, then select and confirm a reset there.")
                     } else if snapshot.offers.isEmpty || snapshot.offers.contains(where: { !$0.supportsDirectRedemption }) {
@@ -380,7 +382,7 @@ struct ProviderCard: View {
                 }
                 Text(offer.title).font(.system(size: 12, weight: .medium))
             }
-            if name == "Claude" {
+            if provider == .claude {
                 HStack {
                     if let count = offer.remainingCount { Text("\(count) remaining\(offer.kind.map { " · \($0.capitalized)" } ?? "")") }
                     if offer.isNext { Text("Next to be used").foregroundStyle(.orange) }
@@ -396,7 +398,7 @@ struct ProviderCard: View {
                 Text(expiryText).foregroundStyle(.secondary)
             } else { Text("Expiry not reported").foregroundStyle(.secondary) }
             if let detail = offer.detail { Text(detail).foregroundStyle(.secondary) }
-            if name == "Codex", isCurrent, offer.supportsDirectRedemption, let useReset {
+            if provider == .codex, isCurrent, offer.supportsDirectRedemption, let useReset {
                 Button("Use reset…") { useReset(offer) }
                     .disabled(canReset?(offer) != true)
                     .help("Requires a fresh account-verified reading. Review and confirm before one saved credit is used.")
