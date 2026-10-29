@@ -44,12 +44,15 @@ struct MenuBarQuota {
 }
 
 struct MenuBarEntry {
-    let name: String
+    let provider: Provider
+    var name: String { provider.rawValue }
     let session: MenuBarQuota
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
+    var quotaGroup: String? = nil
     func description(at now: Date) -> String {
-        [name, session.tooltipLine("5-hour window", at: now), weekly.tooltipLine("Weekly window", at: now)].joined(separator: "; ")
+        ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window", at: now),
+                                                     weekly.tooltipLine("Weekly window", at: now)]).joined(separator: "; ")
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
@@ -81,7 +84,8 @@ struct MenuBarEntry {
             // Rounded down like the chip, so it never overstates the time left.
             $0 > now ? "Next reset expires in \(countdown($0, now: now, style: .totalHours, roundingDown: true))" : "Next reset expired"
         }
-        return ([name, session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)] + [expiry].compactMap { $0 }).joined(separator: "\n")
+        return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)]
+                + [expiry].compactMap { $0 }).joined(separator: "\n")
     }
 }
 
@@ -124,7 +128,7 @@ struct MenuBarEntry {
                 var x: CGFloat = 0
                 for (index, entry) in entries.enumerated() {
                     if index > 0 { x += providerGap }
-                    ProviderArtwork.menuImage(for: entry.name, appearance: appearance)
+                    ProviderArtwork.menuImage(for: entry.provider, appearance: appearance)
                         .draw(in: NSRect(x: x, y: 2, width: iconSize, height: iconSize))
                     x += iconSize + iconTextGap
                     let label = NSMutableAttributedString()

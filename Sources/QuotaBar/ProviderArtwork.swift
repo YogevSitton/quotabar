@@ -6,12 +6,25 @@ import SwiftUI
     private static let claude = load(resource: "Claude", applications: ["Claude"], identifiers: ["com.anthropic.claudefordesktop"])
     private static let codexMenu = loadMenu(resource: "CodexMenu", symbol: "terminal")
     private static let claudeMenu = loadMenu(resource: "ClaudeMenu", symbol: "asterisk")
+    private static let antigravity = antigravityMark(color: .systemBlue)
+    private static let antigravityMenu = antigravityMark(color: .black)
 
-    static func image(for name: String) -> NSImage {
-        (name == "Claude" ? claude : codex).copy() as! NSImage
+    static func image(for provider: Provider) -> NSImage {
+        let image: NSImage
+        switch provider {
+        case .codex: image = codex
+        case .claude: image = claude
+        case .antigravity: image = antigravity
+        }
+        return image.copy() as! NSImage
     }
-    static func menuImage(for name: String, appearance: NSAppearance) -> NSImage {
-        let mark = name == "Claude" ? claudeMenu : codexMenu
+    static func menuImage(for provider: Provider, appearance: NSAppearance) -> NSImage {
+        let mark: NSImage
+        switch provider {
+        case .codex: mark = codexMenu
+        case .claude: mark = claudeMenu
+        case .antigravity: mark = antigravityMenu
+        }
         // Text attachments do not reliably apply NSImage template tinting.
         // Resolve the menu button's appearance explicitly, retaining the alpha mask.
         return NSImage(size: NSSize(width: 20, height: 20), flipped: false) { bounds in
@@ -20,6 +33,27 @@ import SwiftUI
                 NSColor.labelColor.setFill()
                 bounds.fill(using: .sourceIn)
             }
+            return true
+        }
+    }
+    /// Unchanged silhouette from Google's favicon.svg, recorded in
+    /// Assets/Antigravity-mark.svg. Transparent monochrome, without the tile.
+    private static func antigravityMark(color: NSColor) -> NSImage {
+        NSImage(size: NSSize(width: 112, height: 112), flipped: true) { _ in
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: 89.6992, y: 93.695))
+            let curves: [[CGFloat]] = [
+                [94.3659,97.195,101.366,94.8617,94.9492,88.445],
+                [75.6992,69.7783,79.7825,18.445,55.8659,18.445],
+                [31.9492,18.445,36.0325,69.7783,16.7825,88.445],
+                [9.78251,95.445,17.3658,97.195,22.0325,93.695],
+                [40.1159,81.445,38.9492,59.8617,55.8659,59.8617],
+                [72.7825,59.8617,71.6159,81.445,89.6992,93.695]
+            ]
+            for c in curves {
+                path.curve(to: NSPoint(x: c[4], y: c[5]), controlPoint1: NSPoint(x: c[0], y: c[1]), controlPoint2: NSPoint(x: c[2], y: c[3]))
+            }
+            path.close(); color.setFill(); path.fill()
             return true
         }
     }
@@ -49,10 +83,10 @@ import SwiftUI
 }
 
 struct ProviderIcon: View {
-    let name: String
+    let provider: Provider
     var size: CGFloat = 28
     var body: some View {
-        Image(nsImage: ProviderArtwork.image(for: name)).resizable().interpolation(.high)
-            .frame(width: size, height: size).accessibilityLabel(name)
+        Image(nsImage: ProviderArtwork.image(for: provider)).resizable().interpolation(.high)
+            .frame(width: size, height: size).accessibilityLabel(provider.rawValue)
     }
 }

@@ -187,7 +187,7 @@ struct ClaudeConnectionSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
-                ProviderIcon(name: "Claude", size: 22)
+                ProviderIcon(provider: .claude, size: 22)
                 Text(model.busy ? "Connecting Claude…" : "Claude connection").font(.system(size: 13, weight: .semibold))
                 if model.busy { ProgressView().controlSize(.small) }
             }

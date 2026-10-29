@@ -1,6 +1,6 @@
 # Working on QuotaBar
 
-QuotaBar is a native macOS 14+ menu bar app. Both Codex and Claude are first-class providers: preserve five-hour and weekly usage, scheduled reset times, and reset-credit inventory with expiry dates wherever the provider actually reports them.
+QuotaBar is a native macOS 14+ menu bar app. Codex and Claude are first-class providers, with experimental Antigravity support: preserve five-hour and weekly usage, scheduled reset times, and reset-credit inventory with expiry dates wherever the provider actually reports them.
 
 ## Start here
 
@@ -68,6 +68,15 @@ The maintainer does not want scrolling inside the menu popup. Keep both provider
 - Never commit runtime caches, downloaded helper binaries, local account data, app bundles, or credential files. Use synthetic test fixtures.
 - Keep Claude reads scheduled at their exact next eligible time instead of dropping an early periodic tick for a whole interval. Codex refresh stays at one minute. Healthy Claude reads are at least 130 seconds apart; failures wait five minutes, doubling on repeated failure up to 60 minutes, with explicitly labeled saved values during the wait. Persist a shared request reservation and retry state before launching a Claude usage reader so QuotaBar copies under the same local user cannot race or reset the budget. Store no account identifiers or credentials in this state. Retry, restart, wake, sign-in verification and account changes must respect it; a newer cache sample must not bypass it. A failed or unreadable budget write must not allow an unreserved request. Claude's supported server request quota is unknown, so reduced polling cannot guarantee no HTTP 429 responses. Do not repeatedly probe live endpoints while testing parsers.
 - Claude's get_usage interface is experimental and its optional reset-grant fields are undocumented. Keep parsing defensive and distinguish implemented schema support from verified live behavior.
+
+## Antigravity integration rules
+
+- Keep the helper pinned to the statically reviewed official bytes. A future CLI version requires renewed dispatch, startup and authentication review; do not accept arbitrary installed versions.
+- Use the managed profile and fixed `/usage` command. The explicit false flag alone does not override saved `disableSlashCommands: true` in 1.4.9. Validate or restore only QuotaBar's own non-secret configuration under the profile lease; never copy credentials or personal settings.
+- Monitoring requires detached-session spawning and EOF-pipe stdin. `/dev/null` is a character device and permits interactive auth in this CLI. Only explicit Connect may provide the pseudo-terminal used by the official browser/code sign-in flow. Never use a model prompt, positional `agy login`, or the incompatible CDE login shortcut.
+- Preserve system administrator policy by declining unsupported managed-policy configurations. Keep MCP and plugin registrations empty in the private profile. The helper may perform read-only account/bootstrap work of its own; do not claim it makes only one network request.
+- Antigravity has one card and a primary quota-group selector. Keep Gemini 4 groups independent. Only its selected group supplies the compact menu's five-hour/weekly slots; missing or unknown windows remain unavailable. Its reported-quota Details view is the narrow exception for dynamic Google primary buckets, not permission to show hidden Codex/Claude model limits. Never infer Google reset credits or unlimited quota.
+- Respect its durable five-minute polling reservation and failure backoff across copies, retry, wake and restart. No live Antigravity query or sign-in has been authorized for development verification.
 
 ## Update and release rules
 

@@ -39,17 +39,37 @@ enum ClaudeHelper {
             return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), requirement) == errSecSuccess
         }
     }
-    // Read-only discovery never downloads or starts sign-in.
-    static func existing() throws -> URL? {
-        if let installed = trustedInstalledCLI() { return installed.resolvingSymlinksInPath() }
-        let recordURL = support.appendingPathComponent("release.json")
-        if let saved = try? Data(contentsOf: recordURL), let record = try? JSONSerialization.jsonObject(with: saved) as? [String: Any],
+    private static func managedCandidate(in directory: URL) -> (executable: URL, release: ClaudeHelperRelease)? {
+        let recordURL = directory.appendingPathComponent("release.json")
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: recordURL.path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let handle = try? FileHandle(forReadingFrom: recordURL) else { return nil }
+        defer { try? handle.close() }
+        // Bound the non-secret metadata read used by periodic installation discovery.
+        if let saved = try? handle.read(upToCount: 1_000_000), saved.count < 1_000_000,
+           let record = try? JSONSerialization.jsonObject(with: saved) as? [String: Any],
            let version = record["version"] as? String, let manifest = record["manifest"] as? [String: Any],
            let data = try? JSONSerialization.data(withJSONObject: manifest),
            let release = try? ClaudeHelperRelease.parse(version: version, platform: platform, manifest: data) {
-            let executable = support.appendingPathComponent(release.version).appendingPathComponent("claude")
-            if FileManager.default.isExecutableFile(atPath: executable.path), try checksum(executable) == release.checksum { return executable }
+            let executable = directory.appendingPathComponent(release.version).appendingPathComponent("claude")
+            if FileManager.default.isExecutableFile(atPath: executable.path),
+               let attributes = try? FileManager.default.attributesOfItem(atPath: executable.path),
+               attributes[.type] as? FileAttributeType == .typeRegular {
+                return (executable, release)
+            }
         }
+        return nil
+    }
+    // Visibility discovery only: no hashing, process launch, download or authentication.
+    // existing() still verifies the helper's bytes before any caller may run it.
+    static func managedExecutable(in directory: URL = support) -> URL? {
+        managedCandidate(in: directory)?.executable
+    }
+    // Read-only discovery never downloads or starts sign-in.
+    static func existing() throws -> URL? {
+        if let installed = trustedInstalledCLI() { return installed.resolvingSymlinksInPath() }
+        if let candidate = managedCandidate(in: support),
+           try checksum(candidate.executable) == candidate.release.checksum { return candidate.executable }
         return nil
     }
     static func prepare(status: @escaping @MainActor @Sendable (String) -> Void) async throws -> URL {

@@ -1,8 +1,17 @@
 import AppKit
 
+/// Display identity for each integration. Exhaustive switches keep a new
+/// provider from silently inheriting another provider's artwork or details.
+enum Provider: String {
+    case codex = "Codex", claude = "Claude", antigravity = "Antigravity"
+}
+
 struct ProviderInstallation {
     let codex: Bool
     let claude: Bool
+    var antigravity: Bool = false
+
+    var count: Int { [codex, claude, antigravity].filter { $0 }.count }
 
     static func detect() -> Self {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -20,6 +29,10 @@ struct ProviderInstallation {
         return Self(
             codex: CodexProvider.executable() != nil || app("Codex", identifiers: ["com.openai.codex"]),
             claude: app("Claude", identifiers: ["com.anthropic.claudefordesktop"])
-                || claudePaths.contains { FileManager.default.isExecutableFile(atPath: $0) })
+                || claudePaths.contains { FileManager.default.isExecutableFile(atPath: $0) }
+                || ClaudeHelper.managedExecutable() != nil,
+            antigravity: app("Antigravity", identifiers: ["com.google.antigravity"])
+                || FileManager.default.fileExists(atPath: AntigravityHelper.executable.path)
+                || AntigravityHelper.installedCandidates.contains { FileManager.default.isExecutableFile(atPath: $0.path) })
     }
 }

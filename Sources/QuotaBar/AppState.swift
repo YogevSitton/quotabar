@@ -5,12 +5,27 @@ import QuotaCore
 import Combine
 
 @MainActor final class AppState: ObservableObject {
-    @Published var installation = ProviderInstallation.detect()
+    @Published var installation: ProviderInstallation
     @Published var codex: UsageSnapshot?
     @Published var claude: UsageSnapshot?
     @Published var codexError: String?
     @Published var claudeError: String?
     @Published var claudeIssue: ClaudeConnectionIssue?
+    @Published var antigravity: AntigravitySnapshot?
+    @Published var antigravityError: String?
+    @Published var antigravityIssue: AntigravityConnectionIssue?
+    @Published private(set) var antigravityNextRequestAt: Date?
+    @Published private(set) var refreshingAntigravity = false
+    @Published var selectedAntigravityGroupName: String? {
+        didSet {
+            if storesPreferences { UserDefaults.standard.set(selectedAntigravityGroupName, forKey: "antigravityQuotaGroup") }
+            onChange?()
+        }
+    }
+    private let storesPreferences: Bool
+    @Published private(set) var antigravityConnection: AntigravityConnection?
+    private var antigravityConnectionUpdates: AnyCancellable?
+    private var antigravityRetryTimer: Timer?
     @Published private(set) var redeemingCodex = false
     @Published private(set) var pendingCodexReset: CodexResetAttempt?
     @Published private(set) var codexResetMessage: String?
@@ -22,7 +37,7 @@ import Combine
     // Codex and installation checks run every minute. Claude enforces its
     // separate, durable polling budget and schedules its exact next deadline.
     let interval: Double = 1
-    @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var launchAtLogin: Bool
     @Published var settingsError: String?
     /// Opens the separate Updates window; set by the app delegate.
     var showUpdates: () -> Void = {}
@@ -38,7 +53,14 @@ import Combine
     private var statusLineModified: Date?
     var onChange: (() -> Void)?
 
-    init() {
+    // Offline documentation renders opt out of local recovery/preferences and
+    // never call start(), connection methods or any provider controls.
+    init(loadLocalState: Bool = true) {
+        storesPreferences = loadLocalState
+        installation = loadLocalState ? ProviderInstallation.detect() : ProviderInstallation(codex: false, claude: false)
+        launchAtLogin = loadLocalState && SMAppService.mainApp.status == .enabled
+        guard loadLocalState else { return }
+        selectedAntigravityGroupName = UserDefaults.standard.string(forKey: "antigravityQuotaGroup")
         do { pendingCodexReset = try resetStore.load() }
         catch { resetRecoveryError = "A saved Codex reset request could not be read. Reset actions are disabled to prevent a duplicate. Check ChatGPT Usage before repairing the recovery file." }
     }
@@ -70,6 +92,7 @@ import Combine
     func refresh() {
         updateInstallation()
         if installation.claude { refreshClaude() }
+        if installation.antigravity { refreshAntigravity() }
         guard installation.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
             let started = Date()
@@ -102,6 +125,85 @@ import Combine
     func retryClaude() {
         DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .retryRequested))
         refreshClaude(reconnect: true)
+    }
+
+    var antigravityMaximumAge: TimeInterval { AntigravityProvider.maximumAge }
+    var selectedAntigravityGroup: AntigravityQuotaGroup? {
+        antigravity?.selectedGroup(named: selectedAntigravityGroupName)
+    }
+    /// Polling waits for an explicit action: Connect for setup and sign-in,
+    /// Retry for an unverifiable private profile.
+    var antigravityStopped: Bool {
+        antigravityIssue == .helperMissing || antigravityIssue == .signInRequired || antigravityIssue == .profileUnavailable
+    }
+    func refreshAntigravity() {
+        guard installation.antigravity, !refreshingAntigravity, antigravityConnection?.busy != true,
+              antigravityNextRequestAt.map({ $0 <= Date() }) ?? true, !antigravityStopped else { return }
+        refreshingAntigravity = true
+        DispatchQueue.global(qos: .utility).async {
+            let result = AntigravityProvider.read()
+            DispatchQueue.main.async {
+                self.refreshingAntigravity = false
+                self.applyAntigravity(result)
+            }
+        }
+    }
+    func retryAntigravity() {
+        if antigravityIssue == .profileUnavailable { antigravityIssue = nil }
+        refreshAntigravity()
+    }
+    func applyAntigravity(_ result: AntigravityReadResult) {
+        antigravityRetryTimer?.invalidate(); antigravityNextRequestAt = nil
+        switch result {
+        case .success(let snapshot, let next):
+            antigravity = snapshot; antigravityError = nil; antigravityIssue = nil
+            antigravityNextRequestAt = next
+        case .deferred(let next): antigravityNextRequestAt = next
+        case .failure(let message, let issue, let next):
+            antigravityError = message; antigravityIssue = issue; antigravityNextRequestAt = next
+            if issue == .signInRequired || issue == .helperMissing { antigravity = nil }
+            else { antigravity?.source = .cached }
+        }
+        scheduleAntigravityDeadline()
+        onChange?()
+    }
+    private func scheduleAntigravityDeadline() {
+        antigravityRetryTimer?.invalidate()
+        guard interval > 0, let next = antigravityNextRequestAt else { return }
+        let timer = Timer(timeInterval: max(1, next.timeIntervalSinceNow), repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.antigravityDeadlinePassed() }
+        }
+        antigravityRetryTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+    func antigravityDeadlinePassed() {
+        guard let next = antigravityNextRequestAt else { return }
+        guard next <= Date() else { return scheduleAntigravityDeadline() }
+        // Publish the passed deadline so Connect re-enables now rather than at
+        // the popup's next 30-second tick. This never starts sign-in: refresh
+        // reads without login input and stays idle while monitoring is stopped.
+        antigravityNextRequestAt = nil
+        refreshAntigravity()
+        onChange?()
+    }
+    func connectAntigravity() {
+        guard antigravityConnection?.busy != true, !refreshingAntigravity else { return }
+        if antigravityConnection == nil {
+            let connection = AntigravityConnection { [weak self] result in
+                self?.updateInstallation(); self?.applyAntigravity(result)
+            }
+            antigravityConnection = connection
+            antigravityConnectionUpdates = connection.objectWillChange.sink { [weak self] in
+                Task { @MainActor in self?.objectWillChange.send(); self?.onChange?() }
+            }
+        }
+        antigravity = nil; antigravityIssue = nil; antigravityError = nil
+        antigravityNextRequestAt = nil; antigravityRetryTimer?.invalidate()
+        antigravityConnection?.connect()
+        onChange?()
+    }
+    func openAntigravity() {
+        NSWorkspace.shared.open(URL(string: "https://antigravity.google/docs/cli/commands/usage")!)
     }
     private func scheduleClaudeRead(_ result: ClaudeReadResult) {
         claudeRetryTimer?.invalidate()
@@ -215,7 +317,7 @@ import Combine
     var hasCodexResetNotice: Bool {
         pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil
     }
-    func showDetails(for provider: String) {
+    func showDetails(for provider: Provider) {
         if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
         providerDetails?.show(provider: provider)
     }
@@ -253,14 +355,14 @@ import Combine
     }
     func updateInstallation() {
         let detected = ProviderInstallation.detect()
-        let changed = installation.codex != detected.codex || installation.claude != detected.claude
+        let changed = installation.codex != detected.codex || installation.claude != detected.claude || installation.antigravity != detected.antigravity
         if changed {
             installation = detected; onChange?()
             DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .installationChanged))
         }
     }
     var menuEntries: [MenuBarEntry] {
-        func entry(_ name: String, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
+        func entry(_ provider: Provider, _ snapshot: UsageSnapshot?, error: String?, maximumAge: TimeInterval) -> MenuBarEntry {
             let now = Date()
             let current = snapshot?.isCurrent(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) == true
             func quota(_ limit: UsageLimit) -> MenuBarQuota {
@@ -268,13 +370,22 @@ import Combine
             }
             let session = snapshot?.currentSessionLimit(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) ?? .unavailable
             let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
-            return MenuBarEntry(name: name, session: MenuBarQuota(limit: session),
+            return MenuBarEntry(provider: provider, session: MenuBarQuota(limit: session),
                                 weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
-        if installation.codex { entries.append(entry("Codex", codex, error: codexError, maximumAge: max(600, interval * 120))) }
+        if installation.codex { entries.append(entry(.codex, codex, error: codexError, maximumAge: max(600, interval * 120))) }
         if installation.claude && !needsClaudeConnection {
-            entries.append(entry("Claude", claude, error: claudeError, maximumAge: claudeMaximumAge))
+            entries.append(entry(.claude, claude, error: claudeError, maximumAge: claudeMaximumAge))
+        }
+        if installation.antigravity, !antigravityStopped {
+            let now = Date()
+            let current = antigravity?.isCurrent(at: now, maximumAge: antigravityMaximumAge, hasConnectionError: antigravityError != nil) == true
+            let group = selectedAntigravityGroup
+            func quota(_ window: UsageWindow?) -> MenuBarQuota {
+                MenuBarQuota(limit: current ? (window.map { .limited($0).current(at: now) } ?? .unavailable) : .unavailable)
+            }
+            entries.append(MenuBarEntry(provider: .antigravity, session: quota(group?.session), weekly: quota(group?.weekly), quotaGroup: group?.name))
         }
         return entries
     }
