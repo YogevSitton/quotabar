@@ -13,11 +13,60 @@ enum AntigravityProvider {
     static let maximumAge: TimeInterval = 390
     static let interval: TimeInterval = 300
 
-    private struct Budget: Codable {
+    struct Budget: Codable {
         var version = 1
         var nextRequestAt: Date
         var failures: Int
         var needsSignIn: Bool
+
+        /// Needing Connect is not evidence that the last attempt avoided /usage.
+        /// In particular, old saved needsSignIn flags must retain their deadline.
+        func preflight(explicit: Bool, at now: Date) -> AntigravityReadResult? {
+            if needsSignIn, !explicit || nextRequestAt > now {
+                let next = nextRequestAt > now ? nextRequestAt : nil
+                let message = next.map { "Connect Antigravity to try again after \($0.formatted(date: .omitted, time: .shortened))." }
+                    ?? "Connect Antigravity to sign in through the official CLI."
+                return .failure(message, .signInRequired, nextRequestAt: next)
+            }
+            if nextRequestAt > now { return .deferred(nextRequestAt: nextRequestAt) }
+            return nil
+        }
+
+        mutating func reserve(at now: Date) {
+            failures = min(10, failures + 1)
+            nextRequestAt = now.addingTimeInterval(min(3600, interval * pow(2, Double(failures - 1))))
+            needsSignIn = false
+        }
+
+        mutating func recordFailure(_ error: Error, explicit: Bool, at now: Date) -> AntigravityReadResult {
+            let wait = min(3600, interval * pow(2, Double(failures - 1)))
+            nextRequestAt = now.addingTimeInterval(wait)
+            needsSignIn = false
+            let message: String
+            switch error {
+            case SignInIncomplete.authenticationRequired where !explicit:
+                // Only the monitored, non-interactive auth failure proves that
+                // /usage was not reached. Connect can resolve it immediately.
+                needsSignIn = true
+                nextRequestAt = now
+                return .failure("Connect Antigravity to sign in through the official CLI.", .signInRequired, nextRequestAt: nil)
+            case AntigravityProcess.ProcessError.cancelled where explicit:
+                needsSignIn = true
+                message = "Antigravity connection was cancelled. Connect again after the waiting period."
+            case AntigravityProcess.ProcessError.timedOut where explicit:
+                needsSignIn = true
+                message = "Antigravity connection did not finish in time. Connect again after the waiting period."
+            case AntigravityProcess.ProcessError.timedOut:
+                message = "Antigravity did not finish in time. It will retry automatically without starting sign-in."
+            case is UsageError:
+                message = error.localizedDescription
+            default:
+                message = "Antigravity's usage read failed. It will retry automatically."
+            }
+            // An explicit Connect also performs /usage. Cancellation and timeout
+            // cannot prove which phase stopped, so preserve the full backoff.
+            return .failure(message, needsSignIn ? .signInRequired : .usageUnavailable, nextRequestAt: nextRequestAt)
+        }
     }
 
     /// Runs on a utility queue. The filesystem lease serializes all app copies;
@@ -43,23 +92,14 @@ enum AntigravityProvider {
                     return .failure("Antigravity's saved request schedule could not be verified.", .profileUnavailable, nextRequestAt: nil)
                 }
             }
-            if budget.needsSignIn, loginInput == nil {
-                return .failure("Connect Antigravity to sign in through the official CLI.", .signInRequired, nextRequestAt: nil)
-            }
             let now = Date()
-            // An unauthenticated read never reached /usage. Explicit Connect may
-            // resolve that boundary immediately; other failures keep their budget.
-            if budget.nextRequestAt > now, !(budget.needsSignIn && loginInput != nil) {
-                return .deferred(nextRequestAt: budget.nextRequestAt)
-            }
+            if let result = budget.preflight(explicit: loginInput != nil, at: now) { return result }
             guard let binary = try AntigravityHelper.existing() else {
                 return .failure("Connect Antigravity to prepare its official CLI.", .helperMissing, nextRequestAt: nil)
             }
             // Reserve the attempt as a failure until it completes. Crashes
             // must not repeatedly reset the failure count or request deadline.
-            budget.failures = min(10, budget.failures + 1)
-            budget.nextRequestAt = now.addingTimeInterval(min(3600, interval * pow(2, Double(budget.failures - 1))))
-            budget.needsSignIn = false
+            budget.reserve(at: now)
             try profile.writeState(JSONEncoder().encode(budget))
 
             do {
@@ -67,15 +107,7 @@ enum AntigravityProvider {
                     arguments: ["-p", "/usage", "--output-format", "json"], profile: profile,
                     timeout: loginInput == nil ? 45 : 180, loginInput: loginInput,
                     cancel: cancellation)
-                guard response.exitCode == 0 else {
-                    // Match only the reviewed fixed error. Never expose raw CLI
-                    // output, emails, authorization links or server responses.
-                    let errorText = String(decoding: response.stderr, as: UTF8.self).lowercased()
-                    if errorText.contains("authentication required") {
-                        throw SignInIncomplete.authenticationRequired
-                    }
-                    throw UsageError.message("Antigravity could not retrieve subscription quota. It will retry automatically.")
-                }
+                try validateExit(response, explicit: loginInput != nil)
                 let data: Data
                 if loginInput != nil {
                     guard let report = finalJSONObject(in: response.stdout) else {
@@ -89,24 +121,9 @@ enum AntigravityProvider {
                 try profile.writeState(JSONEncoder().encode(budget))
                 return .success(snapshot, nextRequestAt: budget.nextRequestAt)
             } catch {
-                let wait = min(3600, interval * pow(2, Double(budget.failures - 1)))
-                budget.nextRequestAt = Date().addingTimeInterval(wait)
-                // A missing sign-in, or an explicit Connect that was cancelled or
-                // ran out of time, ended before a usage report. Keep Connect
-                // available; background polling cannot start sign-in itself.
-                if let incomplete = signInIncomplete(error, explicit: loginInput != nil) {
-                    budget.needsSignIn = true
-                    try profile.writeState(JSONEncoder().encode(budget))
-                    return .failure(incomplete, .signInRequired, nextRequestAt: nil)
-                }
+                let result = budget.recordFailure(error, explicit: loginInput != nil, at: Date())
                 try profile.writeState(JSONEncoder().encode(budget))
-                let message: String
-                switch error {
-                case AntigravityProcess.ProcessError.timedOut: message = "Antigravity did not finish in time. It will retry automatically without starting sign-in."
-                case is UsageError: message = error.localizedDescription
-                default: message = "Antigravity's usage read failed. It will retry automatically."
-                }
-                return .failure(message, .usageUnavailable, nextRequestAt: budget.nextRequestAt)
+                return result
             }
         } catch AntigravityProfile.ProfileError.busy {
             return .deferred(nextRequestAt: Date().addingTimeInterval(30))
@@ -121,18 +138,15 @@ enum AntigravityProvider {
 
     private enum SignInIncomplete: Error { case authenticationRequired }
 
-    private static func signInIncomplete(_ error: Error, explicit: Bool) -> String? {
-        switch error {
-        case SignInIncomplete.authenticationRequired:
-            return explicit ? "Antigravity sign-in did not complete. Connect Antigravity to try again."
-                : "Connect Antigravity to sign in through the official CLI."
-        case AntigravityProcess.ProcessError.cancelled where explicit:
-            return "Antigravity sign-in was cancelled. Connect Antigravity to try again."
-        case AntigravityProcess.ProcessError.timedOut where explicit:
-            return "Antigravity sign-in did not finish in time. Connect Antigravity to try again."
-        default:
-            return nil
+    static func validateExit(_ response: AntigravityProcess.Result, explicit: Bool) throws {
+        guard response.exitCode != 0 else { return }
+        // Explicit login prints this preamble before successful authentication,
+        // so it says nothing about a later quota failure. Only monitoring can
+        // classify this reviewed error as a confirmed authentication boundary.
+        if !explicit, String(decoding: response.stderr, as: UTF8.self).lowercased().contains("authentication required") {
+            throw SignInIncomplete.authenticationRequired
         }
+        throw UsageError.message("Antigravity could not retrieve subscription quota. It will retry automatically.")
     }
 
     /// Explicit sign-in can print a preamble before the report. Accept only the

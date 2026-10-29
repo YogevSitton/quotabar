@@ -20,6 +20,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- Keep Antigravity quota failures on automatic retry after a successful sign-in, and preserve the request cooldown when a connection is cancelled or times out. Connect shows when another attempt is allowed.
 - Keep Claude visible when QuotaBar's managed Claude Code helper is installed, even without Claude Desktop or a standalone CLI. Empty or incomplete helper installations do not count.
 - Manual reset countdown tags and expiry warnings gradually blend from their existing yellow-orange color at 24 hours left to full red at 12 hours, instead of abruptly turning red at 24 hours.
 - Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.

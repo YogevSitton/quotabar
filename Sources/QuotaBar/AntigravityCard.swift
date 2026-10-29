@@ -34,9 +34,13 @@ struct AntigravityCard: View {
                 AntigravityConnectionSummary(model: connection)
             } else if needsConnection {
                 if let error = state.antigravityError { compactError(error) }
+                if let next = state.antigravityNextRequestAt, next > now {
+                    Text("Connect available in \(countdown(next, now: now))")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
                 Button("Connect Antigravity...", action: state.connectAntigravity)
                     .font(.system(size: 12)).controlSize(.small)
-                    .disabled(state.refreshingAntigravity)
+                    .disabled(state.refreshingAntigravity || (state.antigravityNextRequestAt.map { $0 > now } ?? false))
             } else if state.antigravityIssue == .profileUnavailable {
                 // Connect cannot repair the private profile. Retry rechecks it
                 // and still respects the saved request schedule.
