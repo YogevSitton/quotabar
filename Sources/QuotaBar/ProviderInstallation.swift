@@ -12,6 +12,9 @@ struct ProviderInstallation {
     var antigravity: Bool = false
 
     var count: Int { [codex, claude, antigravity].filter { $0 }.count }
+    var providers: [Provider] {
+        [(Provider.codex, codex), (.claude, claude), (.antigravity, antigravity)].compactMap { $1 ? $0 : nil }
+    }
 
     static func detect() -> Self {
         let home = FileManager.default.homeDirectoryForCurrentUser
