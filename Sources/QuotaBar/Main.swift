@@ -128,7 +128,7 @@ import QuotaUpdateSupport
             }
         }
         button.toolTip = entries.isEmpty
-            ? "QuotaBar\nConnect an installed provider"
+            ? (state.installation.count > 0 && state.visible.count == 0 ? "QuotaBar\nAll providers are hidden" : "QuotaBar\nConnect an installed provider")
             : (["QuotaBar - usage remaining"] + entries.map { $0.tooltipSection(at: now) }).joined(separator: "\n\n")
         let leftovers = entries.compactMap { $0.leftoverAnnouncement(at: now).map { " " + $0 } }
         let expiring = zip(entries, chips).compactMap { entry, chip in chip.map { " \(entry.name) reset expires in \($0.spoken)." } }
