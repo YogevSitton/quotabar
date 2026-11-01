@@ -8,6 +8,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Added
 
+- Show or hide each installed provider from the More menu (**Show Codex**, **Show Claude**, **Show Antigravity**). A hidden provider leaves the menu bar and popup and is not polled; showing it again reads it on its usual schedule. Your choice is saved across restarts.
 - Experimental Antigravity subscription usage, including separately reported Gemini 4 quota groups. Connect through the official CLI, choose the quota group shown in the menu bar, and see its remaining quota and reset times. Private CLI settings avoid the saved slash-command preference bug. A cancelled, timed-out or failed connection keeps its request cooldown, and Connect shows when another attempt is allowed. Live connection and quota behavior remain unverified.
 - More > Logs... opens a private local diagnostic history with Copy logs and Clear logs controls. It keeps bounded provider outcomes, Claude cache-validation and retry details, helper versions and update states across restarts, without credentials, account identifiers or raw replies.
 - In-app updates under More > Updates..., with a default Stable channel and an opt-in Preview channel per Mac. Checks run about hourly and downloads are automatic by default; nothing installs until you click Install and Relaunch. Moving from published versions through 0.3.0 needs one manual download. Preview builds are published automatically from `main`.

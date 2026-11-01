@@ -8,7 +8,7 @@ struct Dashboard: View {
     // screen-capped height so the popup has no empty space at the bottom.
     var fixedHeight: CGFloat? = nil
     var contentWidth: CGFloat {
-        min(CGFloat(max(1, state.installation.count) * 320 + 60), maximumSize.width)
+        min(CGFloat(max(1, state.visible.count) * 320 + 60), maximumSize.width)
     }
     private var resetRowLimit: Int {
         let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
@@ -31,6 +31,14 @@ struct Dashboard: View {
                     Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power").frame(width: 14, height: 16) }
                         .help("Quit QuotaBar").keyboardShortcut("q")
                     Menu {
+                        // Every installed provider keeps its toggle, so a hidden
+                        // one can always be shown again.
+                        ForEach(state.installation.providers, id: \.self) { provider in
+                            Toggle("Show \(provider.rawValue)", isOn: Binding(
+                                get: { !state.hiddenProviders.contains(provider) },
+                                set: { state.setVisible(provider, $0) }))
+                        }
+                        if state.installation.count > 0 { Divider() }
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Updates...") { state.showUpdates() }
                         Button("Logs...") { state.showLogs() }
@@ -42,7 +50,7 @@ struct Dashboard: View {
                     VStack(spacing: 10) {
                         // Explicit columns prevent a long offer or button from
                         // expanding the hosting view beyond the screen budget.
-                        let columns = max(1, state.installation.count)
+                        let columns = max(1, state.visible.count)
                         let columnWidth = max(0, (contentWidth - 24 - CGFloat(columns - 1) * 10) / CGFloat(columns))
                         let paired = columns > 1
                         // Only worth saying when there is another provider to choose.
@@ -51,7 +59,7 @@ struct Dashboard: View {
                             entry.leftoverReset(at: context.date).map { (provider: entry.provider, resetsAt: $0.resetsAt) }
                         }.min { $0.resetsAt < $1.resetsAt }?.provider
                         HStack(alignment: .top, spacing: 10) {
-                            if state.installation.codex {
+                            if state.visible.codex {
                                     CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                                                  resetRowLimit: resetRowLimit, details: { state.showDetails(for: .codex) },
@@ -60,17 +68,17 @@ struct Dashboard: View {
                                                  useFirst: useFirst == .codex)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
-                            if state.installation.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
+                            if state.visible.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
                                 ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
-                            } else if state.installation.claude && !state.needsClaudeConnection {
+                            } else if state.visible.claude && !state.needsClaudeConnection {
                                 CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
                                              resetRowLimit: resetRowLimit, details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
                                              nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil,
                                              useFirst: useFirst == .claude)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
-                            } else if state.installation.claude && state.needsClaudeConnection {
+                            } else if state.visible.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
                                     HStack(spacing: 8) {
                                         ProviderIcon(provider: .claude, size: 24)
@@ -79,13 +87,17 @@ struct Dashboard: View {
                                 }.controlSize(.large)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
                             }
-                            if state.installation.antigravity {
+                            if state.visible.antigravity {
                                 AntigravityCard(state: state, now: context.date, useFirst: useFirst == .antigravity)
                                     .frame(width: columnWidth, alignment: .topLeading)
                             }
                         }
                         if state.installation.count == 0 {
                             Text("Install Codex, Claude or Antigravity to see your usage here.")
+                                .font(.callout).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, 20)
+                        } else if state.visible.count == 0 {
+                            Text("All providers are hidden. Show one from the More menu.")
                                 .font(.callout).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
