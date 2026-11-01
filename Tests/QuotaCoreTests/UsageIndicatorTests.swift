@@ -110,4 +110,40 @@ final class UsageIndicatorTests: XCTestCase {
         let snapshot = UsageSnapshot(offers: [expired, unknown, later, urgent])
         XCTAssertEqual(snapshot.orderedResetOffers(at: sampleTime).map(\.id), ["urgent", "later", "unknown", "expired"])
     }
+
+    func testLeftoverResetBoundaries() {
+        func qualifies(_ window: LeftoverReset.Window, _ remaining: Int?, _ seconds: TimeInterval?) -> Bool {
+            LeftoverReset.qualifies(window, remaining: remaining, resetsAt: seconds.map { sampleTime.addingTimeInterval($0) }, at: sampleTime)
+        }
+        XCTAssertTrue(qualifies(.weekly, 1, 48 * 3600))
+        XCTAssertTrue(qualifies(.weekly, 100, 1))
+        XCTAssertFalse(qualifies(.weekly, 34, 48 * 3600 + 1))
+        XCTAssertFalse(qualifies(.weekly, 0, 3600))
+        XCTAssertTrue(qualifies(.fiveHour, 30, 3600))
+        XCTAssertFalse(qualifies(.fiveHour, 29, 600))
+        XCTAssertFalse(qualifies(.fiveHour, 80, 3601))
+        for window in [LeftoverReset.Window.fiveHour, .weekly] {
+            XCTAssertFalse(qualifies(window, nil, 600))
+            XCTAssertFalse(qualifies(window, 50, nil))
+            for seconds in [0, -1, .nan, -.infinity] as [TimeInterval] {
+                XCTAssertFalse(qualifies(window, 50, seconds))
+            }
+        }
+    }
+
+    func testLeftoverResetPicksSoonestQualifyingWindow() throws {
+        func window(used: Double, _ seconds: TimeInterval) -> UsageWindow {
+            UsageWindow(used: used, resetsAt: sampleTime.addingTimeInterval(seconds))
+        }
+        let weekly = try XCTUnwrap(LeftoverReset.soonest(fiveHour: window(used: 20, 3 * 3600), weekly: window(used: 66, 9 * 3600), at: sampleTime))
+        XCTAssertEqual(weekly.window, .weekly)
+        XCTAssertEqual(weekly.remaining, 34)
+        let fiveHour = try XCTUnwrap(LeftoverReset.soonest(fiveHour: window(used: 45, 2400), weekly: window(used: 66, 9 * 3600), at: sampleTime))
+        XCTAssertEqual(fiveHour.window, .fiveHour)
+        XCTAssertEqual(fiveHour.resetsAt, sampleTime.addingTimeInterval(2400))
+        XCTAssertNil(LeftoverReset.soonest(fiveHour: window(used: 45, 2400), weekly: window(used: 100, 9 * 3600), at: sampleTime))
+        XCTAssertNil(LeftoverReset.soonest(fiveHour: nil, weekly: window(used: 10, 3 * 86400), at: sampleTime))
+        XCTAssertNil(LeftoverReset.soonest(fiveHour: nil, weekly: UsageWindow(used: 10, resetsAt: nil), at: sampleTime))
+        XCTAssertEqual(LeftoverReset.soonest(fiveHour: window(used: 0, 600), weekly: nil, at: sampleTime)?.window, .fiveHour)
+    }
 }

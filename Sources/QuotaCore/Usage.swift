@@ -63,6 +63,38 @@ public enum ResetExpiryUrgency: Int, Comparable {
     }
 }
 
+/// Usage still left in a window that resets automatically soon. Unused usage
+/// does not carry over, so the menu bar and popup suggest spending it first.
+public struct LeftoverReset: Equatable {
+    public enum Window: Equatable { case fiveHour, weekly }
+    public let window: Window
+    public let remaining: Int
+    public let resetsAt: Date
+
+    /// Weekly: within 48 hours with any usage left. Five-hour: within the last
+    /// hour with at least 30% left. Exhausted, unknown and past resets never qualify.
+    public static func qualifies(_ window: Window, remaining: Int?, resetsAt: Date?, at now: Date) -> Bool {
+        guard let remaining, remaining > 0, let resetsAt else { return false }
+        let timeLeft = resetsAt.timeIntervalSince(now)
+        guard timeLeft.isFinite, timeLeft > 0 else { return false }
+        switch window {
+        case .weekly: return timeLeft <= 48 * 3600
+        case .fiveHour: return timeLeft <= 3600 && remaining >= 30
+        }
+    }
+
+    /// At most one per provider: the qualifying window that resets first. An
+    /// exhausted weekly window blocks the five-hour window too, so neither counts.
+    public static func soonest(fiveHour: UsageWindow?, weekly: UsageWindow?, at now: Date) -> LeftoverReset? {
+        guard weekly?.remaining != 0 else { return nil }
+        return [(Window.fiveHour, fiveHour), (.weekly, weekly)].compactMap { kind, window -> LeftoverReset? in
+            guard let window, let resetsAt = window.resetsAt,
+                  qualifies(kind, remaining: window.remaining, resetsAt: resetsAt, at: now) else { return nil }
+            return LeftoverReset(window: kind, remaining: window.remaining, resetsAt: resetsAt)
+        }.min { $0.resetsAt < $1.resetsAt }
+    }
+}
+
 public struct ResetOffer: Identifiable, Equatable {
     public let id: String
     public let title: String
