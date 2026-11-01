@@ -7,6 +7,39 @@ struct MenuBarResetChip: Equatable {
     let redFraction: Double
 }
 
+struct MenuBarSegment: Equatable {
+    let text: String
+    /// The percentage that tints this segment; nil stays uncolored.
+    let remaining: Int?
+    /// Time until a window with usage left resets, drawn in blue after its percentage.
+    var isLeftover = false
+}
+
+extension LeftoverReset.Window {
+    var label: String { self == .weekly ? "weekly" : "5-hour" }
+}
+
+extension LeftoverReset {
+    /// Rounded down like the reset chip, so it never overstates the time left.
+    /// Hours even past a day, so it never reads like the chip's "2d".
+    func countdown(at now: Date) -> (text: String, spoken: String) {
+        let minutes = max(1, Int(resetsAt.timeIntervalSince(now) / 60))
+        func plural(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s")" }
+        if minutes >= 60 { return ("\(minutes / 60)h", plural(minutes / 60, "hour")) }
+        return ("\(minutes)m", plural(minutes, "minute"))
+    }
+}
+
+extension NSColor {
+    /// Fixed blues rather than the accent color, which can be orange like the
+    /// reset chip. Both keep about 4.9:1 or more on typical menu bar backgrounds.
+    static let quotaLeftover = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.290, green: 0.639, blue: 1, alpha: 1)
+            : NSColor(srgbRed: 0, green: 0.384, blue: 0.8, alpha: 1)
+    }
+}
+
 struct MenuBarQuota {
     let limit: UsageLimit
     var remaining: Int? { limit.remaining }
@@ -54,12 +87,31 @@ struct MenuBarEntry {
         ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window", at: now),
                                                      weekly.tooltipLine("Weekly window", at: now)]).joined(separator: "; ")
     }
+    /// Usage left in a current window that resets automatically soon.
+    func leftoverReset(at now: Date) -> LeftoverReset? {
+        LeftoverReset.soonest(fiveHour: session.limit.window, weekly: weekly.limit.window, at: now)
+    }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
-    /// Each segment carries the percentage that tints it; nil stays uncolored.
-    func menuSegments(at now: Date) -> [(text: String, remaining: Int?)] {
-        if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true { return [(weekly.menuValue(at: now), nil)] }
-        return [(session.menuValue(at: now), session.remaining), ("/", nil), (weekly.menuValue(at: now), weekly.remaining)]
+    /// Leftover usage that resets soon adds its countdown after that window's %.
+    func menuSegments(at now: Date) -> [MenuBarSegment] {
+        if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true {
+            return [MenuBarSegment(text: weekly.menuValue(at: now), remaining: nil)]
+        }
+        let leftover = leftoverReset(at: now)
+        func segments(_ quota: MenuBarQuota, _ window: LeftoverReset.Window) -> [MenuBarSegment] {
+            var segments = [MenuBarSegment(text: quota.menuValue(at: now), remaining: quota.remaining)]
+            if let leftover, leftover.window == window {
+                segments.append(MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true))
+            }
+            return segments
+        }
+        return segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
+    }
+    func leftoverAnnouncement(at now: Date) -> String? {
+        leftoverReset(at: now).map {
+            "\(name) \($0.window.label) usage resets in \($0.countdown(at: now).spoken) with \($0.remaining) percent unused."
+        }
     }
     func menuLabel(at now: Date) -> String {
         menuSegments(at: now).map(\.text).joined() + (resetChip(at: now).map { " " + $0.text } ?? "")
@@ -84,8 +136,12 @@ struct MenuBarEntry {
             // Rounded down like the chip, so it never overstates the time left.
             $0 > now ? "Next reset expires in \(countdown($0, now: now, style: .totalHours, roundingDown: true))" : "Next reset expired"
         }
+        // Rounded up like the reset line above it, which shows the same time.
+        let leftover = leftoverReset(at: now).map {
+            "Use soon: \($0.remaining)% of the \($0.window.label) window resets in \(countdown($0.resetsAt, now: now, style: .totalHours))"
+        }
         return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)]
-                + [expiry].compactMap { $0 }).joined(separator: "\n")
+                + [leftover, expiry].compactMap { $0 }).joined(separator: "\n")
     }
 }
 
@@ -98,19 +154,33 @@ struct MenuBarEntry {
         guard fraction > 0, let base = NSColor.labelColor.usingColorSpace(.sRGB) else { return .labelColor }
         return base.blended(withFraction: fraction, of: .systemRed) ?? .labelColor
     }
+    private static let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+    private static let leftoverFont = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
+    private static let leftoverGap: CGFloat = 3
     private static let chipFont = NSFont.monospacedDigitSystemFont(ofSize: 8.5, weight: .bold)
     private static let chipGap: CGFloat = 3
     private static let chipPadding: CGFloat = 3.5
-    static func image(entries: [MenuBarEntry], segments: [[(text: String, remaining: Int?)]], chips: [MenuBarResetChip?],
+    /// One line so the smaller leftover countdown shares the percentages' baseline.
+    private static func attributedLabel(_ segments: [MenuBarSegment]) -> NSAttributedString {
+        let label = NSMutableAttributedString()
+        for segment in segments {
+            if segment.isLeftover, label.length > 0 {
+                label.addAttribute(.kern, value: leftoverGap, range: NSRange(location: label.length - 1, length: 1))
+            }
+            label.append(NSAttributedString(string: segment.text, attributes: segment.isLeftover
+                ? [.font: leftoverFont, .foregroundColor: NSColor.quotaLeftover]
+                : [.font: font, .foregroundColor: color(remaining: segment.remaining)]))
+        }
+        return label
+    }
+    static func image(entries: [MenuBarEntry], segments: [[MenuBarSegment]], chips: [MenuBarResetChip?],
                       appearance: NSAppearance) -> NSImage {
         // Keep the bar to one logo and 5h%/weekly% per connected provider.
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         // Fit the content with no reserved space. Digits are monospaced, so
         // ordinary percentage changes keep the width; a different digit count,
-        // countdown, no-limit marker, unavailable reading or chip changes it.
-        let labelWidths = segments.map {
-            ceil(($0.map(\.text).joined() as NSString).size(withAttributes: [.font: font]).width)
-        }
+        // countdown, no-limit marker, unavailable reading, leftover countdown
+        // or chip changes it.
+        let labelWidths = segments.map { ceil(attributedLabel($0).size().width) }
         let widths: [CGFloat] = zip(labelWidths, chips).map { label, chip in
             label + (chip.map { chipGap + chipWidth($0) } ?? 0)
         }
@@ -131,11 +201,8 @@ struct MenuBarEntry {
                     ProviderArtwork.menuImage(for: entry.provider, appearance: appearance)
                         .draw(in: NSRect(x: x, y: 2, width: iconSize, height: iconSize))
                     x += iconSize + iconTextGap
-                    let label = NSMutableAttributedString()
-                    for segment in segments[index] {
-                        label.append(NSAttributedString(string: segment.text, attributes: [
-                            .font: font, .foregroundColor: color(remaining: segment.remaining)]))
-                    }
+                    // Built here so the tint resolves in the menu bar's appearance.
+                    let label = attributedLabel(segments[index])
                     label.draw(at: NSPoint(x: x, y: (22 - label.size().height) / 2))
                     if let chip = chips[index] { drawChip(chip, at: x + labelWidths[index] + chipGap) }
                     x += widths[index]

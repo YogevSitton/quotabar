@@ -6,6 +6,7 @@ import QuotaCore
 struct AntigravityCard: View {
     @ObservedObject var state: AppState
     let now: Date
+    var useFirst = false
 
     private var current: Bool {
         state.antigravity?.isCurrent(at: now, maximumAge: state.antigravityMaximumAge,
@@ -25,6 +26,7 @@ struct AntigravityCard: View {
             HStack(spacing: 6) {
                 ProviderIcon(provider: .antigravity, size: 22)
                 Text("Antigravity").font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                if useFirst && current { UseFirstTag(name: "Antigravity") }
                 Spacer(minLength: 2)
                 Button(action: state.openAntigravity) { Image(systemName: "arrow.up.right.square") }
                     .buttonStyle(.plain).help("Open Antigravity usage help").accessibilityLabel("Open Antigravity usage help")
@@ -76,10 +78,13 @@ struct AntigravityCard: View {
                         Text(group.name).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                             .lineLimit(1).help(group.name)
                     }
+                    let leftover = current ? LeftoverReset.soonest(fiveHour: group.session, weekly: group.weekly, at: now) : nil
                     UsageRow(title: "5-hour window", window: group.session, color: .blue, now: now, stale: !current,
-                             duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
+                             duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true,
+                             leftover: leftover?.window == .fiveHour ? leftover : nil)
                     UsageRow(title: "Weekly window", window: group.weekly, color: .blue, now: now, stale: !current,
-                             duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
+                             duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true,
+                             leftover: leftover?.window == .weekly ? leftover : nil)
                     if current {
                         Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                             .font(.system(size: 10)).foregroundStyle(.secondary)

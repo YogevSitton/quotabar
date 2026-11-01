@@ -45,13 +45,19 @@ struct Dashboard: View {
                         let columns = max(1, state.installation.count)
                         let columnWidth = max(0, (contentWidth - 24 - CGFloat(columns - 1) * 10) / CGFloat(columns))
                         let paired = columns > 1
+                        // Only worth saying when there is another provider to choose.
+                        let entries = state.menuEntries
+                        let useFirst = entries.count < 2 ? nil : entries.compactMap { entry in
+                            entry.leftoverReset(at: context.date).map { (provider: entry.provider, resetsAt: $0.resetsAt) }
+                        }.min { $0.resetsAt < $1.resetsAt }?.provider
                         HStack(alignment: .top, spacing: 10) {
                             if state.installation.codex {
                                     CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                                                  resetRowLimit: resetRowLimit, details: { state.showDetails(for: .codex) },
                                                  resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.hasCodexResetNotice ? "Reset request needs attention" : nil,
-                                                 canReset: state.canUseCodexReset, useReset: state.confirmCodexReset)
+                                                 canReset: state.canUseCodexReset, useReset: state.confirmCodexReset,
+                                                 useFirst: useFirst == .codex)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             }
                             if state.installation.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
@@ -61,7 +67,8 @@ struct Dashboard: View {
                                 CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
                                              error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
                                              resetRowLimit: resetRowLimit, details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
-                                             nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil)
+                                             nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil,
+                                             useFirst: useFirst == .claude)
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                             } else if state.installation.claude && state.needsClaudeConnection {
                                 Button(action: state.connectClaude) {
@@ -73,7 +80,7 @@ struct Dashboard: View {
                                     .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
                             }
                             if state.installation.antigravity {
-                                AntigravityCard(state: state, now: context.date)
+                                AntigravityCard(state: state, now: context.date, useFirst: useFirst == .antigravity)
                                     .frame(width: columnWidth, alignment: .topLeading)
                             }
                         }
@@ -116,6 +123,7 @@ private struct CompactProviderCard: View {
     var useReset: ((ResetOffer) -> Void)? = nil
     var retry: (() -> Void)? = nil
     var nextRetry: Date? = nil
+    var useFirst = false
     private var current: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -124,16 +132,20 @@ private struct CompactProviderCard: View {
                 ProviderIcon(provider: provider, size: 22)
                 Text(name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                 if let plan = snapshot?.plan { Text(plan.capitalized).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1) }
+                if useFirst && current { UseFirstTag(name: name) }
                 Spacer(minLength: 2)
                 Button(action: open) { Image(systemName: "arrow.up.right.square") }
                     .buttonStyle(.plain).help("Open \(name) usage").accessibilityLabel("Open \(name) usage")
             }.padding(.bottom, 2)
             if current, let snapshot {
+                let leftover = LeftoverReset.soonest(fiveHour: snapshot.session, weekly: snapshot.weekly, at: now)
                 UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false,
                          noLimit: snapshot.sessionLimit == .noLimit,
-                         duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true)
+                         duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true,
+                         leftover: leftover?.window == .fiveHour ? leftover : nil)
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
-                         duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true)
+                         duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true,
+                         leftover: leftover?.window == .weekly ? leftover : nil)
                 if provider != .claude {
                     Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -315,11 +327,14 @@ struct ProviderCard: View {
         return "\(minutes)m"
     }
     @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
+        let leftover = historical ? nil : LeftoverReset.soonest(fiveHour: snapshot.session, weekly: snapshot.weekly, at: now)
         UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical,
                  noLimit: snapshot.sessionLimit == .noLimit,
-                 duration: 5 * 3600, observedAt: snapshot.observedAt)
+                 duration: 5 * 3600, observedAt: snapshot.observedAt,
+                 leftover: leftover?.window == .fiveHour ? leftover : nil)
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
-                 duration: 7 * 86400, observedAt: snapshot.observedAt)
+                 duration: 7 * 86400, observedAt: snapshot.observedAt,
+                 leftover: leftover?.window == .weekly ? leftover : nil)
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         if provider != .claude || snapshot.showsResetCredits { resets }
@@ -419,6 +434,8 @@ struct UsageRow: View {
     var duration: TimeInterval? = nil
     var observedAt: Date? = nil
     var compact = false
+    /// Usage left in this window that resets soon, from a current reading only.
+    var leftover: LeftoverReset? = nil
     var pending: Bool { window?.awaitingReset(at: now) == true }
     var visibleWindow: UsageWindow? { !stale && pending ? nil : window }
     private var pace: UsagePace? {
@@ -468,10 +485,17 @@ struct UsageRow: View {
                     // The countdown follows the reset time to keep the popup
                     // short; the timezone stays in the tooltip.
                     let when = reset.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-                    Text(stale ? "Reset reported for \(when)" : "Auto reset: \(when) (\(countdown(reset, now: now, style: .short)))")
-                        .font(.system(size: 11, weight: .medium)).foregroundStyle(stale ? .secondary : .primary)
+                    let exact = reset.formatted(.dateTime.day().month().year().hour().minute().timeZone())
+                    // Unused usage is lost at the reset, so say when to use it by.
+                    let leftover = stale ? nil : self.leftover
+                    Text(stale ? "Reset reported for \(when)"
+                         : "\(leftover == nil ? "Auto reset:" : "Use by") \(when) (\(countdown(reset, now: now, style: .short)))")
+                        .font(.system(size: 11, weight: leftover == nil ? .medium : .semibold))
+                        .foregroundStyle(stale ? Color.secondary : leftover == nil ? Color.primary : Color(nsColor: .quotaLeftover))
                         .lineLimit(compact ? 1 : nil).minimumScaleFactor(0.85)
-                        .help(reset.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
+                        .help(leftover.map {
+                            "\($0.remaining)% of the \($0.window.label) window is still unused and does not carry over. Automatic reset: \(exact)."
+                        } ?? exact)
                 } else { Text("Automatic reset time not reported").font(.system(size: 11)).foregroundStyle(.secondary) }
             }
         }
@@ -502,6 +526,19 @@ private struct UsageBar: View {
         // Reserve the tick's full height so it cannot grow the track or crowd
         // the reset time below the meter.
         }.frame(height: 9)
+    }
+}
+
+/// Marks the provider whose leftover usage resets soonest, in the leftover blue.
+struct UseFirstTag: View {
+    let name: String
+    var body: some View {
+        Text("Use first").font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color(nsColor: .quotaLeftover))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Color(nsColor: .quotaLeftover).opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+            .lineLimit(1).fixedSize()
+            .help("\(name)'s leftover usage resets soonest. Use \(name) first to avoid losing it.")
     }
 }
 
