@@ -212,4 +212,44 @@ final class AntigravityProviderTests: XCTestCase {
             XCTAssertEqual(next, start.addingTimeInterval(1_200))
         }
     }
+
+    func testFailureDiagnosticsKeepOnlyFixedCategories() {
+        let private_ = "private-value"
+        let failed = AntigravityProcess.Result(stdout: Data("\(private_)\n".utf8),
+            stderr: Data("Authentication required. \(private_)\n".utf8), exitCode: 1)
+        XCTAssertTrue(AntigravityProvider.mentionsAuthenticationRequired(failed))
+        XCTAssertFalse(AntigravityProvider.mentionsAuthenticationRequired(
+            AntigravityProcess.Result(stdout: Data(), stderr: Data("Synthetic quota failure.\n".utf8), exitCode: 1)))
+        let report = DiagnosticEvent.Report(antigravity: AntigravityProvider.finalJSONObject(in: failed.stdout))
+        XCTAssertEqual(report, .missing)
+        XCTAssertThrowsError(try AntigravityProvider.validateExit(failed, explicit: true)) { error in
+            let reason = AntigravityProvider.diagnosticReason(error, phase: .usage, report: report)
+            XCTAssertEqual(reason, .exitedWithError)
+            let event = DiagnosticEvent(area: .antigravity, kind: .readFailed, reason: reason, phase: .usage,
+                signInAllowed: true, exitStatus: Int(failed.exitCode),
+                authenticationNotice: AntigravityProvider.mentionsAuthenticationRequired(failed), report: report)
+            XCTAssertTrue(event.isValid)
+            XCTAssertFalse(event.line.contains(private_))
+        }
+        XCTAssertThrowsError(try AntigravityProvider.validateExit(failed, explicit: false)) { error in
+            XCTAssertEqual(AntigravityProvider.diagnosticReason(error, phase: .usage, report: report), .signedOut)
+        }
+        let rejected = UsageError.message("Synthetic parser rejection.")
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(rejected, phase: .parsing, report: .missing), .missingReport)
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(rejected, phase: .parsing, report: .failedStatus), .invalidUsage)
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(rejected, phase: .launch, report: nil), .helperCheckFailed)
+        let processReasons: [(AntigravityProcess.ProcessError, DiagnosticEvent.Reason)] = [
+            (.timedOut, .helperTimeout), (.cancelled, .cancelled), (.cancelledBeforeLaunch, .cancelledBeforeLaunch),
+            (.oversizedResponse, .oversizedReply), (.inputUnavailable, .terminalUnavailable), (.launchFailed, .launchFailed)]
+        for (error, reason) in processReasons {
+            XCTAssertEqual(AntigravityProvider.diagnosticReason(error, phase: .usage, report: nil), reason)
+        }
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(AntigravityProfile.ProfileError.busy, phase: .launch, report: nil), .pollStoreBusy)
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(AntigravityProfile.ProfileError.administratorPolicy,
+            phase: .launch, report: nil), .administratorPolicy)
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(AntigravityProfile.ProfileError.unavailable,
+            phase: .usage, report: nil), .profileUnavailable)
+        XCTAssertEqual(AntigravityProvider.diagnosticReason(AntigravityProfile.ProfileError.unavailable,
+            phase: .savingSchedule, report: nil), .pollStoreUnavailable)
+    }
 }

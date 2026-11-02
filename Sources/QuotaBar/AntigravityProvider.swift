@@ -9,6 +9,13 @@ enum AntigravityReadResult {
     case success(AntigravitySnapshot, nextRequestAt: Date)
     case deferred(nextRequestAt: Date)
     case failure(String, AntigravityConnectionIssue, nextRequestAt: Date?)
+
+    var nextRequestAt: Date? {
+        switch self {
+        case .success(_, let next), .deferred(let next): return next
+        case .failure(_, _, let next): return next
+        }
+    }
 }
 
 enum AntigravityProvider {
@@ -96,10 +103,13 @@ enum AntigravityProvider {
     /// the durable reservation survives termination, wake, retry and relaunch.
     static func read(loginInput: AntigravityProcess.LoginInput? = nil,
                      cancellation: AntigravityProcess.Cancellation? = nil) -> AntigravityReadResult {
+        let explicit = loginInput != nil
+        var phase: DiagnosticEvent.Phase = .launch
         do {
             // A presence check keeps polling from creating the private profile
             // before Connect. The full hash and signature check runs below,
             // only for an attempt that will actually launch the helper.
+            // Not logged: an unconnected install would add an entry every launch.
             guard FileManager.default.fileExists(atPath: AntigravityHelper.executable.path) else {
                 return .failure("Connect Antigravity to prepare its official CLI.", .helperMissing, nextRequestAt: nil)
             }
@@ -107,63 +117,134 @@ enum AntigravityProvider {
             var budget = Budget(nextRequestAt: .distantPast, failures: 0, needsSignIn: false)
             if let saved = try profile.readState() {
                 guard let decoded = try? JSONDecoder().decode(Budget.self, from: saved) else {
+                    record(.readFailed, .pollStoreInvalid, phase: phase, explicit: explicit)
                     return .failure("Antigravity's saved request schedule could not be read. Usage monitoring is stopped.", .profileUnavailable, nextRequestAt: nil)
                 }
                 budget = decoded
                 guard budget.version == 1, (0...10).contains(budget.failures),
                       budget.nextRequestAt.timeIntervalSince1970.isFinite else {
+                    record(.readFailed, .pollStoreInvalid, phase: phase, explicit: explicit)
                     return .failure("Antigravity's saved request schedule could not be verified.", .profileUnavailable, nextRequestAt: nil)
                 }
             }
             let now = Date()
-            if let result = budget.preflight(explicit: loginInput != nil, at: now) { return result }
+            if let result = budget.preflight(explicit: explicit, at: now) {
+                DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .readDeferred,
+                    reason: budget.needsSignIn ? .connectRequired : budget.failures > 0 ? .cooldown : .scheduled,
+                    failureCount: budget.failures, nextAttemptAt: result.nextRequestAt, signInAllowed: explicit))
+                return result
+            }
             guard let binary = try AntigravityHelper.existing() else {
+                record(.readFailed, .helperMissing, phase: phase, explicit: explicit)
                 return .failure("Connect Antigravity to prepare its official CLI.", .helperMissing, nextRequestAt: nil)
             }
             // Verification takes a moment; a Connect cancelled meanwhile never launched.
-            if cancellation?.isCancelled == true { return budget.cancelledBeforeLaunch(at: Date()) }
+            if cancellation?.isCancelled == true {
+                record(.readFailed, .cancelledBeforeLaunch, phase: phase, explicit: explicit)
+                return budget.cancelledBeforeLaunch(at: Date())
+            }
             // Reserve the attempt as a failure until it completes. Crashes
             // must not repeatedly reset the failure count or request deadline.
             let previous = budget
             budget.reserve(at: now)
+            phase = .savingSchedule
             try profile.writeState(JSONEncoder().encode(budget))
+            DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .readStarted,
+                failureCount: previous.failures, nextAttemptAt: budget.nextRequestAt, signInAllowed: explicit))
 
+            let startedAt = Date()
+            var response: AntigravityProcess.Result?
             do {
-                let response = try AntigravityProcess.run(binary: binary,
+                phase = .usage
+                let completed = try AntigravityProcess.run(binary: binary,
                     arguments: ["-p", "/usage", "--output-format", "json"], profile: profile,
-                    timeout: loginInput == nil ? 45 : 180, loginInput: loginInput,
+                    timeout: explicit ? 180 : 45, loginInput: loginInput,
                     cancel: cancellation)
-                try validateExit(response, explicit: loginInput != nil)
+                response = completed
+                try validateExit(completed, explicit: explicit)
+                phase = .parsing
                 let data: Data
-                if loginInput != nil {
-                    guard let report = finalJSONObject(in: response.stdout) else {
+                if explicit {
+                    guard let report = finalJSONObject(in: completed.stdout) else {
                         throw UsageError.message("Antigravity did not return subscription quota after sign-in.")
                     }
                     data = report
-                } else { data = response.stdout }
+                } else { data = completed.stdout }
                 let snapshot = try UsageParser.antigravity(data, observedAt: now)
                 budget.failures = 0
                 budget.nextRequestAt = max(Date().addingTimeInterval(1), now.addingTimeInterval(interval))
+                phase = .savingSchedule
                 try profile.writeState(JSONEncoder().encode(budget))
+                DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .readSucceeded,
+                    durationMS: DiagnosticEvent.durationMS(from: startedAt), failureCount: 0,
+                    nextAttemptAt: budget.nextRequestAt, signInAllowed: explicit))
                 return .success(snapshot, nextRequestAt: budget.nextRequestAt)
             } catch AntigravityProcess.ProcessError.cancelledBeforeLaunch {
                 // The lease is still held, so restoring the earlier schedule
                 // cannot overwrite another copy's reservation.
+                phase = .savingSchedule
                 try profile.writeState(JSONEncoder().encode(previous))
+                record(.readFailed, .cancelledBeforeLaunch, phase: .launch, explicit: explicit)
                 return previous.cancelledBeforeLaunch(at: Date())
             } catch {
-                let result = budget.recordFailure(error, explicit: loginInput != nil, reservedFrom: previous, at: Date())
+                let result = budget.recordFailure(error, explicit: explicit, reservedFrom: previous, at: Date())
+                let report = response.map { DiagnosticEvent.Report(antigravity: finalJSONObject(in: $0.stdout)) }
+                DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .readFailed,
+                    reason: diagnosticReason(error, phase: phase, report: report), phase: phase,
+                    durationMS: DiagnosticEvent.durationMS(from: startedAt), failureCount: budget.failures,
+                    nextAttemptAt: result.nextRequestAt, signInAllowed: explicit,
+                    exitStatus: response.map { Int($0.exitCode) },
+                    authenticationNotice: response.map(mentionsAuthenticationRequired), report: report))
+                phase = .savingSchedule
                 try profile.writeState(JSONEncoder().encode(budget))
                 return result
             }
-        } catch AntigravityProfile.ProfileError.busy {
-            return .deferred(nextRequestAt: Date().addingTimeInterval(30))
-        } catch AntigravityProfile.ProfileError.administratorPolicy {
-            return .failure("Antigravity's administrator policy is not supported by this integration yet. Check usage in Antigravity.", .profileUnavailable, nextRequestAt: nil)
-        } catch is AntigravityProfile.ProfileError {
-            return .failure("Antigravity's isolated settings could not be verified. Usage monitoring is stopped.", .profileUnavailable, nextRequestAt: nil)
         } catch {
-            return .failure("The reviewed Antigravity helper or its saved schedule could not be verified. Use Connect Antigravity to check setup.", .helperMissing, nextRequestAt: nil)
+            let reason = diagnosticReason(error, phase: phase, report: nil)
+            record(reason == .pollStoreBusy ? .readDeferred : .readFailed, reason,
+                   phase: reason == .pollStoreBusy ? nil : phase, explicit: explicit)
+            switch error {
+            case AntigravityProfile.ProfileError.busy:
+                return .deferred(nextRequestAt: Date().addingTimeInterval(30))
+            case AntigravityProfile.ProfileError.administratorPolicy:
+                return .failure("Antigravity's administrator policy is not supported by this integration yet. Check usage in Antigravity.", .profileUnavailable, nextRequestAt: nil)
+            case is AntigravityProfile.ProfileError:
+                return .failure("Antigravity's isolated settings could not be verified. Usage monitoring is stopped.", .profileUnavailable, nextRequestAt: nil)
+            default:
+                return .failure("The reviewed Antigravity helper or its saved schedule could not be verified. Use Connect Antigravity to check setup.", .helperMissing, nextRequestAt: nil)
+            }
+        }
+    }
+
+    private static func record(_ kind: DiagnosticEvent.Kind, _ reason: DiagnosticEvent.Reason,
+                               phase: DiagnosticEvent.Phase?, explicit: Bool) {
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: kind, reason: reason,
+            phase: phase, signInAllowed: explicit))
+    }
+
+    /// Fixed categories only: stdout, stderr and error text never reach the log.
+    /// `phase` is the step that threw, which separates a failed exit from a
+    /// rejected report and a schedule write from profile verification.
+    static func diagnosticReason(_ error: Error, phase: DiagnosticEvent.Phase,
+                                 report: DiagnosticEvent.Report?) -> DiagnosticEvent.Reason {
+        switch error {
+        case AntigravityProcess.ProcessError.timedOut: return .helperTimeout
+        case AntigravityProcess.ProcessError.cancelled: return .cancelled
+        case AntigravityProcess.ProcessError.cancelledBeforeLaunch: return .cancelledBeforeLaunch
+        case AntigravityProcess.ProcessError.oversizedResponse: return .oversizedReply
+        case AntigravityProcess.ProcessError.inputUnavailable: return .terminalUnavailable
+        case AntigravityProcess.ProcessError.launchFailed: return .launchFailed
+        case SignInIncomplete.authenticationRequired: return .signedOut
+        case AntigravityProfile.ProfileError.busy: return .pollStoreBusy
+        case AntigravityProfile.ProfileError.administratorPolicy: return .administratorPolicy
+        case is AntigravityProfile.ProfileError: return phase == .savingSchedule ? .pollStoreUnavailable : .profileUnavailable
+        default:
+            switch phase {
+            case .usage: return .exitedWithError
+            case .parsing: return report == .missing ? .missingReport : .invalidUsage
+            case .savingSchedule: return .pollStoreUnavailable
+            default: return .helperCheckFailed
+            }
         }
     }
 
@@ -174,10 +255,15 @@ enum AntigravityProvider {
         // Explicit login prints this preamble before successful authentication,
         // so it says nothing about a later quota failure. Only monitoring can
         // classify this reviewed error as a confirmed authentication boundary.
-        if !explicit, String(decoding: response.stderr, as: UTF8.self).lowercased().contains("authentication required") {
+        if !explicit, mentionsAuthenticationRequired(response) {
             throw SignInIncomplete.authenticationRequired
         }
         throw UsageError.message("Antigravity could not retrieve subscription quota. It will retry automatically.")
+    }
+
+    /// Matches the reviewed CLI's fixed error text; only the boolean is kept.
+    static func mentionsAuthenticationRequired(_ response: AntigravityProcess.Result) -> Bool {
+        String(decoding: response.stderr, as: UTF8.self).lowercased().contains("authentication required")
     }
 
     /// Explicit sign-in can print a preamble before the report. Accept only the

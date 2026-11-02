@@ -162,4 +162,18 @@ final class AntigravityUsageTests: XCTestCase {
         XCTAssertNil(snapshot.groups[0].buckets[1].resetsAt)
         XCTAssertNil(snapshot.groups[0].buckets[2].resetsAt)
     }
+
+    func testDiagnosticReportCategoryNamesTheEnvelopeOnly() throws {
+        let gemini = group(buckets: [["id": "primary", "name": "Short usage", "window": "5h", "remaining_fraction": 0.5]])
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini])), .usage)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([])), .noGroups)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini], changes: ["status": "ERROR"])), .failedStatus)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini], changes: ["error": "Synthetic failure"])), .failedStatus)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini], changes: ["num_turns": 1, "status": "ERROR"])), .modelTurn)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini], changes: ["num_turns": NSNull()])), .unexpectedShape)
+        XCTAssertEqual(DiagnosticEvent.Report(antigravity: try report([gemini], changes: ["command": ["name": "chat"]])), .unexpectedShape)
+        for missing in [nil, Data(), Data("Synthetic notice".utf8), Data("[]".utf8)] {
+            XCTAssertEqual(DiagnosticEvent.Report(antigravity: missing), .missing)
+        }
+    }
 }

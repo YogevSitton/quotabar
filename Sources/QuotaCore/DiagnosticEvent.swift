@@ -3,7 +3,7 @@ import Foundation
 /// A closed schema: callers cannot put provider replies, arbitrary error text,
 /// paths, URLs, account identifiers or credentials into the diagnostic history.
 public struct DiagnosticEvent: Codable, Equatable, Sendable {
-    public enum Area: String, Codable, Sendable { case app, codex, claude, updates }
+    public enum Area: String, Codable, Sendable { case app, codex, claude, antigravity, updates }
     public enum Kind: String, Codable, Sendable {
         case started, woke, installationChanged, readStarted, readSucceeded, readFailed
         case readDeferred, retryRequested, helperReady, sampleRejected
@@ -17,8 +17,12 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         case readerIO, helperCheckFailed, invalidUsage, signedIn, signedOut, otherAuthentication, unknownAuthentication
         case pollStoreBusy, pollStoreInvalid, pollStoreUnavailable, cooldown, scheduled, pendingRequest
         case idle, notConfigured, checking, upToDate, unavailable, available, downloading, ready, installing, failed
+        case cancelled, cancelledBeforeLaunch, terminalUnavailable, exitedWithError, missingReport
+        case connectRequired, profileUnavailable, administratorPolicy
     }
     public enum Phase: String, Codable, Sendable { case launch, initialize, version, usage, parsing, savingSchedule }
+    /// The category of a CLI's final top-level JSON object, never its values.
+    public enum Report: String, Codable, Sendable { case missing, usage, noGroups, failedStatus, modelTurn, unexpectedShape }
 
     public let date: Date
     public let area: Area
@@ -32,14 +36,23 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
     public var nextAttemptAt: Date?
     public var version: String?
     public var build: Int?
+    /// Whether the attempt could start the CLI's own sign-in (an explicit Connect).
+    public var signInAllowed: Bool?
+    public var exitStatus: Int?
+    /// Whether stderr contained the reviewed fixed authentication error text.
+    public var authenticationNotice: Bool?
+    public var report: Report?
 
     public init(area: Area, kind: Kind, reason: Reason? = nil, phase: Phase? = nil, date: Date = Date(),
                 durationMS: Int? = nil, sampleAgeSeconds: Int? = nil, cacheAdvanced: Bool? = nil,
-                failureCount: Int? = nil, nextAttemptAt: Date? = nil, version: String? = nil, build: Int? = nil) {
+                failureCount: Int? = nil, nextAttemptAt: Date? = nil, version: String? = nil, build: Int? = nil,
+                signInAllowed: Bool? = nil, exitStatus: Int? = nil, authenticationNotice: Bool? = nil, report: Report? = nil) {
         self.date = date; self.area = area; self.kind = kind; self.reason = reason
         self.phase = phase
         self.durationMS = durationMS; self.sampleAgeSeconds = sampleAgeSeconds; self.cacheAdvanced = cacheAdvanced
         self.failureCount = failureCount; self.nextAttemptAt = nextAttemptAt; self.version = version; self.build = build
+        self.signInAllowed = signInAllowed; self.exitStatus = exitStatus
+        self.authenticationNotice = authenticationNotice; self.report = report
     }
 
     public var isValid: Bool {
@@ -49,9 +62,10 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         return validDate(date) && (nextAttemptAt.map(validDate) ?? true)
             && (durationMS.map { (0...3_600_000).contains($0) } ?? true)
             && (sampleAgeSeconds.map { (-1_000_000_000...1_000_000_000).contains($0) } ?? true)
-            && (failureCount.map { (0...5).contains($0) } ?? true)
+            && (failureCount.map { (0...10).contains($0) } ?? true)
             && (version.map(Self.isVersion) ?? true)
             && (build.map { (0...1_000_000_000).contains($0) } ?? true)
+            && (exitStatus.map { (0...255).contains($0) } ?? true)
     }
 
     /// Elapsed milliseconds, clamped to the range `isValid` accepts.
@@ -88,6 +102,10 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         if let nextAttemptAt { fields.append("nextAttempt=\(nextAttemptAt.ISO8601Format())") }
         if let version { fields.append("version=\(version)") }
         if let build { fields.append("build=\(build)") }
+        if let signInAllowed { fields.append("signInAllowed=\(signInAllowed)") }
+        if let exitStatus { fields.append("exitStatus=\(exitStatus)") }
+        if let authenticationNotice { fields.append("authenticationNotice=\(authenticationNotice)") }
+        if let report { fields.append("report=\(report.rawValue)") }
         return fields.joined(separator: " ")
     }
 }

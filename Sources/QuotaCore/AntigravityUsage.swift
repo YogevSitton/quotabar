@@ -157,6 +157,30 @@ public extension UsageParser {
     }
 }
 
+public extension DiagnosticEvent.Report {
+    /// Diagnostics only: follows the parser's envelope checks, but a model turn
+    /// is named first because it matters most. The parser still decides acceptance.
+    init(antigravity object: Data?) {
+        guard let object, let root = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any] else {
+            self = .missing; return
+        }
+        let turns = AntigravityValue.number(root["num_turns"])
+        let command = root["command"] as? [String: Any]
+        if let turns, turns != 0 {
+            self = .modelTurn
+        } else if root["status"] as? String != "SUCCESS"
+                    || !(root["error"] == nil || root["error"] is NSNull || root["error"] as? String == "") {
+            self = .failedStatus
+        } else if turns == nil || command?["name"] as? String != "usage" {
+            self = .unexpectedShape
+        } else if let groups = (command?["data"] as? [String: Any])?["groups"] as? [[String: Any]], !groups.isEmpty {
+            self = .usage
+        } else {
+            self = .noGroups
+        }
+    }
+}
+
 private enum AntigravityValue {
     static func number(_ value: Any?) -> Double? {
         guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),

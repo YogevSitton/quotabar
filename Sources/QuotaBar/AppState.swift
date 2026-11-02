@@ -188,6 +188,7 @@ import Combine
     }
     func connectAntigravity() {
         guard antigravityConnection?.busy != true, !refreshingAntigravity else { return }
+        DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .connectionRequested))
         if antigravityConnection == nil {
             let connection = AntigravityConnection { [weak self] result in
                 self?.updateInstallation(); self?.applyAntigravity(result)

@@ -41,9 +41,10 @@ struct AntigravityProfile {
             Darwin.close(rootFD)
         }
 
+        /// 1.4.9 rejects `--include-default-customizations` as an undefined flag
+        /// (exit status 2 before any work), so it is not passed.
         var arguments: [String] {
-            ["--gemini_dir=\(geminiDirectory.path)", "--app_data_dir=quotabar",
-             "--include-default-customizations=false", "--disable-slash-commands=false"]
+            ["--gemini_dir=\(geminiDirectory.path)", "--app_data_dir=quotabar", "--disable-slash-commands=false"]
         }
 
         var environment: [String: String] {
