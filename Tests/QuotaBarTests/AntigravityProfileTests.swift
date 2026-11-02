@@ -94,6 +94,31 @@ final class AntigravityProfileTests: XCTestCase {
         }
     }
 
+    /// Mirrors the layout 1.4.9 leaves after its first full run.
+    func testCLIHooksLinkIsAcceptedOnlyForTheControlledConfigCopy() throws {
+        try fixture { user, policy in
+            var lease: AntigravityProfile.Lease? = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            let hooks = lease!.geminiDirectory.appendingPathComponent("quotabar/hooks.json")
+            let shared = lease!.geminiDirectory.appendingPathComponent("config/hooks.json")
+            lease = nil
+            try FileManager.default.removeItem(at: hooks)
+            try FileManager.default.createSymbolicLink(at: hooks, withDestinationURL: shared)
+            lease = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            try lease!.validateForLaunch()
+            XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: hooks.path), shared.path)
+            lease = nil
+
+            let target = user.appendingPathComponent("synthetic-hooks.json")
+            let original = try Data(contentsOf: shared)
+            try original.write(to: target)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+            try FileManager.default.removeItem(at: hooks)
+            try FileManager.default.createSymbolicLink(at: hooks, withDestinationURL: target)
+            XCTAssertThrowsError(try AntigravityProfile.acquire(home: user, administratorSettings: policy))
+            XCTAssertEqual(try Data(contentsOf: target), original)
+        }
+    }
+
     func testSymlinkedAncestorIsRefused() throws {
         try fixture { user, policy in
             let realHome = user.deletingLastPathComponent().appendingPathComponent("real-user", isDirectory: true)
