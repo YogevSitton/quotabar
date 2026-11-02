@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import QuotaCore
 
 /// The official CLI launches OAuth and stores its own authentication. QuotaBar
 /// forwards an optional one-time code through stdin and never sees token files.
@@ -30,6 +31,8 @@ import Combine
             }
             do {
                 _ = try await AntigravityHelper.prepare { [weak self] value in self?.status = value }
+                DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .helperReady,
+                    version: AntigravityHelper.version))
                 try Task.checkCancellation()
                 let input = try AntigravityProcess.LoginInput()
                 self.input = input
@@ -53,6 +56,11 @@ import Combine
                 }
                 finished(outcome)
             } catch {
+                // Nothing launched yet: preparation, cancellation or the sign-in terminal failed.
+                DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .readFailed,
+                    reason: Task.isCancelled ? .cancelledBeforeLaunch
+                        : error as? AntigravityProcess.ProcessError == .inputUnavailable ? .terminalUnavailable : .helperCheckFailed,
+                    phase: .launch, signInAllowed: true))
                 status = ""
                 self.error = Task.isCancelled ? "Antigravity connection cancelled." : "The official Antigravity helper could not be prepared. Try Connect Antigravity again."
                 finished(.failure(self.error!, .helperMissing, nextRequestAt: nil))

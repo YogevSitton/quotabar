@@ -30,6 +30,8 @@ final class AntigravityProfileTests: XCTestCase {
             XCTAssertNil(lease.environment["SSH_CONNECTION"])
             XCTAssertNil(lease.environment["AGY_CDE_SEAMLESS_AUTH"])
             XCTAssertTrue(lease.arguments.contains("--gemini_dir=\(lease.geminiDirectory.path)"))
+            // 1.4.9 exits with status 2 on this undefined flag before doing anything.
+            XCTAssertFalse(lease.arguments.contains { $0.hasPrefix("--include-default-customizations") })
             try lease.validateForLaunch()
         }
     }

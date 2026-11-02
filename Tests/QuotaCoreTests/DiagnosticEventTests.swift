@@ -33,9 +33,26 @@ final class DiagnosticEventTests: XCTestCase {
 
     func testInvalidNumericFieldsAndDatesAreRejected() {
         XCTAssertFalse(DiagnosticEvent(area: .claude, kind: .readFailed, durationMS: -1).isValid)
-        XCTAssertFalse(DiagnosticEvent(area: .claude, kind: .readFailed, failureCount: 6).isValid)
+        XCTAssertTrue(DiagnosticEvent(area: .antigravity, kind: .readFailed, failureCount: 10).isValid)
+        XCTAssertFalse(DiagnosticEvent(area: .antigravity, kind: .readFailed, failureCount: 11).isValid)
+        XCTAssertTrue(DiagnosticEvent(area: .antigravity, kind: .readFailed, exitStatus: 255).isValid)
+        for status in [-1, 256] {
+            XCTAssertFalse(DiagnosticEvent(area: .antigravity, kind: .readFailed, exitStatus: status).isValid)
+        }
         XCTAssertFalse(DiagnosticEvent(area: .app, kind: .started, build: -1).isValid)
         XCTAssertFalse(DiagnosticEvent(area: .claude, kind: .readFailed,
             nextAttemptAt: Date(timeIntervalSince1970: .infinity)).isValid)
+    }
+
+    func testAntigravityFieldsUseFixedCategories() throws {
+        let event = DiagnosticEvent(area: .antigravity, kind: .readFailed, reason: .exitedWithError, phase: .usage,
+            date: Date(timeIntervalSince1970: 1_792_800_000), durationMS: 1_200, failureCount: 1,
+            signInAllowed: true, exitStatus: 1, authenticationNotice: true, report: .missing)
+        XCTAssertEqual(event.line, "2026-10-24T00:00:00Z antigravity readFailed reason=exitedWithError phase=usage "
+            + "durationMs=1200 failureCount=1 signInAllowed=true exitStatus=1 authenticationNotice=true report=missing")
+        XCTAssertEqual(try JSONDecoder().decode(DiagnosticEvent.self, from: JSONEncoder().encode(event)), event)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(event)) as? [String: Any])
+        object["report"] = "private-value"
+        XCTAssertThrowsError(try JSONDecoder().decode(DiagnosticEvent.self, from: JSONSerialization.data(withJSONObject: object)))
     }
 }
