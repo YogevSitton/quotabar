@@ -6,6 +6,8 @@ import Combine
 
 @MainActor final class AppState: ObservableObject {
     @Published var installation: ProviderInstallation
+    // Saved as hidden rather than shown, so a newly installed provider appears.
+    @Published private(set) var hiddenProviders: Set<Provider> = []
     @Published var codex: UsageSnapshot?
     @Published var claude: UsageSnapshot?
     @Published var codexError: String?
@@ -60,6 +62,7 @@ import Combine
         installation = loadLocalState ? ProviderInstallation.detect() : ProviderInstallation(codex: false, claude: false)
         launchAtLogin = loadLocalState && SMAppService.mainApp.status == .enabled
         guard loadLocalState else { return }
+        hiddenProviders = Set((UserDefaults.standard.stringArray(forKey: "hiddenProviders") ?? []).compactMap(Provider.init(rawValue:)))
         selectedAntigravityGroupName = UserDefaults.standard.string(forKey: "antigravityQuotaGroup")
         do { pendingCodexReset = try resetStore.load() }
         catch { resetRecoveryError = "A saved Codex reset request could not be read. Reset actions are disabled to prevent a duplicate. Check ChatGPT Usage before repairing the recovery file." }
@@ -71,8 +74,31 @@ import Combine
             Task { @MainActor in self?.checkStatusLineFile() }
         }
     }
+    /// Installed providers the user has not hidden. Only these are shown in the
+    /// menu bar and popup, and a hidden provider is not polled.
+    var visible: ProviderInstallation {
+        ProviderInstallation(codex: installation.codex && !hiddenProviders.contains(.codex),
+                             claude: installation.claude && !hiddenProviders.contains(.claude),
+                             antigravity: installation.antigravity && !hiddenProviders.contains(.antigravity))
+    }
+    func setVisible(_ provider: Provider, _ shown: Bool) {
+        guard shown == hiddenProviders.contains(provider) else { return }
+        if shown { hiddenProviders.remove(provider) } else { hiddenProviders.insert(provider) }
+        if storesPreferences { UserDefaults.standard.set(hiddenProviders.map(\.rawValue).sorted(), forKey: "hiddenProviders") }
+        if shown {
+            // Showing reads through each provider's usual waiting period.
+            switch provider {
+            case .codex: refreshCodex()
+            case .claude: refreshClaude()
+            case .antigravity: refreshAntigravity()
+            }
+        } else if provider == .claude {
+            claudeRetryTimer?.invalidate(); claudeNextRequestAt = nil
+        }
+        onChange?()
+    }
     private func checkStatusLineFile() {
-        guard installation.claude else { return }
+        guard visible.claude else { return }
         let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/QuotaBar/claude-statusline.json")
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let modified = attrs[.modificationDate] as? Date, modified != statusLineModified else { return }
@@ -91,9 +117,12 @@ import Combine
     }
     func refresh() {
         updateInstallation()
-        if installation.claude { refreshClaude() }
-        if installation.antigravity { refreshAntigravity() }
-        guard installation.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
+        if visible.claude { refreshClaude() }
+        if visible.antigravity { refreshAntigravity() }
+        refreshCodex()
+    }
+    private func refreshCodex() {
+        guard visible.codex, !refreshingCodex, !redeemingCodex else { return }; refreshingCodex = true
         DispatchQueue.global(qos: .utility).async {
             let started = Date()
             let result = Result { try CodexProvider.read() }
@@ -113,7 +142,7 @@ import Combine
         }
     }
     func refreshClaude(reconnect: Bool = false) {
-        guard installation.claude, !refreshingClaude else { return }; refreshingClaude = true
+        guard visible.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
             let result = await claudeProvider.read(reconnect: reconnect)
             self.claude = result.snapshot; self.claudeError = result.error
@@ -137,7 +166,7 @@ import Combine
         antigravityIssue == .helperMissing || antigravityIssue == .signInRequired || antigravityIssue == .profileUnavailable
     }
     func refreshAntigravity() {
-        guard installation.antigravity, !refreshingAntigravity, antigravityConnection?.busy != true,
+        guard visible.antigravity, !refreshingAntigravity, antigravityConnection?.busy != true,
               antigravityNextRequestAt.map({ $0 <= Date() }) ?? true, !antigravityStopped else { return }
         refreshingAntigravity = true
         DispatchQueue.global(qos: .utility).async {
@@ -209,7 +238,7 @@ import Combine
     private func scheduleClaudeRead(_ result: ClaudeReadResult) {
         claudeRetryTimer?.invalidate()
         claudeNextRequestAt = nil
-        guard interval > 0, installation.claude, let next = result.nextRequestAt else { return }
+        guard interval > 0, visible.claude, let next = result.nextRequestAt else { return }
         let now = Date()
         let delay = max(1, next.timeIntervalSince(now))
         claudeNextRequestAt = now.addingTimeInterval(delay)
@@ -375,11 +404,12 @@ import Combine
                                 weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
         }
         var entries: [MenuBarEntry] = []
-        if installation.codex { entries.append(entry(.codex, codex, error: codexError, maximumAge: max(600, interval * 120))) }
-        if installation.claude && !needsClaudeConnection {
+        let shown = visible
+        if shown.codex { entries.append(entry(.codex, codex, error: codexError, maximumAge: max(600, interval * 120))) }
+        if shown.claude && !needsClaudeConnection {
             entries.append(entry(.claude, claude, error: claudeError, maximumAge: claudeMaximumAge))
         }
-        if installation.antigravity, !antigravityStopped {
+        if shown.antigravity, !antigravityStopped {
             let now = Date()
             let current = antigravity?.isCurrent(at: now, maximumAge: antigravityMaximumAge, hasConnectionError: antigravityError != nil) == true
             let group = selectedAntigravityGroup

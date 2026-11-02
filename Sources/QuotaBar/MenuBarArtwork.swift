@@ -11,7 +11,7 @@ struct MenuBarSegment: Equatable {
     let text: String
     /// The percentage that tints this segment; nil stays uncolored.
     let remaining: Int?
-    /// Time until a window with usage left resets, drawn in blue after its percentage.
+    /// Time until a window with usage left resets, drawn in blue beside its percentage.
     var isLeftover = false
 }
 
@@ -93,18 +93,18 @@ struct MenuBarEntry {
     }
     /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
     /// weekly window blocks both, so it shows only the weekly countdown.
-    /// Leftover usage that resets soon adds its countdown after that window's %.
+    /// Leftover usage that resets soon adds its countdown on the outer side of
+    /// that window's %: before the 5h % and after the weekly %.
     func menuSegments(at now: Date) -> [MenuBarSegment] {
         if weekly.isExhausted, weekly.resetsAt.map({ $0 > now }) == true {
             return [MenuBarSegment(text: weekly.menuValue(at: now), remaining: nil)]
         }
         let leftover = leftoverReset(at: now)
         func segments(_ quota: MenuBarQuota, _ window: LeftoverReset.Window) -> [MenuBarSegment] {
-            var segments = [MenuBarSegment(text: quota.menuValue(at: now), remaining: quota.remaining)]
-            if let leftover, leftover.window == window {
-                segments.append(MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true))
-            }
-            return segments
+            let value = MenuBarSegment(text: quota.menuValue(at: now), remaining: quota.remaining)
+            guard let leftover, leftover.window == window else { return [value] }
+            let countdown = MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true)
+            return window == .fiveHour ? [countdown, value] : [value, countdown]
         }
         return segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
     }
@@ -163,10 +163,13 @@ struct MenuBarEntry {
     /// One line so the smaller leftover countdown shares the percentages' baseline.
     private static func attributedLabel(_ segments: [MenuBarSegment]) -> NSAttributedString {
         let label = NSMutableAttributedString()
+        var previous: MenuBarSegment?
         for segment in segments {
-            if segment.isLeftover, label.length > 0 {
+            // Space the leftover countdown from the percentage on either side of it.
+            if let previous, previous.isLeftover != segment.isLeftover {
                 label.addAttribute(.kern, value: leftoverGap, range: NSRange(location: label.length - 1, length: 1))
             }
+            previous = segment
             label.append(NSAttributedString(string: segment.text, attributes: segment.isLeftover
                 ? [.font: leftoverFont, .foregroundColor: NSColor.quotaLeftover]
                 : [.font: font, .foregroundColor: color(remaining: segment.remaining)]))
