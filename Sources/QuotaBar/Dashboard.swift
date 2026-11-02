@@ -26,10 +26,6 @@ struct Dashboard: View {
                     QuotaBarIcon(size: 24)
                     Text("QuotaBar").font(.system(size: 16, weight: .semibold))
                     Spacer()
-                    // Button padding is wider than the menu's, so a narrower icon
-                    // frame keeps both header controls the same 30-point width.
-                    Button { NSApplication.shared.terminate(nil) } label: { Image(systemName: "power").frame(width: 14, height: 16) }
-                        .help("Quit QuotaBar").keyboardShortcut("q")
                     Menu {
                         // Every installed provider keeps its toggle, so a hidden
                         // one can always be shown again.
@@ -42,8 +38,14 @@ struct Dashboard: View {
                         Toggle("Launch at login", isOn: Binding(get: { state.launchAtLogin }, set: state.setLogin))
                         Button("Updates...") { state.showUpdates() }
                         Button("Logs...") { state.showLogs() }
+                        Divider()
+                        Button("Quit QuotaBar") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
                     } label: { Image(systemName: "ellipsis").frame(width: 18, height: 16) }
                         .menuStyle(.button).menuIndicator(.hidden).fixedSize().help("More")
+                        // Menu key equivalents only fire while the menu is open,
+                        // so this keeps Command-Q working in the open popup.
+                        .background(Button("") { NSApplication.shared.terminate(nil) }
+                            .keyboardShortcut("q").opacity(0).accessibilityHidden(true))
                 }.padding(.horizontal, 16).padding(.vertical, 20)
                     .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()

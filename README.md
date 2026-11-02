@@ -35,7 +35,7 @@ Continue with [First launch and provider setup](#first-launch-and-provider-setup
 
 ### Updates
 
-Published versions through 0.3.0 predate the updater. To move to the first updater-enabled release, quit QuotaBar with the power button, download the new ZIP from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), extract it, replace the app in Applications, and reopen it. That first migration is manual.
+Published versions through 0.3.0 predate the updater. To move to the first updater-enabled release, quit QuotaBar from its More (ellipsis) menu, download the new ZIP from [GitHub Releases](https://github.com/YogevSitton/quotabar/releases), extract it, replace the app in Applications, and reopen it. That first migration is manual.
 
 In an updater-enabled release, **More > Updates...** opens a separate Updates window:
 
@@ -98,7 +98,7 @@ Reported manual reset offers expiring within 3 days have an orange warning icon 
 
 The window with leftover usage shows **Use by** in blue instead of **Auto reset**, with the same reset time and countdown. With more than one provider shown, the one whose leftover resets first gets a **Use first** tag.
 
-The header contains **Quit** (power) and **More** (ellipsis). More contains a **Show** toggle for each installed provider, **Launch at login**, **Updates...** and **Logs...**. Updates and logs open in separate windows. A hidden provider leaves the menu bar and popup and is not polled until you show it again; showing it reads through that provider's usual waiting period. The choice is saved across restarts, and a newly installed provider is shown by default. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞`, a leftover countdown or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
+The header contains **More** (ellipsis). More contains a **Show** toggle for each installed provider, **Launch at login**, **Updates...**, **Logs...** and **Quit QuotaBar** (Command-Q). Updates and logs open in separate windows. A hidden provider leaves the menu bar and popup and is not polled until you show it again; showing it reads through that provider's usual waiting period. The choice is saved across restarts, and a newly installed provider is shown by default. The app version appears at the bottom right of the popup. Refresh is automatic, with separate provider intervals and saved Claude retry deadlines; there is no manual refresh control or Settings window. You can Command-drag the menu bar item to reposition it. The item fits its content: ordinary percentage changes keep its width, while reaching or leaving 100%, dropping below 10%, a countdown, `∞`, a leftover countdown or a reset chip can make it slightly wider or narrower. Width changes wait until the popup closes.
 
 ## Screenshots
 
