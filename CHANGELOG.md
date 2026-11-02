@@ -17,6 +17,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- **Quit QuotaBar** moved from the popup's power button into the More (ellipsis) menu. Command-Q still quits while the popup is open.
 - Menu bar hover info shows total hours and minutes until usage resets and manual reset expiry instead of calendar dates and clock times.
 - Set the source version to 0.4.0 for the upcoming release.
 - The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
