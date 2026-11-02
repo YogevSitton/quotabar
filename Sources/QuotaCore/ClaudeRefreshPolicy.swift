@@ -34,6 +34,19 @@ public enum ClaudeRefreshPolicy {
         }
     }
 
+    /// The one exception to disk-only readings staying historical. After a
+    /// restart the previous process's reading is gone while the shared schedule
+    /// still defers the next read. Claude Code's account-matched sample may then
+    /// stand in only when the last request succeeded, the sample is no older than
+    /// one that request could have accepted (the 60-second cache TTL), and it is
+    /// still inside the display lifetime from its original sample time.
+    public static func canResume(sampleAt: Date, after state: ClaudePollState, at now: Date) -> Bool {
+        guard !state.pending, state.failureCount == 0, sampleAt.timeIntervalSince1970.isFinite,
+              now.timeIntervalSince1970.isFinite else { return false }
+        let age = now.timeIntervalSince(sampleAt)
+        return sampleAt > state.startedAt.addingTimeInterval(-60) && age >= 0 && age < maximumDisplayAge
+    }
+
     /// Why `classify` returned `.unverified`, for diagnostics only. Nil when
     /// the response is accepted.
     public static func rejection(before: Date?, after: Date?, requestStartedAt: Date,
