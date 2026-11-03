@@ -119,6 +119,34 @@ final class AntigravityProfileTests: XCTestCase {
         }
     }
 
+    /// The synthetic home has no real keychain; only the link itself is checked.
+    func testKeychainFolderLinksOnlyToTheUsersOwnKeychains() throws {
+        try fixture { user, policy in
+            let expected = user.appendingPathComponent("Library/Keychains", isDirectory: true).path
+            var lease: AntigravityProfile.Lease? = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            let link = lease!.home.appendingPathComponent("Library/Keychains")
+            XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), expected)
+            try lease!.validateForLaunch()
+
+            // A link elsewhere refuses the launch and is replaced at the next acquisition.
+            try FileManager.default.removeItem(at: link)
+            try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/synthetic/elsewhere")
+            XCTAssertThrowsError(try lease!.validateForLaunch())
+            lease = nil
+            lease = try AntigravityProfile.acquire(home: user, administratorSettings: policy)
+            XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), expected)
+            lease = nil
+
+            // A real folder there might hold a keychain, so it is refused and kept.
+            try FileManager.default.removeItem(at: link)
+            try FileManager.default.createDirectory(at: link, withIntermediateDirectories: false)
+            let kept = link.appendingPathComponent("synthetic-placeholder")
+            try Data("synthetic fixture - not a keychain".utf8).write(to: kept)
+            XCTAssertThrowsError(try AntigravityProfile.acquire(home: user, administratorSettings: policy))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+        }
+    }
+
     func testSymlinkedAncestorIsRefused() throws {
         try fixture { user, policy in
             let realHome = user.deletingLastPathComponent().appendingPathComponent("real-user", isDirectory: true)

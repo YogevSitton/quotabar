@@ -9,9 +9,6 @@ import QuotaCore
     @Published private(set) var status = ""
     @Published private(set) var error: String?
     @Published private(set) var needsCode = false
-    /// True while the official CLI may save a new sign-in, which is when
-    /// macOS can ask about the private profile's missing keychain.
-    @Published private(set) var signingIn = false
     @Published var code = ""
     private var task: Task<Void, Never>?
     private var input: AntigravityProcess.LoginInput?
@@ -30,7 +27,7 @@ import QuotaCore
             guard let self else { return }
             defer {
                 input?.close(); input = nil; self.cancellation = nil
-                code = ""; needsCode = false; signingIn = false; busy = false; task = nil
+                code = ""; needsCode = false; busy = false; task = nil
             }
             do {
                 _ = try await AntigravityHelper.prepare { [weak self] value in self?.status = value }
@@ -40,7 +37,7 @@ import QuotaCore
                 let input = try AntigravityProcess.LoginInput()
                 self.input = input
                 status = "Finish sign-in in your browser. If Antigravity gives you a code, paste it below."
-                needsCode = true; signingIn = true
+                needsCode = true
                 let result = await withCheckedContinuation { continuation in
                     DispatchQueue.global(qos: .userInitiated).async {
                         continuation.resume(returning: AntigravityProvider.read(loginInput: input, cancellation: cancellation))
