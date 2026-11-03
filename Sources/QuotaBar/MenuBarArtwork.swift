@@ -64,7 +64,7 @@ struct MenuBarQuota {
     }
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
-    func tooltipLine(_ label: String, at now: Date) -> String {
+    func descriptionLine(_ label: String, at now: Date) -> String {
         if limit == .noLimit { return "\(label): No limit" }
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
         let value = remaining.map { "\($0)% left" } ?? "Unavailable"
@@ -84,8 +84,8 @@ struct MenuBarEntry {
     var nextResetExpiry: Date? = nil
     var quotaGroup: String? = nil
     func description(at now: Date) -> String {
-        ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5-hour window", at: now),
-                                                     weekly.tooltipLine("Weekly window", at: now)]).joined(separator: "; ")
+        ([name] + [quotaGroup].compactMap { $0 } + [session.descriptionLine("5-hour window", at: now),
+                                                     weekly.descriptionLine("Weekly window", at: now)]).joined(separator: "; ")
     }
     /// Usage left in a current window that resets automatically soon.
     func leftoverReset(at now: Date) -> LeftoverReset? {
@@ -131,18 +131,6 @@ struct MenuBarEntry {
         return MenuBarResetChip(text: "\(minutes)m", spoken: plural(minutes, "minute"), redFraction: redFraction)
     }
     private func plural(_ count: Int, _ unit: String) -> String { "\(count) \(unit)\(count == 1 ? "" : "s")" }
-    func tooltipSection(at now: Date) -> String {
-        let expiry = nextResetExpiry.map {
-            // Rounded down like the chip, so it never overstates the time left.
-            $0 > now ? "Next reset expires in \(countdown($0, now: now, style: .totalHours, roundingDown: true))" : "Next reset expired"
-        }
-        // Rounded up like the reset line above it, which shows the same time.
-        let leftover = leftoverReset(at: now).map {
-            "Use soon: \($0.remaining)% of the \($0.window.label) window resets in \(countdown($0.resetsAt, now: now, style: .totalHours))"
-        }
-        return ([name] + [quotaGroup].compactMap { $0 } + [session.tooltipLine("5h", at: now), weekly.tooltipLine("Weekly", at: now)]
-                + [leftover, expiry].compactMap { $0 }).joined(separator: "\n")
-    }
 }
 
 @MainActor enum MenuBarArtwork {
