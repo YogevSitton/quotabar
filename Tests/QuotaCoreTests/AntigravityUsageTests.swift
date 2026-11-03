@@ -26,13 +26,14 @@ final class AntigravityUsageTests: XCTestCase {
             ])
         ]
         let snapshot = try UsageParser.antigravity(report(groups), observedAt: now)
-        XCTAssertNil(snapshot.selectedGroup(named: nil))
+        XCTAssertEqual(snapshot.selectedGroup(named: nil)?.name, "Gemini 4 Argon")
+        XCTAssertEqual(snapshot.orderedGroups.map(\.name), ["Gemini 4 Argon", "Gemini"])
         XCTAssertEqual(snapshot.selectedGroup(named: "Gemini")?.session?.remaining, 29)
         XCTAssertEqual(snapshot.selectedGroup(named: "Gemini")?.weekly?.remaining, 80)
         let argon = try XCTUnwrap(snapshot.selectedGroup(named: "Gemini 4 Argon"))
         XCTAssertNil(argon.session)
         XCTAssertEqual(argon.weekly?.remaining, 40)
-        XCTAssertNil(snapshot.selectedGroup(named: "Removed group"))
+        XCTAssertEqual(snapshot.selectedGroup(named: "Removed group")?.name, "Gemini 4 Argon")
         XCTAssertEqual(snapshot.observedAt, now)
     }
 

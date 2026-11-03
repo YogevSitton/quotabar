@@ -24,12 +24,19 @@ public struct AntigravitySnapshot: Equatable {
             && age.isFinite && age >= 0 && age < maximumAge
     }
 
-    /// Never silently switch an existing selection to another quota group.
-    /// A lone group needs no picker; multiple groups require an explicit selection.
+    /// A saved choice wins while exactly one group has that name. Otherwise
+    /// the default group is shown, so the card never waits for a choice.
     public func selectedGroup(named name: String?) -> AntigravityQuotaGroup? {
-        guard let name else { return groups.count == 1 ? groups.first : nil }
-        let matches = groups.filter { $0.name == name }
-        return matches.count == 1 ? matches.first : nil
+        if let name {
+            let matches = groups.filter { $0.name == name }
+            if matches.count == 1 { return matches.first }
+        }
+        return orderedGroups.first
+    }
+
+    /// Gemini 4 Argon first, then the order the CLI reported.
+    public var orderedGroups: [AntigravityQuotaGroup] {
+        groups.filter(\.isArgon) + groups.filter { !$0.isArgon }
     }
 }
 
@@ -44,6 +51,8 @@ public struct AntigravityQuotaGroup: Equatable, Identifiable {
         self.description = description
         self.buckets = buckets
     }
+
+    var isArgon: Bool { name.range(of: "argon", options: .caseInsensitive) != nil }
 
     public var session: UsageWindow? { uniqueWindow(.fiveHour) }
     public var weekly: UsageWindow? { uniqueWindow(.weekly) }

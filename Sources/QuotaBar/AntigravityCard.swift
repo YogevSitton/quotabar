@@ -56,8 +56,7 @@ struct AntigravityCard: View {
                     Picker("Quota group", selection: Binding(
                         get: { state.selectedAntigravityGroup?.name },
                         set: { state.selectedAntigravityGroupName = $0 })) {
-                        Text("Choose quota group").tag(Optional<String>.none)
-                        ForEach(snapshot.groups) { group in
+                        ForEach(snapshot.orderedGroups) { group in
                             Text(group.name).tag(Optional(group.name))
                         }
                     }
@@ -95,12 +94,7 @@ struct AntigravityCard: View {
                             .font(.system(size: 11)).buttonStyle(.link)
                     }
                 } else if state.antigravity != nil {
-                    Text("Choose the quota group to show here and in the menu bar.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if let snapshot = state.antigravity, snapshot.groups.count == 1, let group = snapshot.groups.first {
-                        Button("Use \(group.name)") { state.selectedAntigravityGroupName = group.name }
-                            .font(.system(size: 11)).buttonStyle(.link)
-                    }
+                    Text("No quota groups reported.").font(.caption).foregroundStyle(.secondary)
                 }
                 if !current {
                     if let next = state.antigravityNextRequestAt, next > now {
@@ -145,6 +139,10 @@ private struct AntigravityConnectionSummary: View {
                 Button("Complete sign-in", action: model.submitCode)
                     .disabled(model.code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .controlSize(.small)
+            }
+            if model.signingIn {
+                Text("If macOS says a keychain cannot be found, choose Cancel. Antigravity then keeps its sign-in in QuotaBar's private profile.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.error {
                 Text(error).font(.caption).foregroundStyle(.orange).lineLimit(2).help(error)
