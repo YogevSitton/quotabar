@@ -124,7 +124,7 @@ import QuotaUpdateSupport
         let segments = entries.map { $0.menuSegments(at: now) }
         let chips = entries.map { $0.resetChip(at: now) }
         // Key only what the image draws. The description carries minute
-        // countdowns for the tooltip and accessibility, set on every pass below.
+        // countdowns for accessibility, set on every pass below.
         let renderKey = entries.map { "\($0.name) \($0.menuLabel(at: now))" }.joined(separator: "|")
         let appearance = button.effectiveAppearance
         // The expiry tint can advance while the rounded countdown stays the same.
@@ -146,9 +146,6 @@ import QuotaUpdateSupport
                 renderedMenuChips = chips
             }
         }
-        button.toolTip = entries.isEmpty
-            ? (state.installation.count > 0 && state.visible.count == 0 ? "QuotaBar\nAll providers are hidden" : "QuotaBar\nConnect an installed provider")
-            : (["QuotaBar - usage remaining"] + entries.map { $0.tooltipSection(at: now) }).joined(separator: "\n\n")
         let leftovers = entries.compactMap { $0.leftoverAnnouncement(at: now).map { " " + $0 } }
         let expiring = zip(entries, chips).compactMap { entry, chip in chip.map { " \(entry.name) reset expires in \($0.spoken)." } }
         button.setAccessibilityLabel("QuotaBar. \(description). Percent remaining." + leftovers.joined() + expiring.joined())
