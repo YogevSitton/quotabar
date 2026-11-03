@@ -93,9 +93,19 @@ actor ClaudeProvider {
             switch try pollStore.reserve(at: Date()) {
             case .deferred(let state):
                 nextRequestAt = state.nextRequestAt
-                if loggedDeadline != state.nextRequestAt {
+                // A restart loses the last validated reading but not the schedule.
+                // Claude Code's account-matched sample stands in within the policy.
+                var resumed: UsageSnapshot?
+                if latestLive == nil, lastError == nil, var saved = persistedUsage(identity: current.identity),
+                   ClaudeRefreshPolicy.canResume(sampleAt: saved.observedAt, after: state, at: Date()) {
+                    saved.source = .live; saved.sourceName = "Claude Code CLI"
+                    latestLive = saved; resumed = saved
+                }
+                if loggedDeadline != state.nextRequestAt || resumed != nil {
                     DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .readDeferred,
-                        reason: state.pending ? .pendingRequest : state.failureCount > 0 ? .cooldown : .scheduled,
+                        reason: resumed != nil ? .resumedSample
+                            : state.pending ? .pendingRequest : state.failureCount > 0 ? .cooldown : .scheduled,
+                        sampleAgeSeconds: cacheAge(resumed?.observedAt, at: Date()),
                         failureCount: state.failureCount, nextAttemptAt: state.nextRequestAt))
                     loggedDeadline = state.nextRequestAt
                 }

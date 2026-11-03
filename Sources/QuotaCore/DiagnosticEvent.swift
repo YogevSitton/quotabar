@@ -11,7 +11,7 @@ public struct DiagnosticEvent: Codable, Equatable, Sendable {
         case loginSettingFailed, updateState
     }
     public enum Reason: String, Codable, Sendable {
-        case freshSample, recentCache, missingProvenance, valuesMismatch, sampleTooOld
+        case freshSample, recentCache, resumedSample, missingProvenance, valuesMismatch, sampleTooOld
         case reusedSampleExpired, inconsistentTiming, helperMissing, launchFailed
         case unsupportedVersion, protocolFailure, helperEnded, helperTimeout, oversizedReply
         case readerIO, helperCheckFailed, invalidUsage, signedIn, signedOut, otherAuthentication, unknownAuthentication
