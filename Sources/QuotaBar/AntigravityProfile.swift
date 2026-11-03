@@ -205,7 +205,12 @@ struct AntigravityProfile {
         try controlledFile("config.json", under: config, data: emptyObject, create: create)
         try controlledFile("hooks.json", under: gemini, data: emptyObject, create: create)
         try controlledFile("hooks.json", under: config, data: emptyObject, create: create)
-        try controlledFile("hooks.json", under: cli, data: emptyObject, create: create)
+        // On its first full run, 1.4.9 replaces the app-data hooks.json with a
+        // link to the shared config copy. Accept only a link that resolves to
+        // that controlled file; any other link is still refused.
+        if try !links("hooks.json", under: cli, to: "hooks.json", in: config) {
+            try controlledFile("hooks.json", under: cli, data: emptyObject, create: create)
+        }
         // A server-level plugin watcher starts before the CLI's default-
         // customization override. Its registries must remain empty on every
         // launch, including after the official CLI has populated this profile.
@@ -286,6 +291,23 @@ struct AntigravityProfile {
             guard names.count < limit else { throw ProfileError.changedConfiguration }
             names.append(entryName)
         }
+    }
+
+    /// True only for a symlink owned by this user that resolves to the already
+    /// validated `target`. Other entries are left to the regular file checks.
+    private static func links(_ name: String, under directory: Int32, to target: String,
+                              in targetDirectory: Int32) throws -> Bool {
+        var link = stat(), resolved = stat(), expected = stat()
+        guard fstatat(directory, name, &link, AT_SYMLINK_NOFOLLOW) == 0 else {
+            guard errno == ENOENT else { throw ProfileError.unavailable }
+            return false
+        }
+        guard (link.st_mode & S_IFMT) == S_IFLNK, link.st_uid == getuid() else { return false }
+        guard fstatat(directory, name, &resolved, 0) == 0,
+              fstatat(targetDirectory, target, &expected, AT_SYMLINK_NOFOLLOW) == 0 else {
+            throw ProfileError.unavailable
+        }
+        return resolved.st_dev == expected.st_dev && resolved.st_ino == expected.st_ino
     }
 
     private static func requireAbsent(_ name: String, under directory: Int32) throws {

@@ -32,6 +32,28 @@ final class ClaudeRefreshPolicyTests: XCTestCase {
         XCTAssertEqual(classification(before: 0, after: 0), .recentCache)
     }
 
+    func testRestartResumesOnlyTheLastSuccessfulRequestsRecentSample() {
+        func state(failures: Int = 0, pending: Bool = false) -> ClaudePollState {
+            ClaudePollState(version: 1, requestID: UUID(), startedAt: start,
+                nextRequestAt: start.addingTimeInterval(130), failureCount: failures, pending: pending)
+        }
+        func resume(_ sample: TimeInterval, at now: TimeInterval, _ saved: ClaudePollState = state()) -> Bool {
+            ClaudeRefreshPolicy.canResume(sampleAt: start.addingTimeInterval(sample), after: saved,
+                                          at: start.addingTimeInterval(now))
+        }
+        XCTAssertTrue(resume(0.5, at: 75))
+        XCTAssertTrue(resume(-59, at: 75))
+        XCTAssertTrue(resume(0.5, at: 240.4))
+        // Older than the last request could accept, in the future, or past the display lifetime.
+        XCTAssertFalse(resume(-60, at: 75))
+        XCTAssertFalse(resume(80, at: 75))
+        XCTAssertFalse(resume(0.5, at: 240.5))
+        // A failed, cooling-down or unfinished last request never resumes.
+        XCTAssertFalse(resume(0.5, at: 75, state(failures: 1)))
+        XCTAssertFalse(resume(0.5, at: 75, state(failures: 1, pending: true)))
+        XCTAssertFalse(resume(.infinity, at: 75))
+    }
+
     func testHelperStartupCrossingCacheTTLDoesNotHideFailedRefresh() {
         XCTAssertEqual(classification(before: -59.99, after: -59.99, completed: 2), .unverified)
         XCTAssertEqual(classification(before: -59, after: -59, completed: 1), .unverified)
