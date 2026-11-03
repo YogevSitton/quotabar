@@ -27,6 +27,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 - Keep Claude visible when QuotaBar's managed Claude Code helper is installed, even without Claude Desktop or a standalone CLI. Empty or incomplete helper installations do not count.
 - Antigravity Connect and automatic checks no longer fail immediately. The official CLI rejected an option QuotaBar passed and exited before sign-in or reading quota, so every attempt failed and the wait before the next one grew.
+- Antigravity no longer stops with "isolated settings could not be verified" after the official CLI's first full run. The CLI links one of QuotaBar's empty settings files to another, and QuotaBar now accepts that exact link while still refusing any other.
 - Retain Claude's original usage failure message when Retry usage is clicked during a cooldown.
 - Manual reset countdown tags and expiry warnings gradually blend from their existing yellow-orange color at 24 hours left to full red at 12 hours, instead of abruptly turning red at 24 hours.
 - Detect Claude's expired-cache fallback as a failed refresh immediately, instead of accepting it until the sample reaches two minutes old. Keep the original values labeled **Saved reading** while waiting.
