@@ -140,10 +140,6 @@ private struct AntigravityConnectionSummary: View {
                     .disabled(model.code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .controlSize(.small)
             }
-            if model.signingIn {
-                Text("If macOS says a keychain cannot be found, choose Cancel. Antigravity then keeps its sign-in in QuotaBar's private profile.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
             if let error = model.error {
                 Text(error).font(.caption).foregroundStyle(.orange).lineLimit(2).help(error)
             }

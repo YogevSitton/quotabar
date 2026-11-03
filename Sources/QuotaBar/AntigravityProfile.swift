@@ -2,8 +2,9 @@ import Foundation
 import Darwin
 
 /// Only non-secret configuration is managed here. The official CLI owns every
-/// authentication operation. The isolated HOME has no keychain, so the CLI's
-/// own file fallback in this profile holds its sign-in; QuotaBar never reads it.
+/// authentication operation. Its keyring finds the login keychain through HOME,
+/// so the profile links only `Library/Keychains` back to the user's own folder;
+/// QuotaBar never opens anything through that link or reads the saved sign-in.
 struct AntigravityProfile {
     enum ProfileError: Error {
         case unavailable
@@ -25,12 +26,14 @@ struct AntigravityProfile {
         private let rootFD: Int32
         private let lockFD: Int32
         private let administratorSettings: URL
+        private let keychains: String
 
-        fileprivate init(home: URL, rootFD: Int32, lockFD: Int32, administratorSettings: URL) {
+        fileprivate init(home: URL, rootFD: Int32, lockFD: Int32, administratorSettings: URL, keychains: String) {
             self.home = home
             self.rootFD = rootFD
             self.lockFD = lockFD
             self.administratorSettings = administratorSettings
+            self.keychains = keychains
             geminiDirectory = home.appendingPathComponent(".gemini", isDirectory: true)
             workingDirectory = home.appendingPathComponent("work", isDirectory: true)
             temporaryDirectory = home.appendingPathComponent("tmp", isDirectory: true)
@@ -92,7 +95,7 @@ struct AntigravityProfile {
                 throw ProfileError.changedConfiguration
             }
             try AntigravityProfile.validateDirectory(current)
-            try AntigravityProfile.configure(rootFD: current, create: false)
+            try AntigravityProfile.configure(rootFD: current, create: false, keychains: keychains)
         }
     }
 
@@ -115,8 +118,10 @@ struct AntigravityProfile {
         guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
             throw errno == EWOULDBLOCK ? ProfileError.busy : ProfileError.unavailable
         }
-        try configure(rootFD: rootFD, create: true)
-        let lease = Lease(home: home, rootFD: rootFD, lockFD: lockFD, administratorSettings: administratorSettings)
+        let keychains = userHome.appendingPathComponent("Library/Keychains", isDirectory: true).path
+        try configure(rootFD: rootFD, create: true, keychains: keychains)
+        let lease = Lease(home: home, rootFD: rootFD, lockFD: lockFD, administratorSettings: administratorSettings,
+                          keychains: keychains)
         retained = true
         try lease.validateForLaunch()
         return lease
@@ -179,7 +184,7 @@ struct AntigravityProfile {
         catch { Darwin.close(fd); throw error }
     }
 
-    private static func configure(rootFD: Int32, create: Bool) throws {
+    private static func configure(rootFD: Int32, create: Bool, keychains: String) throws {
         let gemini = try directory(".gemini", under: rootFD, create: create)
         defer { Darwin.close(gemini) }
         let cli = try directory("quotabar", under: gemini, create: create)
@@ -231,6 +236,41 @@ struct AntigravityProfile {
             if create { try removeIfPresent(name, under: rootFD) }
             try requireAbsent(name, under: rootFD)
         }
+        try keychainLink(to: keychains, under: rootFD, create: create)
+    }
+
+    /// Without a keychain under HOME, every token refresh made /usr/bin/security
+    /// show "Keychain Not Found". This is the profile's only link out, to the
+    /// user's own keychain folder. A link with another target is only a pointer
+    /// and is replaced; a real file or folder there is refused, never removed.
+    private static func keychainLink(to target: String, under rootFD: Int32, create: Bool) throws {
+        guard target.hasPrefix("/"), !target.utf8.contains(0) else { throw ProfileError.unavailable }
+        let library = try directory("Library", under: rootFD, create: create)
+        defer { Darwin.close(library) }
+        if create {
+            let current = try linkTarget("Keychains", under: library)
+            if current != target {
+                if current != nil, unlinkat(library, "Keychains", 0) != 0 { throw ProfileError.unavailable }
+                guard symlinkat(target, library, "Keychains") == 0 else { throw ProfileError.unavailable }
+            }
+        }
+        guard try linkTarget("Keychains", under: library) == target else { throw ProfileError.changedConfiguration }
+    }
+
+    /// nil when absent. Anything other than a link this user owns is refused.
+    private static func linkTarget(_ name: String, under directory: Int32) throws -> String? {
+        var info = stat()
+        if fstatat(directory, name, &info, AT_SYMLINK_NOFOLLOW) != 0 {
+            guard errno == ENOENT else { throw ProfileError.unavailable }
+            return nil
+        }
+        guard (info.st_mode & S_IFMT) == S_IFLNK, info.st_uid == getuid() else { throw ProfileError.changedConfiguration }
+        var buffer = [UInt8](repeating: 0, count: Int(PATH_MAX))
+        let count = buffer.withUnsafeMutableBytes {
+            readlinkat(directory, name, $0.baseAddress!.assumingMemoryBound(to: CChar.self), $0.count)
+        }
+        guard count > 0, count < buffer.count else { throw ProfileError.unavailable }
+        return String(decoding: buffer.prefix(count), as: UTF8.self)
     }
 
     /// Bounds cleanup so a pathological tree cannot stall a read. Exceeding

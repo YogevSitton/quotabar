@@ -28,7 +28,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 - Keep Claude visible when QuotaBar's managed Claude Code helper is installed, even without Claude Desktop or a standalone CLI. Empty or incomplete helper installations do not count.
 - Command-V, -C, -X, -A and -Z now work in text fields, such as the Antigravity and Claude authorization code fields. Previously only the context-menu Paste worked.
 - Antigravity shows Gemini 4 Argon by default, listed first in the quota group menu, instead of asking you to choose a group.
-- Antigravity sign-in now explains the macOS "keychain cannot be found" prompt: choose Cancel, and the official CLI keeps its sign-in in QuotaBar's private profile.
+- Antigravity no longer makes macOS ask "A keychain cannot be found to store "antigravity"" at sign-in and about every hour afterwards. QuotaBar's private Antigravity profile now points the official CLI at your own keychain folder, so it saves its sign-in in your login keychain, as it does when you run it yourself. QuotaBar still never reads it.
 - Antigravity Connect and automatic checks no longer fail immediately. The official CLI rejected an option QuotaBar passed and exited before sign-in or reading quota, so every attempt failed and the wait before the next one grew.
 - Antigravity no longer stops with "isolated settings could not be verified" after the official CLI's first full run. The CLI links one of QuotaBar's empty settings files to another, and QuotaBar now accepts that exact link while still refusing any other.
 - Retain Claude's original usage failure message when Retry usage is clicked during a cooldown.
