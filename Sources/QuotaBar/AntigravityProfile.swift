@@ -2,7 +2,8 @@ import Foundation
 import Darwin
 
 /// Only non-secret configuration is managed here. The official CLI owns every
-/// authentication operation, including any access to its shared Keychain entry.
+/// authentication operation. The isolated HOME has no keychain, so the CLI's
+/// own file fallback in this profile holds its sign-in; QuotaBar never reads it.
 struct AntigravityProfile {
     enum ProfileError: Error {
         case unavailable

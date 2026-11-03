@@ -52,6 +52,7 @@ import QuotaUpdateSupport
             NSApp.terminate(nil); return
         }
         NSApp.applicationIconImage = AppArtwork.icon
+        NSApp.mainMenu = Self.editingMenu()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String).flatMap(Int.init)
         DiagnosticLog.shared.record(DiagnosticEvent(area: .app, kind: .started,
@@ -96,6 +97,24 @@ import QuotaUpdateSupport
         }
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke), name: NSWorkspace.didWakeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(displayChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+    /// An accessory app never shows its main menu, but AppKit still routes key
+    /// equivalents through it. Without these items Command-V, -C, -X, -A and -Z
+    /// do nothing in the popup's code fields and the separate windows.
+    private static func editingMenu() -> NSMenu {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let item = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        item.submenu = edit
+        let menu = NSMenu()
+        menu.addItem(item)
+        return menu
     }
     private func updateLabel() {
         guard let button = statusItem.button else { return }
