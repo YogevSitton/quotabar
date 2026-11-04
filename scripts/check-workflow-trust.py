@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 WORKFLOWS = Path('.github/workflows')
-PR_WORKFLOWS = ['ci.yml', 'pr-title.yml']
+PR_WORKFLOWS = ['ci.yml', 'pr-title.yml', 'pr-hygiene.yml']
 RELEASE = 'release.yml'
 SIGNING_SECRET = 'secrets.QUOTABAR_UPDATE_SIGNING_KEY'
 SIGNING_JOBS = {'sign-and-publish-preview', 'sign-and-publish-stable'}
@@ -79,11 +79,15 @@ def common(name, lines, problems):
 
 
 def check_pr_workflow(name, lines, problems):
+    if not any(line.startswith('permissions:') for line in lines):
+        problems.append(f'{name}: pull-request workflows must declare top-level permissions')
     for number, line in enumerate(lines, 1):
         code = strip_comment(line)
-        if 'secrets.' in code:
+        # Also catch expression forms such as toJSON(secrets) and secrets['NAME'].
+        if 'secrets.' in code or ('${{' in code and re.search(r'\bsecrets\b', code)):
             problems.append(f'{name}:{number}: pull-request workflows must not reference secrets')
-        if re.search(r':\s*write\b', code):
+        # Also catch quoted values such as contents: 'write'.
+        if re.search(r''':\s*['"]?write\b''', code):
             problems.append(f'{name}:{number}: pull-request workflows must stay read-only')
         if 'QUOTABAR_UPDATE_SIGNING_KEY' in code or 'QUOTABAR_RELEASE_BUILD' in code:
             problems.append(f'{name}:{number}: pull-request workflows must not sign or build releases')

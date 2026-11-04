@@ -8,6 +8,7 @@ None of this is meant to be bureaucratic. The goal is a `main` branch people can
 
 - **Never exercise a reset action.** Do not click Use reset, confirm a reset, send a reset request, or spend reset credits while developing or testing, on any account. Review reset changes statically; current verification is compile-only.
 - **Use synthetic fixtures only.** Tests must not contact a provider, read a real account, or depend on local caches. Never commit real account identifiers, emails, tokens, raw CLI output, runtime caches, downloaded helper binaries or app bundles.
+- **Keep the public record clean.** Commit with your GitHub noreply address only (`<id>+<login>@users.noreply.github.com`). Commits, their author names and messages, the files they add, branch names, pull request titles and descriptions, issues, reviews and release notes must not contain personal email addresses, home-directory paths, account identifiers, device names or credentials. The [local hooks](#local-hooks) check commits and branch names before a push and the PR hygiene check runs on every pull request, but a title or description is public as soon as it is posted, so check it first with `python3 scripts/check-public-text.py -`.
 - **Keep monitoring read-only.** No model prompts, purchases, subscription changes, token refresh or direct credential access.
 - **Unknown stays unknown.** Missing or malformed provider data must never become zero usage, full availability or zero credits.
 - **Use ASCII hyphens** for every authored dash in UI text and documentation.
@@ -24,7 +25,7 @@ None of this is meant to be bureaucratic. The goal is a `main` branch people can
 **Every change reaches `main` through a pull request**, including the maintainer's own and those made with AI assistants. Nobody pushes to `main` directly.
 
 1. **Branch from `main`.** Name it `<type>/<short-topic>`, for example `fix/claude-backoff` or `docs/install-steps`. Tool-generated branch names are fine too.
-2. **Commit as you like on the branch.** Pull requests are squash-merged, so work-in-progress commits are fine. Open a **draft** pull request early if you want feedback.
+2. **Commit as you like on the branch**, with the [local hooks](#local-hooks) installed. Pull requests are squash-merged, so work-in-progress commits are fine. Open a **draft** pull request early if you want feedback.
 3. **Title the pull request as a [Conventional Commit](https://www.conventionalcommits.org/).** The title becomes the single commit on `main` and feeds the changelog, so it is the one message that has to be right. A CI check validates the format.
 4. **Fill in the template**, link the issue (`Closes #12`) and describe what you verified.
 5. **Wait for CI to pass**, then for review. The maintainer reviews every outside contribution. While there is a single maintainer, the maintainer's own pull requests may be merged once CI is green, but still go through a pull request so the change is visible and revertible.
@@ -82,6 +83,8 @@ swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
 python3 scripts/check-workflow-trust.py
 python3 scripts/check-release-docs.py
+python3 scripts/check-commit-identity.py --revs origin/main..HEAD
+python3 scripts/audit-public-tree.py --revs origin/main..HEAD
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 
@@ -93,7 +96,25 @@ Do not execute tests, live diagnostics, sign-in or reset actions under the curre
 
 Offline documentation renders may use synthetic fixtures without starting provider monitoring, loading account or recovery files, or invoking any controls. They demonstrate presentation only and do not establish live-provider or reset verification.
 
-CI compiles the app and test targets on macOS, audits the public tree, checks workflow trust rules and release documentation, packages the app without secrets and checks the pull request title; it does not execute tests. Workflows from first-time contributors wait for maintainer approval before running.
+CI compiles the app and test targets on macOS, audits the public tree, checks workflow trust rules and release documentation, packages the app without secrets and checks the pull request title, and the PR hygiene workflow checks each commit's address, name and message, every file version and path the commits add, and the pull request's title, description and branch name for private details; none of it executes tests. Workflows from first-time contributors wait for maintainer approval before running.
+
+### Local hooks
+
+Install the repository's hooks once per clone:
+
+```sh
+./scripts/install-git-hooks.sh
+```
+
+The installer copies the hooks and the checkers they call into the clone's git directory and points `core.hooksPath` there, so they run in every worktree, including branches created before the hooks existed, and never run code from whatever branch is checked out. Run it again after pulling changes to `scripts/git-hooks` or to the checkers; `pre-push` prints a note when the checkout's hooks differ from the installed ones.
+
+- `pre-commit` and `pre-merge-commit` refuse an author or committer address that is not a GitHub noreply address, including `--author` overrides and the original author of an `--amend`, and author or committer names that contain private text.
+- `commit-msg` checks the message as Git will store it, including the `#` lines that `-m` and `-F` keep.
+- `pre-push` refuses pushes to this repository's `main`. For every other branch or tag it checks what the remote does not already have: each commit's address, name and message, annotated tag text, and every file version and path the commits add, so a leak that a later commit removes is still refused. Rewrite the offending commit instead of adding a fix commit.
+
+The PR hygiene workflow runs the same commit and content checks on every open pull request, plus its title, description and branch name; Dependabot descriptions are skipped because they quote upstream release notes. Commits made by cherry-pick, revert, rebase or `git am` are checked at push. Nothing checks device names, account identifiers, issues, reviews or release notes.
+
+Maintainers keep private terms, such as the name of a personal tool, as salted hashes in `quotabar-private-terms.txt` in the clone's git directory, outside the repository. Add one with `python3 scripts/check-public-text.py --add-term` (type the term, press Return). The local hooks and checkers read that file and CI never sees it. Never commit or share it: a hash of a short word can be reversed by guessing. Matching ignores case and also covers camelCase and digit-separated parts.
 
 ## Reviews
 

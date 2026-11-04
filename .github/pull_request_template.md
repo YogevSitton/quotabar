@@ -15,6 +15,7 @@ It becomes the commit message on main when squash-merged. See CONTRIBUTING.md.
 - [ ] No tests or live diagnostics were executed under the current verification restriction
 - [ ] `python3 scripts/audit-public-tree.py --public-docs` passes
 - [ ] `python3 scripts/check-workflow-trust.py` and `python3 scripts/check-release-docs.py` pass
+- [ ] `python3 scripts/check-commit-identity.py --revs origin/main..HEAD` and `python3 scripts/audit-public-tree.py --revs origin/main..HEAD` pass
 - [ ] `codesign --verify --deep --strict dist/QuotaBar.app` passes
 
 What was verified against a live account, if anything, and what still needs one:
@@ -25,6 +26,7 @@ What was verified against a live account, if anything, and what still needs one:
 - [ ] No update was installed and no release, tag, signing key, secret, variable or publishing setting was created; pull-request CI stays keyless
 - [ ] Tests use synthetic fixtures only
 - [ ] No tokens, account identifiers, emails, private authorization links or raw CLI output in code, tests, screenshots or this description
+- [ ] Every commit carries a GitHub noreply author and committer address, and this title, description, branch name and the commit messages hold no private details; the title and description were checked with `python3 scripts/check-public-text.py -` before posting (the PR hygiene check runs only after)
 - [ ] `CHANGELOG.md` has an Unreleased entry if users would notice this change
 - [ ] `docs/VERIFICATION.md` updated if verification status changed
 - [ ] AI assistance, if any, is mentioned above

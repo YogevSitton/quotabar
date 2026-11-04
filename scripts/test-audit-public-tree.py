@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import os
 from pathlib import Path
 import struct
@@ -105,6 +106,58 @@ class AuditTests(unittest.TestCase):
         self.add('AGENTS.md', 'Ask FORBIDDEN-TERM first.\nThe human decides.\n')
         self.assertFinding("AGENTS.md:1: forbidden term 'FORBIDDEN-TERM'", '--forbid', 'FORBIDDEN-TERM')
         self.assertFinding('AGENTS.md:2: private-log phrasing', '--public-docs')
+
+    def write_terms(self, *lines):
+        path = self.root / '.git' / 'quotabar-private-terms.txt'
+        path.write_text('# salted hashes only\n' + ''.join(line + '\n' for line in lines))
+        return path
+
+    def test_private_term_matches_words_and_their_parts(self):
+        salt, term = 'ab12cd34ef56ab78', 'hiddentool'
+        self.write_terms(f'sha256:{salt}:' + hashlib.sha256(f'{salt}:{term}'.encode()).hexdigest())
+        for line in ['Reviewed with HiddenTool before merging.', 'Use hiddentool2 now.', 'useHiddentool hook']:
+            with self.subTest(line=line):
+                self.add('notes.md', line + '\n')
+                self.assertFinding('notes.md:1: private term (hash match)')
+        self.add('notes.md', 'Reviewed with hiddentools before merging.\n')
+        self.assertEqual(self.audit().returncode, 0)
+        self.add('docs/hiddentool-setup.md', 'Neutral text.\n')
+        self.assertFinding('docs/hiddentool-setup.md: path: private term (hash match)')
+
+    def test_malformed_or_missing_terms_files_are_errors(self):
+        self.write_terms('sha256:bad')
+        result = self.audit()
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn('expected sha256:<salt>:<digest>', result.stdout)
+        self.assertEqual(self.audit('--private-terms', 'missing.txt').returncode, 2)
+
+    def test_personal_email_is_reported_and_public_addresses_pass(self):
+        self.add('CONTACT.md', 'Contact: jane.doe' + '@' + 'gmail.com\n')
+        self.assertFinding('CONTACT.md:1: email address that is not a public noreply address')
+        self.add('CONTACT.md', 'Bots: 1+someone' + '@' + 'users.noreply.github.com, test' + '@' + 'example.invalid\n'
+                 'Sign-off: support' + '@' + 'github.com; URL: https://user' + '@' + 'example.org/path\n')
+        self.assertEqual(self.audit().returncode, 0)
+
+    def test_home_paths_without_a_trailing_slash_and_in_dashed_form(self):
+        for line in ['HOME=/' + 'Users/jane', 'cd /' + 'home/jane && make', 'log at /tmp/x/-' + 'Users-jane-Projects-Q/out']:
+            with self.subTest(line=line):
+                self.add('notes.txt', line + '\n')
+                self.assertFinding('notes.txt:1: absolute home-directory path')
+        self.add('notes.txt', 'CI: /' + 'Users/runner/work/x and /' + 'Users/Shared/cache\n')
+        self.assertEqual(self.audit().returncode, 0)
+
+    def test_revs_mode_finds_a_leak_that_a_later_commit_removed(self):
+        self.git('commit', '-qm', 'initial')
+        self.add('notes.md', 'Built in /' + 'Users/jane/Projects for you\n')
+        self.git('commit', '-qm', 'add notes')
+        self.add('notes.md', 'Built locally\n')
+        self.git('commit', '-qm', 'tidy notes')
+        self.assertEqual(self.audit().returncode, 0)
+        result = self.audit('--revs', 'HEAD~2..HEAD')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('absolute home-directory path', result.stdout)
+        self.assertEqual(self.audit('--revs', 'HEAD~1..HEAD').returncode, 0)
+        self.assertEqual(self.audit('--revs').returncode, 2)
 
     def test_missing_required_file_and_dirty_worktree_are_reported(self):
         self.assertFinding('LICENSE: required file is not tracked', '--require-file', 'LICENSE')

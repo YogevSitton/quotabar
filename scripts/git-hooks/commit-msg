@@ -1,0 +1,20 @@
+#!/bin/sh
+# Refuses a commit message that contains a credential-shaped string, a
+# home-directory path, a personal email address or a private term. The message
+# is checked as Git will store it: after an editor, comment lines and the diff
+# that git commit -v adds below the scissors line are dropped, but -m, -F and
+# the whitespace, verbatim and scissors cleanup modes keep comment lines, so
+# those are checked too. Install with scripts/install-git-hooks.sh.
+checks=$(cd "$(dirname "$0")/.." && pwd) || exit 1
+editor=yes
+[ "${GIT_EDITOR-}" = : ] && editor=
+strip=$editor
+case "$(git config commit.cleanup 2>/dev/null)" in
+  verbatim | whitespace | scissors) strip= ;;
+esac
+if [ -n "$editor" ]; then
+  sed '/^[^[:space:]]\{1,\} -\{24\} >8 -\{24\}$/,$d' "$1"
+else
+  cat "$1"
+fi | if [ -n "$strip" ]; then git stripspace --strip-comments; else cat; fi |
+  python3 "$checks/check-public-text.py" --quiet --label "commit message" -
