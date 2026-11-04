@@ -19,3 +19,14 @@ The rewritten history was rescanned before upload. Only the rewritten main branc
 - Releases and in-app updates follow [Releases and in-app updates](UPDATES.md): one public repository, Stable and Preview channels, keyless contributor packaging and owner-activated signed publication. That policy does not repeat this repository migration.
 
 Pattern scans and metadata inspection reduce exposure risk; they do not prove the absence of every possible secret or vulnerability. Future changes still need review and repository security scanning.
+
+## Public-record checks after publication
+
+The publication audit replaced the personal commit address once. Keeping it and other private details out is now checked at several points, and none of them can remove anything already published.
+
+- The maintainer's clone commits with the GitHub noreply address and runs the hooks that `scripts/install-git-hooks.sh` installs. They refuse other commit addresses, private text in commit names, messages, branch names and annotated tags, and pushes to `main`, and before a push they audit every file version and path the pushed commits add.
+- The PR hygiene workflow runs the same commit and content checks on every open pull request, plus its title, description and branch name. It blocks merging only while `public-record` is a required check of the main branch ruleset, and it sees a title or description only after it is posted.
+- Private tool names are kept as salted hashes in an untracked file in the maintainer's clone and checked only locally, because publishing even the hashes would expose a short name to anyone who guesses it.
+- GitHub sets the address of a web merge from the account's email settings, which no check sees, so **Keep my email addresses private** stays on, together with **Block command line pushes that expose my email** (GitHub > Settings > Emails).
+
+These checks are pattern-based; they reduce exposure and do not prove its absence. Commits pushed to a pull request stay reachable on GitHub after the branch is deleted, and GitHub copies commit addresses and branch names into pull request timelines, the activity feed and Actions run records. A renamed title, an edited description's earlier revisions and a pull request's branch name stay visible. Only GitHub Support can purge these copies.

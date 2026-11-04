@@ -8,7 +8,7 @@ QuotaBar is a native macOS 14+ menu bar app. Codex and Claude are first-class pr
 - `Sources/QuotaCore/` contains Foundation-only models, parsers, freshness rules, backoff, sign-in validation and the signed update metadata, policy and schedule.
 - `Sources/QuotaBar/` contains the SwiftUI/AppKit UI, provider clients, official Claude helper integration, the Darwin-backed persistent Claude polling store and the in-app updater (feed client, coordinator, Updates window).
 - `Sources/QuotaUpdateSupport/` holds update signing, file, ZIP, bundle and installation-journal code; `Sources/QuotaUpdater/` is the bundled one-shot install helper; `Sources/QuotaReleaseTool/` is used only by the release workflow and the owner's key setup.
-- `Tests/QuotaCoreTests/` uses Foundation-only synthetic fixtures; `Tests/QuotaBarTests/` covers the platform-specific polling store; `Tests/QuotaUpdateSupportTests/` covers update integrity. `scripts/` contains the app build, build identity, packaging, static checks and the optional sanitized status-line exporter.
+- `Tests/QuotaCoreTests/` uses Foundation-only synthetic fixtures; `Tests/QuotaBarTests/` covers the platform-specific polling store; `Tests/QuotaUpdateSupportTests/` covers update integrity. `scripts/` contains the app build, build identity, packaging, static checks, the public-record git hooks and their installer, and the optional sanitized status-line exporter.
 - [docs/UPDATES.md](docs/UPDATES.md) is the canonical release and update policy.
 
 ## Development workflow
@@ -22,6 +22,9 @@ Follow the Git workflow in `CONTRIBUTING.md`:
 - Add an Unreleased entry to `CHANGELOG.md` for user-visible changes.
 - Do not create tags, releases, version bumps (`release-version.json`), Stable promotions, signing keys, secrets, variables, environments or Pages settings, and do not enable publishing, unless the maintainer asks.
 - Do not merge a pull request unless the maintainer asks. Preview publishing is active: every eligible merge to `main` runs the release workflow and publishes a public `preview-<build>` prerelease, so a request to merge is also a request to publish.
+- Commit only with the GitHub noreply address (`<id>+<login>@users.noreply.github.com`). Each clone sets it with `git config user.email <id>+<login>@users.noreply.github.com` and installs the hooks with `scripts/install-git-hooks.sh`, which copies them into the clone's git directory so that they also run in worktrees of older branches. The hooks refuse any other address, and the PR hygiene workflow fails pull requests whose commits carry one. Never override it with a personal address, and run `python3 scripts/check-commit-identity.py --revs origin/main..HEAD` before pushing commits made elsewhere.
+- The maintainer's personal tool stays unnamed everywhere public: files and paths, commit messages and author names, branch names, pull request titles and descriptions, issues, reviews, release notes and screenshots. Its name is kept only as a salted hash in an untracked file in the maintainer's clone (`quotabar-private-terms.txt` in the git directory), which the local hooks and checkers read; CI cannot check for it. A hash of a short word can be reversed by guessing, so never commit or publish that file, and never write the name to add it (use `python3 scripts/check-public-text.py --add-term`).
+- Keep personal email addresses, home-directory paths, device names and account identifiers out of everything public. The hooks and the PR hygiene workflow check commits, the file versions they add, branch names and pull request titles and descriptions, but the workflow sees a title or description only after it is posted, and nothing checks issues, reviews, release notes, device names or account identifiers. Pipe text through `python3 scripts/check-public-text.py -` before posting it.
 
 ## Build and verify
 
@@ -33,6 +36,8 @@ swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
 python3 scripts/check-workflow-trust.py
 python3 scripts/check-release-docs.py
+python3 scripts/check-commit-identity.py --revs origin/main..HEAD
+python3 scripts/audit-public-tree.py --revs origin/main..HEAD
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 

@@ -1,0 +1,42 @@
+#!/bin/sh
+# Refuses pushes to this repository's main branch, and pushes that would
+# publish private details. For every pushed branch or tag it checks what the
+# remote does not already have: the author and committer addresses and names
+# and the message of each commit, annotated tag text, and every file version
+# and path those commits add (audit-public-tree.py --revs), so a leak that a
+# later commit removes is still refused. Branch deletions are not checked.
+# Install with scripts/install-git-hooks.sh.
+checks=$(cd "$(dirname "$0")/.." && pwd) || exit 1
+remote=$1
+url=$2
+zero=0000000000000000000000000000000000000000
+status=0
+if [ -f scripts/git-hooks/pre-push ] && ! cmp -s scripts/git-hooks/pre-push "$0"; then
+  echo "pre-push: note: this checkout's scripts/git-hooks differ from the installed hooks; run scripts/install-git-hooks.sh to update them." >&2
+fi
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "$local_ref" ] || continue
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_ref" = refs/heads/main ] &&
+    printf '%s\n' "$url" | grep -Eiq 'github\.com[:/]+yogevsitton/quotabar(\.git)?/?$'; then
+    echo "pre-push: nothing is pushed to main directly; open a pull request (CONTRIBUTING.md)." >&2
+    status=1
+    continue
+  fi
+  printf '%s\n' "${remote_ref#refs/heads/}" |
+    python3 "$checks/check-public-text.py" --quiet --label "ref name" - >&2 || status=1
+  if [ "$(git cat-file -t "$local_sha" 2>/dev/null)" = tag ]; then
+    git cat-file tag "$local_sha" </dev/null |
+      python3 "$checks/check-public-text.py" --quiet --label "tag ${remote_ref#refs/tags/}" - >&2 || status=1
+  fi
+  # Trust only what the destination remote already has.
+  if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    set -- "$local_sha" --not "$remote_sha" --remotes="$remote"
+  else
+    set -- "$local_sha" --not --remotes="$remote"
+  fi
+  python3 "$checks/check-commit-identity.py" --quiet --revs "$@" </dev/null >&2 || status=1
+  python3 "$checks/check-public-text.py" --quiet --revs "$@" </dev/null >&2 || status=1
+  python3 "$checks/audit-public-tree.py" --quiet --revs "$@" </dev/null >&2 || status=1
+done
+exit "$status"

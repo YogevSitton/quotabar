@@ -1,0 +1,62 @@
+name: PR hygiene
+
+# Keeps personal details out of the public record. For every open pull request
+# it checks the author and committer address, name and message of each commit,
+# every file version and path the commits add (not only the final tree), and
+# the title, description and branch name, for credential-shaped strings,
+# home-directory paths and email addresses other than GitHub noreply, system and
+# example ones. Read-only and keyless. Private terms are checked only by the
+# local hooks, because their hashes are never published. Make the public-record
+# job a required check in the main branch ruleset so that a failure blocks merging.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  public-record:
+    # The check gates merging, so edits to closed pull requests are not checked.
+    if: github.event.pull_request.state == 'open'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pull request with its history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Commit author and committer addresses
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/check-commit-identity.py --revs "$BASE_SHA..$HEAD_SHA"
+      - name: Commit names and messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/check-public-text.py --revs "$BASE_SHA..$HEAD_SHA"
+      - name: Files and paths the commits add
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/audit-public-tree.py --revs "$BASE_SHA..$HEAD_SHA"
+      - name: Title and branch name
+        env:
+          # Passed through the environment so pull request text is never interpreted as shell code.
+          TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          status=0
+          printf '%s\n' "$TITLE" | python3 scripts/check-public-text.py --label "pull request title" - || status=1
+          printf '%s\n' "$HEAD_REF" | python3 scripts/check-public-text.py --label "branch name" - || status=1
+          exit "$status"
+      - name: Description
+        # Dependabot descriptions quote upstream release notes, which can mention paths or addresses that are not ours.
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n' "$BODY" | python3 scripts/check-public-text.py --label "pull request description" -

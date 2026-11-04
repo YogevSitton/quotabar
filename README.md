@@ -210,6 +210,8 @@ swift build --build-tests --disable-sandbox
 python3 scripts/audit-public-tree.py --public-docs
 python3 scripts/check-workflow-trust.py
 python3 scripts/check-release-docs.py
+python3 scripts/check-commit-identity.py --revs origin/main..HEAD
+python3 scripts/audit-public-tree.py --revs origin/main..HEAD
 codesign --verify --deep --strict dist/QuotaBar.app
 ```
 

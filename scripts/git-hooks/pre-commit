@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuses a commit whose author or committer address is not a GitHub noreply
+# address, including --author overrides and the original author of an --amend,
+# or whose author or committer name holds private text.
+# Install with scripts/install-git-hooks.sh.
+checks=$(cd "$(dirname "$0")/.." && pwd) || exit 1
+python3 "$checks/check-commit-identity.py" --quiet || exit 1
+{ git var GIT_AUTHOR_IDENT && git var GIT_COMMITTER_IDENT; } </dev/null |
+  sed 's/ <[^>]*> [0-9]* [-+][0-9]*$//' |
+  python3 "$checks/check-public-text.py" --quiet --label "author and committer names" -
