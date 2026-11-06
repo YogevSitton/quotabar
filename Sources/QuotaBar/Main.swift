@@ -42,6 +42,7 @@ import QuotaUpdateSupport
     private let logsWindow = LogsWindow()
     private var timer: Timer?
     private var outsideClickMonitor: Any?
+    private var localClickMonitor: Any?
     private var renderedMenuKey: String?
     private var renderedMenuAppearance: NSAppearance.Name?
     private var renderedMenuChips: [MenuBarResetChip?]?
@@ -77,7 +78,10 @@ import QuotaUpdateSupport
         statusItem.autosaveName = "QuotaBar"
         statusItem.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         statusItem.button?.target = self; statusItem.button?.action = #selector(toggle)
-        popover.behavior = .transient
+        // A transient popover can close on mouse-down before the status button's
+        // mouse-up action, making that same click reopen it. Own dismissal so
+        // the status button's action is the only handler for its clicks.
+        popover.behavior = .applicationDefined
         popover.animates = false
         popover.delegate = self
         state.onChange = { [weak self] in
@@ -158,6 +162,9 @@ import QuotaUpdateSupport
         showPopover()
         return true
     }
+    func applicationDidResignActive(_ notification: Notification) {
+        popover.performClose(nil)
+    }
     private func showPopover() {
         guard !popover.isShown, let button = statusItem.button else { return }
         state.updateInstallation()
@@ -166,9 +173,31 @@ import QuotaUpdateSupport
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        guard popover.isShown else { return }
+        // AppKit invokes event monitors on the main thread. Close synchronously
+        // so a queued dismissal cannot close a later opening of the popup.
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
-            Task { @MainActor in self?.popover.performClose(nil) }
+            MainActor.assumeIsolated { self?.popover.performClose(nil) }
         }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                self?.closePopoverForOutsideClick(event)
+            }
+            return event
+        }
+    }
+    private func closePopoverForOutsideClick(_ event: NSEvent) {
+        guard let clickedWindow = event.window,
+              clickedWindow !== statusItem.button?.window,
+              clickedWindow !== NSApp.modalWindow else { return }
+        // Keep controls and child panels usable; clicks in our other windows
+        // dismiss the popup without consuming the click.
+        var window: NSWindow? = clickedWindow
+        while let candidate = window {
+            if candidate === popover.contentViewController?.view.window { return }
+            window = candidate.parent
+        }
+        popover.performClose(nil)
     }
     private var anchorScreen: NSScreen? {
         statusItem.button?.window?.screen
@@ -195,7 +224,8 @@ import QuotaUpdateSupport
             // frame directly leaves its chrome at the old height.
             if !popover.isShown { hostingController.view.setFrameSize(size) }
         } else {
-            let controller = NSHostingController(rootView: dashboard)
+            let controller = PopoverHostingController(rootView: dashboard)
+            controller.popover = popover
             // The dashboard owns its screen-constrained size. Do not let a
             // later intrinsic-size report trigger a second popover placement.
             controller.sizingOptions = []
@@ -214,11 +244,21 @@ import QuotaUpdateSupport
     }
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        if let localClickMonitor { NSEvent.removeMonitor(localClickMonitor) }
         outsideClickMonitor = nil
+        localClickMonitor = nil
         updateLabel()
     }
     @objc private func toggle() {
         if popover.isShown { popover.performClose(nil) }
         else { showPopover() }
+    }
+}
+
+@MainActor private final class PopoverHostingController: NSHostingController<Dashboard> {
+    weak var popover: NSPopover?
+
+    override func cancelOperation(_ sender: Any?) {
+        popover?.performClose(sender)
     }
 }
