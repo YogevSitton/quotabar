@@ -65,7 +65,7 @@ struct Dashboard: View {
                                     CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
                                                  error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
                                                  resetRowLimit: resetRowLimit, details: { state.showDetails(for: .codex) },
-                                                 resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.hasCodexResetNotice ? "Reset request needs attention" : nil,
+                                                 resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.codexResetNeedsAttention ? "Reset request needs attention" : nil,
                                                  canReset: state.canUseCodexReset, useReset: state.confirmCodexReset,
                                                  useFirst: useFirst == .codex)
                                         .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
