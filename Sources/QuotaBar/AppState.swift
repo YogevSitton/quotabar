@@ -306,7 +306,12 @@ import Combine
                 self.codex?.sourceName = "Codex reading before reset request"
                 switch result {
                 case .success(let outcome):
-                    self.codexResetMessage = outcome.message
+                    switch outcome {
+                    case .reset, .alreadyRedeemed, .nothingToReset:
+                        self.codexResetMessage = outcome.message
+                    case .noCredit:
+                        self.codexResetError = outcome.message
+                    }
                     do {
                         try self.resetStore.clear(attempt)
                         self.pendingCodexReset = nil
@@ -344,8 +349,8 @@ import Combine
         guard let model = claudeConnection?.model else { return false }
         return model.busy || (model.error != nil && (claudeError != nil || needsClaudeConnection))
     }
-    var hasCodexResetNotice: Bool {
-        pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil || codexResetMessage != nil
+    var codexResetNeedsAttention: Bool {
+        pendingCodexReset != nil || resetRecoveryError != nil || codexResetError != nil
     }
     func showDetails(for provider: Provider) {
         if providerDetails == nil { providerDetails = ProviderDetailsWindow(state: self) }
