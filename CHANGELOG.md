@@ -19,7 +19,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 - **Quit QuotaBar** moved from the popup's power button into the More (ellipsis) menu. Command-Q still quits while the popup is open.
 - Set the source version to 0.4.0 for the upcoming release.
-- The menu bar item now fits its content, removing the empty space after each provider's usage, and providers are separated by the same space as neighboring menu bar icons. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
+- The menu bar item now fits its content, removing the empty space after each provider's usage, with a tighter 10-point gap between providers instead of 18 points. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
 - Reduce healthy Claude polling to at least 2 minutes 10 seconds between reads. Validated readings remain current for less than four minutes to cover the next read, while failed refreshes immediately show saved values and wait five minutes, increasing to at most one hour after repeated failures. Codex keeps its one-minute interval.
 
 ### Removed
