@@ -175,6 +175,7 @@ actor ClaudeProvider {
                 return fallback(organization: current.organization, error: lastError)
             }
             snapshot.observedAt = observedAt
+            snapshot.claudeResetHintValidUntil = cached?.claudeResetHintValidUntil
             phase = .savingSchedule
             let state = try pollStore.complete(lease, outcome: .success(observedAt: observedAt), at: completedAt)
             nextRequestAt = state.nextRequestAt
@@ -313,6 +314,8 @@ actor ClaudeProvider {
               var cached = try? UsageParser.claudeOAuth(limitsData) else { return nil }
         cached.observedAt = Date(timeIntervalSince1970: rawDate.doubleValue / 1000)
         guard cached.observedAt <= Date().addingTimeInterval(60) else { return nil }
+        cached.claudeResetHintValidUntil = UsageParser.claudeResetHintValidity(
+            root["unusedLimitResetStatusCache"] as? [String: Any], accountID: identity)
         cached.source = .cached; cached.sourceName = "Claude Code CLI saved reading"
         return cached
     }
