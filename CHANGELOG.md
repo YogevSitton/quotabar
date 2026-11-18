@@ -29,6 +29,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- The Updates window now sizes itself to fit its full content instead of scrolling.
 - Successful Codex resets no longer show "Reset request needs attention". The notice is reserved for errors, unavailable credits and unresolved requests.
 - Clicking the menu bar item again closes the popup instead of briefly closing and reopening it.
 - Keep Claude visible when QuotaBar's managed Claude Code helper is installed, even without Claude Desktop or a standalone CLI. Empty or incomplete helper installations do not count.
