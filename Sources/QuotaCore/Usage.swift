@@ -145,7 +145,7 @@ public struct UsageSnapshot {
     public var sourceName: String?
     public var showsResetCredits = true
     public var cooldownUntil: Date?
-    var claudeResetEligible: Bool?
+    public internal(set) var claudeResetEligible: Bool?
     public var claudeResetHintValidUntil: Date?
     public var additionalWindows: [NamedUsageWindow] = []
     public var claudeFableWeekly: NamedUsageWindow?
