@@ -49,8 +49,7 @@ struct MenuBarQuota {
         limit = remaining.map { .limited(UsageWindow(used: Double(100 - $0), resetsAt: resetsAt)) } ?? .unavailable
     }
     var percentage: String {
-        if limit == .noLimit { return "∞" }
-        return remaining.map { "\($0)%" } ?? "-"
+        remaining.map { "\($0)%" } ?? "-"
     }
     var isExhausted: Bool { remaining == 0 }
     /// An exhausted window shows time until its reset instead of 0%.
@@ -65,7 +64,6 @@ struct MenuBarQuota {
     var resetTime: String { resetsAt.map { $0.formatted(.dateTime.weekday(.abbreviated).hour().minute()) } ?? "-" }
 
     func descriptionLine(_ label: String, at now: Date) -> String {
-        if limit == .noLimit { return "\(label): No limit" }
         guard remaining != nil || resetsAt != nil else { return "\(label): Unavailable" }
         let value = remaining.map { "\($0)% left" } ?? "Unavailable"
         // Rounded up like the menu bar and popup countdowns for the same reset.
@@ -90,7 +88,8 @@ struct MenuBarEntry {
     }
     func description(at now: Date) -> String {
         var lines = [name] + [quotaGroup].compactMap { $0 }
-        lines += [session.descriptionLine("5-hour window", at: now), weekly.descriptionLine("Weekly window", at: now)]
+        if session.limit != .noLimit { lines.append(session.descriptionLine("5-hour window", at: now)) }
+        lines.append(weekly.descriptionLine("Weekly window", at: now))
         if let fable = currentFable(at: now) { lines.append(fable.descriptionLine("Fable weekly window", at: now)) }
         return lines.joined(separator: "; ")
     }
@@ -114,7 +113,12 @@ struct MenuBarEntry {
             let countdown = MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true)
             return window == .fiveHour ? [countdown, prefix, value] : [prefix, value, countdown]
         }
-        var values = segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
+        var values: [MenuBarSegment] = []
+        if session.limit != .noLimit {
+            values += segments(session, .fiveHour)
+            values.append(MenuBarSegment(text: "/", remaining: nil))
+        }
+        values += segments(weekly, .weekly)
         if let fable = currentFable(at: now) {
             values += [MenuBarSegment(text: "/F", remaining: nil), MenuBarSegment(text: fable.menuValue(at: now), remaining: fable.remaining)]
         }

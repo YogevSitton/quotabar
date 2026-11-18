@@ -163,17 +163,7 @@ private struct CompactProviderCard: View {
                     .buttonStyle(.plain).help("Open \(name) usage").accessibilityLabel("Open \(name) usage")
             }.padding(.bottom, 2)
             if current, let snapshot {
-                let leftover = LeftoverReset.soonest(fiveHour: snapshot.session, weekly: snapshot.weekly, at: now)
-                UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: false,
-                         noLimit: snapshot.sessionLimit == .noLimit,
-                         duration: 5 * 3600, observedAt: snapshot.observedAt, compact: true,
-                         leftover: leftover?.window == .fiveHour ? leftover : nil)
-                UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
-                         duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true,
-                         leftover: leftover?.window == .weekly ? leftover : nil)
-                if let fable = snapshot.claudeFableWeekly {
-                    FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: false, compact: true)
-                }
+                ProviderUsageRows(snapshot: snapshot, color: color, now: now, stale: false, compact: true)
                 if provider != .claude {
                     Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -188,11 +178,7 @@ private struct CompactProviderCard: View {
                 if provider == .claude, let snapshot {
                     Text("Saved reading · \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange)
-                    UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true, compact: true)
-                    UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: true, compact: true)
-                    if let fable = snapshot.claudeFableWeekly {
-                        FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: true, compact: true)
-                    }
+                    ProviderUsageRows(snapshot: snapshot, color: color, now: now, stale: true, compact: true)
                 }
                 if let nextRetry, nextRetry > now {
                     Text("Retrying automatically in \(countdown(nextRetry, now: now))")
@@ -335,7 +321,7 @@ struct ProviderCard: View {
                 }
             }
             if isCurrent, let snapshot {
-                windows(snapshot, historical: false)
+                ProviderUsageRows(snapshot: snapshot, color: color, now: now, stale: false, compact: false)
                 Text("Fetched \(sampleTime(snapshot))").font(.system(size: 10)).foregroundStyle(.secondary)
                 details(snapshot, historical: false)
             } else {
@@ -350,7 +336,7 @@ struct ProviderCard: View {
                             Text("Historical values from \(sampleTime(snapshot)). These are not current balances.")
                                 .font(.caption).foregroundStyle(.orange)
                             if let source = snapshot.sourceName { Text(source).font(.caption).foregroundStyle(.secondary) }
-                            windows(snapshot, historical: true)
+                            ProviderUsageRows(snapshot: snapshot, color: color, now: now, stale: true, compact: false)
                             details(snapshot, historical: true)
                         }.padding(.top, 10)
                     } label: {
@@ -381,19 +367,6 @@ struct ProviderCard: View {
         if minutes >= 1440 { return "\(minutes / 1440)d \((minutes % 1440) / 60)h" }
         if minutes >= 60 { return "\(minutes / 60)h \(minutes % 60)m" }
         return "\(minutes)m"
-    }
-    @ViewBuilder private func windows(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        let leftover = historical ? nil : LeftoverReset.soonest(fiveHour: snapshot.session, weekly: snapshot.weekly, at: now)
-        UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: historical,
-                 noLimit: snapshot.sessionLimit == .noLimit,
-                 duration: 5 * 3600, observedAt: snapshot.observedAt,
-                 leftover: leftover?.window == .fiveHour ? leftover : nil)
-        UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
-                 duration: 7 * 86400, observedAt: snapshot.observedAt,
-                 leftover: leftover?.window == .weekly ? leftover : nil)
-        if let fable = snapshot.claudeFableWeekly {
-            FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: historical, compact: false)
-        }
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
         let showsClaudeHint = provider == .claude && !historical && snapshot.showsClaudeResetHint(at: now)
@@ -491,16 +464,27 @@ private func claudeResetLink(_ open: @escaping () -> Void) -> some View {
         .help("Open Claude Usage to check available resets and their expiry dates.")
 }
 
-private struct FableWeeklyRow: View {
-    let reading: NamedUsageWindow
-    let observedAt: Date
+private struct ProviderUsageRows: View {
+    let snapshot: UsageSnapshot
+    let color: Color
     let now: Date
     let stale: Bool
     let compact: Bool
 
     var body: some View {
-        UsageRow(title: "\(reading.title) weekly", window: reading.window, color: .orange, now: now, stale: stale,
-                 duration: 7 * 86400, observedAt: observedAt, compact: compact)
+        let leftover = stale ? nil : LeftoverReset.soonest(fiveHour: snapshot.session, weekly: snapshot.weekly, at: now)
+        if snapshot.sessionLimit != .noLimit {
+            UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: stale,
+                     duration: 5 * 3600, observedAt: snapshot.observedAt, compact: compact,
+                     leftover: leftover?.window == .fiveHour ? leftover : nil)
+        }
+        UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: stale,
+                 duration: 7 * 86400, observedAt: snapshot.observedAt, compact: compact,
+                 leftover: leftover?.window == .weekly ? leftover : nil)
+        if let fable = snapshot.claudeFableWeekly {
+            UsageRow(title: "\(fable.title) weekly", window: fable.window, color: .orange, now: now, stale: stale,
+                     duration: 7 * 86400, observedAt: snapshot.observedAt, compact: compact)
+        }
     }
 }
 
@@ -510,7 +494,6 @@ struct UsageRow: View {
     let color: Color
     let now: Date
     let stale: Bool
-    var noLimit = false
     var duration: TimeInterval? = nil
     var observedAt: Date? = nil
     var compact = false
@@ -531,19 +514,6 @@ struct UsageRow: View {
         return "\(status). \(window.used.formatted(.number.precision(.fractionLength(0...1))))% of quota used; \(elapsed)% of this window's time elapsed. The white tick is the even-use target: \(reference)% left. The colored bar is your actual \(window.remaining)% left. The target approaches zero as reset time approaches. This comparison assumes even use across the window; it is not a forecast."
     }
     var body: some View {
-        if noLimit, window == nil {
-            HStack(spacing: 6) {
-                Text("∞").font(.system(size: 13, weight: .semibold)).accessibilityHidden(true)
-                Text(stale ? "No 5-hour limit at saved reading" : "No 5-hour limit")
-                    .font(.system(size: 12, weight: .medium))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .foregroundStyle(stale ? .secondary : .primary)
-        } else {
-            meteredBody
-        }
-    }
-    private var meteredBody: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title).font(.system(size: 12, weight: .medium))
