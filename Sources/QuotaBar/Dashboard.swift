@@ -10,10 +10,6 @@ struct Dashboard: View {
     var contentWidth: CGFloat {
         min(CGFloat(max(1, state.visible.count) * 320 + 60), maximumSize.width)
     }
-    private var resetRowLimit: Int {
-        let available = maximumSize.height - (state.settingsError == nil ? 0 : 22)
-        return available >= 488 ? 2 : available >= 434 ? 1 : 0
-    }
     private var appVersion: String? {
         guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
               !version.isEmpty else { return nil }
@@ -49,62 +45,71 @@ struct Dashboard: View {
                 }.padding(.horizontal, 16).padding(.vertical, 20)
                     .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                 Divider()
-                    VStack(spacing: 10) {
-                        // Explicit columns prevent a long offer or button from
-                        // expanding the hosting view beyond the screen budget.
-                        let columns = max(1, state.visible.count)
-                        let columnWidth = max(0, (contentWidth - 24 - CGFloat(columns - 1) * 10) / CGFloat(columns))
-                        let paired = columns > 1
-                        // Only worth saying when there is another provider to choose.
-                        let entries = state.menuEntries
-                        let useFirst = entries.count < 2 ? nil : entries.compactMap { entry in
-                            entry.leftoverReset(at: context.date).map { (provider: entry.provider, resetsAt: $0.resetsAt) }
-                        }.min { $0.resetsAt < $1.resetsAt }?.provider
-                        HStack(alignment: .top, spacing: 10) {
-                            if state.visible.codex {
-                                    CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
-                                                 error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
-                                                 resetRowLimit: resetRowLimit, details: { state.showDetails(for: .codex) },
-                                                 resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.codexResetNeedsAttention ? "Reset request needs attention" : nil,
-                                                 canReset: state.canUseCodexReset, useReset: state.confirmCodexReset,
-                                                 useFirst: useFirst == .codex)
-                                        .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
-                            }
-                            if state.visible.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
-                                ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
-                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
-                            } else if state.visible.claude && !state.needsClaudeConnection {
-                                CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
-                                             error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                             resetRowLimit: resetRowLimit, details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
-                                             nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil,
-                                             useFirst: useFirst == .claude)
-                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
-                            } else if state.visible.claude && state.needsClaudeConnection {
-                                Button(action: state.connectClaude) {
-                                    HStack(spacing: 8) {
-                                        ProviderIcon(provider: .claude, size: 24)
-                                        Text("Connect Claude…")
-                                    }
-                                }.controlSize(.large)
-                                    .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
-                            }
-                            if state.visible.antigravity {
-                                AntigravityCard(state: state, now: context.date, useFirst: useFirst == .antigravity)
-                                    .frame(width: columnWidth, alignment: .topLeading)
-                            }
+                let cards = VStack(spacing: 10) {
+                    // Explicit columns prevent a long offer or button from
+                    // expanding the hosting view beyond the screen budget.
+                    let columns = max(1, state.visible.count)
+                    let columnWidth = max(0, (contentWidth - 24 - CGFloat(columns - 1) * 10) / CGFloat(columns))
+                    let paired = columns > 1
+                    // Only worth saying when there is another provider to choose.
+                    let entries = state.menuEntries
+                    let useFirst = entries.count < 2 ? nil : entries.compactMap { entry in
+                        entry.leftoverReset(at: context.date).map { (provider: entry.provider, resetsAt: $0.resetsAt) }
+                    }.min { $0.resetsAt < $1.resetsAt }?.provider
+                    HStack(alignment: .top, spacing: 10) {
+                        if state.visible.codex {
+                            CompactProviderCard(provider: .codex, color: .teal, snapshot: state.codex,
+                                error: state.codexError, now: context.date, staleAfter: max(600, state.interval * 120), open: state.openCodex,
+                                details: { state.showDetails(for: .codex) },
+                                resetNotice: state.redeemingCodex ? "Reset request in progress…" : state.codexResetNeedsAttention ? "Reset request needs attention" : nil,
+                                canReset: state.canUseCodexReset, useReset: state.confirmCodexReset,
+                                useFirst: useFirst == .codex)
+                                .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                         }
-                        if state.installation.count == 0 {
-                            Text("Install Codex, Claude or Antigravity to see your usage here.")
-                                .font(.callout).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 20)
-                        } else if state.visible.count == 0 {
-                            Text("All providers are hidden. Show one from the More menu.")
-                                .font(.callout).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 20)
+                        if state.visible.claude && state.hasClaudeConnectionActivity, let connection = state.claudeConnection {
+                            ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
+                                .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
+                        } else if state.visible.claude && !state.needsClaudeConnection {
+                            CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
+                                error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
+                                details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
+                                nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil,
+                                useFirst: useFirst == .claude)
+                                .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
+                        } else if state.visible.claude && state.needsClaudeConnection {
+                            Button(action: state.connectClaude) {
+                                HStack(spacing: 8) {
+                                    ProviderIcon(provider: .claude, size: 24)
+                                    Text("Connect Claude…")
+                                }
+                            }.controlSize(.large)
+                                .frame(width: paired ? columnWidth : max(0, contentWidth - 24)).padding(.top, 8)
                         }
-                        if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
-                    }.padding(.horizontal, 12).padding(.vertical, 16).frame(maxHeight: fixedHeight == nil ? nil : .infinity, alignment: .top)
+                        if state.visible.antigravity {
+                            AntigravityCard(state: state, now: context.date, useFirst: useFirst == .antigravity)
+                                .frame(width: columnWidth, alignment: .topLeading)
+                        }
+                    }
+                    if state.installation.count == 0 {
+                        Text("Install Codex, Claude or Antigravity to see your usage here.")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 20)
+                    } else if state.visible.count == 0 {
+                        Text("All providers are hidden. Show one from the More menu.")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity).padding(.vertical, 20)
+                    }
+                    if let error = state.settingsError { Text(error).font(.caption).foregroundStyle(.orange).lineLimit(1).help(error) }
+                }.padding(.horizontal, 12).padding(.vertical, 16)
+                if fixedHeight == nil {
+                    cards
+                } else {
+                    ViewThatFits(in: .vertical) {
+                        cards.fixedSize(horizontal: false, vertical: true)
+                        // Keep every row reachable if the inventory is taller than the display.
+                        ScrollView { cards }
+                    }.frame(maxHeight: .infinity, alignment: .top)
+                }
             }.frame(width: contentWidth, height: fixedHeight)
                 .overlay(alignment: .bottomTrailing) {
                     if let version = appVersion {
@@ -130,7 +135,6 @@ private struct CompactProviderCard: View {
     let now: Date
     let staleAfter: TimeInterval
     let open: () -> Void
-    let resetRowLimit: Int
     let details: () -> Void
     var resetNotice: String? = nil
     var canReset: ((ResetOffer) -> Bool)? = nil
@@ -182,7 +186,7 @@ private struct CompactProviderCard: View {
                             claudeResetLink(open)
                         }
                     }
-                    ForEach(Array(snapshot.orderedResetOffers(at: now).prefix(resetRowLimit))) { offer in
+                    ForEach(snapshot.orderedResetOffers(at: now)) { offer in
                         let urgency = offer.expiryUrgency(at: now)
                         let tint = expiryColor(offer.timeUntilExpiry(at: now))
                         VStack(alignment: .leading, spacing: 3) {
@@ -212,9 +216,6 @@ private struct CompactProviderCard: View {
                         Text(snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
                              ?? "Reset availability not reported")
                             .font(.system(size: 10)).foregroundStyle(.secondary)
-                    } else if snapshot.offers.count > resetRowLimit {
-                        Button("View all \(snapshot.offers.count) reset offers…", action: details)
-                            .font(.system(size: 10)).buttonStyle(.link)
                     }
                 }
             } else {
