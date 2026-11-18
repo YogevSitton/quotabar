@@ -70,11 +70,7 @@ struct Dashboard: View {
                             ClaudeConnectionSummary(model: connection.model, details: state.showClaudeConnectionHelp)
                                 .frame(width: paired ? columnWidth : max(0, contentWidth - 24))
                         } else if state.visible.claude && !state.needsClaudeConnection {
-                            CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
-                                error: state.claudeError, now: context.date, staleAfter: state.claudeMaximumAge, open: state.openClaude,
-                                details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
-                                nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil,
-                                useFirst: useFirst == .claude)
+                            claudeCard(at: context.date, useFirst: useFirst == .claude)
                                 .frame(width: paired ? columnWidth : max(0, contentWidth - 24), alignment: .topLeading)
                         } else if state.visible.claude && state.needsClaudeConnection {
                             Button(action: state.connectClaude) {
@@ -124,6 +120,15 @@ struct Dashboard: View {
                 .background(.regularMaterial)
         }
     }
+
+    @MainActor private func claudeCard(at now: Date, useFirst: Bool) -> some View {
+        let editReset: (() -> Void)? = state.canTrackClaudeReset ? { state.editTrackedClaudeReset() } : nil
+        return CompactProviderCard(provider: .claude, color: .orange, snapshot: state.claude,
+            error: state.claudeError, now: now, staleAfter: state.claudeMaximumAge, open: state.openClaude,
+            details: { state.showDetails(for: .claude) }, retry: state.retryClaude,
+            nextRetry: state.interval > 0 ? state.claudeNextRequestAt : nil, useFirst: useFirst,
+            trackedClaudeReset: state.trackedClaudeReset, editTrackedClaudeReset: editReset)
+    }
 }
 
 private struct CompactProviderCard: View {
@@ -142,6 +147,8 @@ private struct CompactProviderCard: View {
     var retry: (() -> Void)? = nil
     var nextRetry: Date? = nil
     var useFirst = false
+    var trackedClaudeReset: TrackedClaudeReset? = nil
+    var editTrackedClaudeReset: (() -> Void)? = nil
     private var current: Bool { snapshot?.isCurrent(at: now, maximumAge: staleAfter, hasConnectionError: error != nil) == true }
 
     var body: some View {
@@ -172,7 +179,7 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }
-                resetSection(snapshot)
+                if provider != .claude { resetSection(snapshot) }
             } else {
                 Label("Live usage unavailable", systemImage: "wifi.exclamationmark")
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
@@ -192,8 +199,8 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 if let retry { Button("Retry usage", action: retry).font(.system(size: 11)).buttonStyle(.link) }
-                if provider == .claude { claudeResetLink(open, reported: false) }
             }
+            if provider == .claude { resetSection(current ? snapshot : nil) }
             if let resetNotice {
                 Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)
             }
@@ -206,9 +213,11 @@ private struct CompactProviderCard: View {
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.06)))
     }
-    @ViewBuilder private func resetSection(_ snapshot: UsageSnapshot) -> some View {
-        let showsClaudeHint = provider == .claude && snapshot.showsClaudeResetHint(at: now)
-        let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
+    @ViewBuilder private func resetSection(_ snapshot: UsageSnapshot?) -> some View {
+        let showsClaudeHint = provider == .claude && snapshot?.showsClaudeResetHint(at: now) == true
+        let trackedReset = trackedClaudeReset.flatMap { $0.isUnexpired(at: now) ? $0 : nil }
+        let offers = snapshot?.orderedResetOffers(at: now) ?? []
+        let timeLeft = snapshot?.nextResetExpiry(at: now)?.timeIntervalSince(now)
         let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
         let title = provider == .claude ? "Limit resets" : "Available resets"
         Divider()
@@ -218,10 +227,15 @@ private struct CompactProviderCard: View {
                 .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
             if provider == .claude {
                 Spacer()
-                claudeResetLink(open, reported: snapshot.hasReviewableClaudeReset(at: now))
+                if let editTrackedClaudeReset, trackedReset != nil || offers.isEmpty {
+                    Button(trackedReset == nil ? "Track reset…" : "Edit tracked reset…", action: editTrackedClaudeReset)
+                        .font(.system(size: 10)).buttonStyle(.link)
+                } else if snapshot?.hasReviewableClaudeReset(at: now) == true {
+                    claudeResetLink(open)
+                }
             }
         }
-        ForEach(snapshot.orderedResetOffers(at: now)) { offer in
+        ForEach(offers) { offer in
             let urgency = offer.expiryUrgency(at: now)
             let tint = expiryColor(offer.timeUntilExpiry(at: now))
             VStack(alignment: .leading, spacing: 3) {
@@ -247,9 +261,19 @@ private struct CompactProviderCard: View {
             }
             .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
         }
-        if snapshot.offers.isEmpty && !showsClaudeHint {
-            let message = snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
-            Text(snapshot.claudeResetEligible == false ? "This account is ineligible for resets" : message ?? "Reset availability not reported")
+        if let trackedReset {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(trackedReset.kind.rawValue).font(.system(size: 11, weight: .medium))
+                let expiry = trackedReset.expiresAt
+                let when = expiry.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+                Text("Manually tracked · Expires \(when) (\(countdown(expiry, now: now, style: .short)))")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                    .help(expiry.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
+            }
+        } else if offers.isEmpty && !showsClaudeHint {
+            let message = snapshot?.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
+            Text(snapshot?.claudeResetEligible == false ? "This account is ineligible for resets" : message ?? "Reset availability not reported")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
     }
@@ -461,8 +485,8 @@ struct ProviderCard: View {
     }
 }
 
-private func claudeResetLink(_ open: @escaping () -> Void, reported: Bool = true) -> some View {
-    Button(reported ? "Review on Claude ↗" : "Check resets on Claude ↗", action: open)
+private func claudeResetLink(_ open: @escaping () -> Void) -> some View {
+    Button("Review on Claude ↗", action: open)
         .font(.system(size: 10)).buttonStyle(.link)
         .help("Open Claude Usage to check available resets and their expiry dates.")
 }

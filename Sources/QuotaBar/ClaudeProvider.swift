@@ -30,6 +30,10 @@ actor ClaudeProvider {
               let oauth = root["oauthAccount"] as? [String: Any] else { return (nil, nil) }
         return (oauth["organizationUuid"] as? String, oauth["accountUuid"] as? String)
     }
+    func resetTrackingAccount() -> ClaudeResetTrackingAccount? {
+        let current = account()
+        return ClaudeResetTrackingAccount(accountID: current.identity, organizationID: current.organization)
+    }
     func statusLineSnapshot() -> UsageSnapshot? {
         let url = home.appendingPathComponent("Library/Application Support/QuotaBar/claude-statusline.json")
         guard let data = try? Data(contentsOf: url) else { return nil }
