@@ -123,7 +123,7 @@ public struct ResetOffer: Identifiable, Equatable {
 }
 
 public enum ReadingSource: String { case live = "Live", cached = "Cached" }
-public struct NamedUsageWindow: Identifiable {
+public struct NamedUsageWindow: Identifiable, Equatable {
     public let id: String
     public let title: String
     public let window: UsageWindow
@@ -145,7 +145,9 @@ public struct UsageSnapshot {
     public var sourceName: String?
     public var showsResetCredits = true
     public var cooldownUntil: Date?
+    public var claudeResetHintValidUntil: Date?
     public var additionalWindows: [NamedUsageWindow] = []
+    public var claudeFableWeekly: NamedUsageWindow?
     public var extraUsage: ExtraUsage?
     public var sessionLimit: UsageLimit
     public var session: UsageWindow? {
@@ -172,6 +174,17 @@ public struct UsageSnapshot {
     public func nextResetExpiry(at now: Date) -> Date? {
         offers.filter { $0.timeUntilExpiry(at: now) != nil }.compactMap(\.expiresAt).min()
     }
+    public func showsClaudeResetHint(at now: Date) -> Bool {
+        !showsResetCredits && claudeResetHintValidUntil.map { now < $0 } == true
+    }
+    public func hasReviewableClaudeReset(at now: Date) -> Bool {
+        if showsClaudeResetHint(at: now) { return true }
+        if offers.isEmpty { return resetCount.map { $0 > 0 } == true }
+        return offers.contains { offer in
+            (offer.remainingCount ?? 0) > 0 && (offer.startsAt ?? .distantPast) <= now
+                && (offer.expiresAt ?? .distantFuture) > now
+        }
+    }
     public func isCurrent(at now: Date, maximumAge: TimeInterval, hasConnectionError: Bool) -> Bool {
         let age = now.timeIntervalSince(observedAt)
         return source == .live && !hasConnectionError && age >= -60 && age < maximumAge
@@ -185,6 +198,7 @@ public struct UsageSnapshot {
     public func hasMatchingUsage(in cached: UsageSnapshot) -> Bool {
         (sessionLimit == .unavailable || sessionLimit == cached.sessionLimit)
             && (weekly == nil || weekly == cached.weekly)
+            && (claudeFableWeekly == nil || claudeFableWeekly == cached.claudeFableWeekly)
     }
     public init(session: UsageWindow? = nil, weekly: UsageWindow? = nil, plan: String? = nil,
                 resetCount: Int? = nil, offers: [ResetOffer] = [], resetNote: String? = nil, observedAt: Date = Date()) {

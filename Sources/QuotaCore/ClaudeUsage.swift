@@ -58,20 +58,29 @@ public extension UsageParser {
         guard let limits = root["rate_limits"] as? [String: Any] else {
             throw UsageError.message("Claude Code could not retrieve subscription usage. Try again later.")
         }
-        var snapshot = try claudeOAuth(JSONSerialization.data(withJSONObject: limits), now: now)
+        var snapshot = try claudeSnapshot(limits, now: now)
         snapshot.plan = root["subscription_type"] as? String
         snapshot.sourceName = "Claude Code CLI"
-        for (index, row) in (limits["model_scoped"] as? [[String: Any]] ?? []).enumerated() {
-            guard let used = ClaudeValue.percent(row["utilization"]), let title = row["display_name"] as? String, !title.isEmpty else { continue }
-            let window = UsageWindow(used: used, resetsAt: ClaudeValue.date(row["resets_at"]))
-            guard !snapshot.additionalWindows.contains(where: { ($0.title == title || $0.title == "\(title) · weekly") && $0.window == window }) else { continue }
-            snapshot.additionalWindows.append(NamedUsageWindow(id: "cli-model-\(index)", title: "\(title) · weekly", window: window))
-        }
         return snapshot
     }
 
     static func claudeOAuth(_ data: Data, now: Date = Date()) throws -> UsageSnapshot {
-        let root = try ClaudeValue.object(data)
+        try claudeSnapshot(ClaudeValue.object(data), now: now)
+    }
+
+    /// Claude Code retains a boolean hint independently of its usage sample.
+    /// Its cutoff bounds the hint's lifetime and is never an offer expiry.
+    static func claudeResetHintValidity(_ cache: [String: Any]?, accountID: String, now: Date = Date()) -> Date? {
+        guard !accountID.isEmpty, cache?["accountUuid"] as? String == accountID,
+              ClaudeValue.bool(cache?["holdsUnusedReset"]) == true,
+              let checkedMS = ClaudeValue.number(cache?["checkedAt"]), checkedMS > 0,
+              let validMS = ClaudeValue.number(cache?["validUntil"]), validMS > checkedMS else { return nil }
+        let checkedAt = Date(timeIntervalSince1970: checkedMS / 1000)
+        let validUntil = min(Date(timeIntervalSince1970: validMS / 1000), checkedAt.addingTimeInterval(3 * 86400))
+        return checkedAt <= now && now < validUntil ? validUntil : nil
+    }
+
+    private static func claudeSnapshot(_ root: [String: Any], now: Date) throws -> UsageSnapshot {
         func window(_ key: String) -> UsageWindow? {
             guard let row = root[key] as? [String: Any], let used = ClaudeValue.percent(row["utilization"]) else { return nil }
             return UsageWindow(used: used, resetsAt: ClaudeValue.date(row["resets_at"]))
@@ -99,10 +108,16 @@ public extension UsageParser {
                     guard left > 0, !paused else { continue }
                     let sum = count.addingReportingOverflow(left); count = sum.partialValue
                     if sum.overflow { countKnown = false }
-                    guard let id = row["id"] as? String else { continue }
-                    let kind = row["type"] as? String
-                    let defaultTitle = ["session": "5-hour reset", "weekly": "Weekly reset", "full": "Full reset (weekly + 5-hour)"][kind ?? ""] ?? "Usage reset"
-                    var offer = ResetOffer(id: id, title: row["label"] as? String ?? defaultTitle,
+                    guard let id = row["id"] as? String, !id.isEmpty else { continue }
+                    let clears = row["clears"] as? [String] ?? []
+                    let isFable = ClaudeValue.bool(row["gives_back_weekly"]) == true
+                        || (clears.contains("seven_day_overage_included") && !clears.contains("seven_day"))
+                    let kind = isFable ? "fable" : row["type"] as? String
+                    let defaultTitle = ["session": "5-hour reset", "weekly": "Weekly reset",
+                        "full": "Full reset (weekly + 5-hour)", "fable": "Fable limit reset"][kind ?? ""] ?? "Usage reset"
+                    let label = (row["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let title = label.flatMap { $0.isEmpty || kind == "fable" ? nil : $0 } ?? defaultTitle
+                    var offer = ResetOffer(id: id, title: title,
                         expiresAt: ClaudeValue.date(row["ends_at"]),
                         detail: ClaudeValue.bool(row["use_requires_limit"]) == true ? "Requires a usage limit to be reached" : nil)
                     offer.remainingCount = left; offer.kind = kind; offer.isNext = id == nextID
@@ -119,14 +134,35 @@ public extension UsageParser {
             ("seven_day_oauth_apps", "OAuth apps · weekly"), ("seven_day_cowork", "Cowork · weekly"),
             ("seven_day_omelette", "Additional weekly limit"), ("omelette_promotional", "Promotional limit")]
         result.additionalWindows = additional.compactMap { key, title in window(key).map { NamedUsageWindow(id: key, title: title, window: $0) } }
+        var fableWindows: [NamedUsageWindow] = []
         for (index, row) in (root["limits"] as? [[String: Any]] ?? []).enumerated() {
             guard row["kind"] as? String == "weekly_scoped", let percent = ClaudeValue.percent(row["percent"]) else { continue }
             let scope = row["scope"] as? [String: Any]
             let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
             let surface = (scope?["surface"] as? [String: Any])?["display_name"] as? String
             let title = [model, surface].compactMap { $0 }.joined(separator: " · ")
-            result.additionalWindows.append(NamedUsageWindow(id: "scoped-\(index)", title: title.isEmpty ? "Additional weekly limit" : "\(title) · weekly",
-                window: UsageWindow(used: percent, resetsAt: ClaudeValue.date(row["resets_at"]))))
+            let window = UsageWindow(used: percent, resetsAt: ClaudeValue.date(row["resets_at"]))
+            result.additionalWindows.append(NamedUsageWindow(id: "scoped-\(index)", title: title.isEmpty ? "Additional weekly limit" : "\(title) · weekly", window: window))
+            if let model, let title = fableTitle(model) {
+                fableWindows.append(NamedUsageWindow(id: "claude-fable", title: title, window: window))
+            }
+        }
+        for (index, row) in (root["model_scoped"] as? [[String: Any]] ?? []).enumerated() {
+            guard let used = ClaudeValue.percent(row["utilization"]), let title = row["display_name"] as? String, !title.isEmpty else { continue }
+            let window = UsageWindow(used: used, resetsAt: ClaudeValue.date(row["resets_at"]))
+            if let title = fableTitle(title) {
+                fableWindows.append(NamedUsageWindow(id: "claude-fable", title: title, window: window))
+            }
+            if !result.additionalWindows.contains(where: { ($0.title == title || $0.title == "\(title) · weekly") && $0.window == window }) {
+                result.additionalWindows.append(NamedUsageWindow(id: "cli-model-\(index)", title: "\(title) · weekly", window: window))
+            }
+        }
+        // Prefer a family-wide window when it exists. With versioned windows,
+        // use the newest reported Fable version. Conflicting copies are unknown.
+        let selected = fableWindows.first { $0.title == "Fable" }
+            ?? fableWindows.max { $0.title.compare($1.title, options: .numeric) == .orderedAscending }
+        if let selected, fableWindows.allSatisfy({ $0.title != selected.title || $0.window == selected.window }) {
+            result.claudeFableWeekly = selected
         }
         if let extra = root["extra_usage"] as? [String: Any] {
             result.extraUsage = ExtraUsage(enabled: ClaudeValue.bool(extra["is_enabled"]),
@@ -135,6 +171,13 @@ public extension UsageParser {
                 currency: extra["currency"] as? String)
         }
         return result
+    }
+
+    private static func fableTitle(_ name: String) -> String? {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let model = name.hasPrefix("claude ") ? String(name.dropFirst("claude ".count)) : name
+        guard model.range(of: #"^fable( [0-9]+(\.[0-9]+)*)?$"#, options: .regularExpression) != nil else { return nil }
+        return model.capitalized
     }
 
     static func claudeHistory(_ data: Data, organizationID: String?, now: Date = Date()) throws -> UsageSnapshot {
