@@ -45,6 +45,9 @@ import Combine
     var showUpdates: () -> Void = {}
     var showLogs: () -> Void = {}
     private let claudeProvider = ClaudeProvider()
+    @Published private var claudeResetTrackingAccount: ClaudeResetTrackingAccount?
+    @Published private(set) var trackedClaudeReset: TrackedClaudeReset?
+    private var claudeResetTrackingWindow: ClaudeResetTrackingWindow?
     @Published private(set) var claudeConnection: ClaudeConnectionWindow?
     private var claudeConnectionUpdates: AnyCancellable?
     private var providerDetails: ProviderDetailsWindow?
@@ -94,6 +97,7 @@ import Combine
             }
         } else if provider == .claude {
             claudeRetryTimer?.invalidate(); claudeNextRequestAt = nil
+            loadTrackedClaudeReset(for: nil)
         }
         onChange?()
     }
@@ -144,6 +148,9 @@ import Combine
     func refreshClaude(reconnect: Bool = false) {
         guard visible.claude, !refreshingClaude else { return }; refreshingClaude = true
         Task {
+            let account = storesPreferences ? await claudeProvider.resetTrackingAccount() : nil
+            guard visible.claude else { refreshingClaude = false; return }
+            loadTrackedClaudeReset(for: account)
             let result = await claudeProvider.read(reconnect: reconnect)
             self.claude = result.snapshot; self.claudeError = result.error
             self.claudeIssue = result.issue
@@ -154,6 +161,39 @@ import Combine
     func retryClaude() {
         DiagnosticLog.shared.record(DiagnosticEvent(area: .claude, kind: .retryRequested))
         refreshClaude(reconnect: true)
+    }
+
+    var canTrackClaudeReset: Bool { claudeResetTrackingAccount != nil }
+
+    private func loadTrackedClaudeReset(for account: ClaudeResetTrackingAccount?) {
+        let reset = account.flatMap { TrackedClaudeReset.load(for: $0) }
+        guard claudeResetTrackingAccount != account || trackedClaudeReset != reset else { return }
+        if let previous = claudeResetTrackingAccount, let account, previous != account { claude = nil }
+        claudeResetTrackingAccount = account
+        trackedClaudeReset = reset
+        onChange?()
+    }
+
+    func editTrackedClaudeReset() {
+        guard storesPreferences, visible.claude, !needsClaudeConnection else { return }
+        Task { [self] in
+            let account = await claudeProvider.resetTrackingAccount()
+            guard visible.claude, !needsClaudeConnection else { return }
+            loadTrackedClaudeReset(for: account)
+            guard let account else { return }
+            if claudeResetTrackingWindow == nil { claudeResetTrackingWindow = ClaudeResetTrackingWindow() }
+            let existing = trackedClaudeReset.flatMap { $0.isUnexpired(at: .now) ? $0 : nil }
+            claudeResetTrackingWindow?.show(reset: existing) { [weak self] reset in
+                guard let self else { return }
+                let current = await claudeProvider.resetTrackingAccount()
+                guard current == account, !needsClaudeConnection else {
+                    loadTrackedClaudeReset(for: visible.claude ? current : nil)
+                    throw UsageError.message("The Claude account changed. Reopen the tracker for the current account.")
+                }
+                try TrackedClaudeReset.save(reset, for: account)
+                loadTrackedClaudeReset(for: visible.claude ? account : nil)
+            }
+        }
     }
 
     var antigravityMaximumAge: TimeInterval { AntigravityProvider.maximumAge }
@@ -366,6 +406,10 @@ import Combine
         guard !Task.isCancelled else { return ClaudeReadResult(snapshot: nil, error: "Connection check cancelled.", issue: .usageUnavailable) }
         refreshingClaude = true; defer { refreshingClaude = false }
         let result = await claudeProvider.read(reconnect: true)
+        if storesPreferences {
+            let account = await claudeProvider.resetTrackingAccount()
+            loadTrackedClaudeReset(for: visible.claude ? account : nil)
+        }
         claude = result.snapshot; claudeError = result.error; claudeIssue = result.issue; onChange?()
         scheduleClaudeRead(result)
         return result

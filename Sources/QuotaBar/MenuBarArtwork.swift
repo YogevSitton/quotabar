@@ -98,7 +98,7 @@ struct MenuBarEntry {
     func leftoverReset(at now: Date) -> LeftoverReset? {
         LeftoverReset.soonest(fiveHour: session.limit.window, weekly: weekly.limit.window, at: now)
     }
-    /// 5h and w label the standard slots. An exhausted 5h slot shows a countdown.
+    /// h and w label the standard slots. An exhausted five-hour slot shows a countdown.
     /// An exhausted weekly window shows only its countdown.
     /// Leftover usage that resets soon adds its countdown on the outer side of
     /// that window's %: before the 5h % and after the weekly %.
@@ -108,7 +108,7 @@ struct MenuBarEntry {
         }
         let leftover = leftoverReset(at: now)
         func segments(_ quota: MenuBarQuota, _ window: LeftoverReset.Window) -> [MenuBarSegment] {
-            let prefix = MenuBarSegment(text: window == .fiveHour ? "5h" : "w", remaining: nil)
+            let prefix = MenuBarSegment(text: window == .fiveHour ? "h" : "w", remaining: nil)
             let value = MenuBarSegment(text: quota.menuValue(at: now), remaining: quota.remaining)
             guard let leftover, leftover.window == window else { return [prefix, value] }
             let countdown = MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true)
