@@ -405,8 +405,10 @@ import Combine
             }
             let session = snapshot?.currentSessionLimit(at: now, maximumAge: maximumAge, hasConnectionError: error != nil) ?? .unavailable
             let expiry = current && snapshot?.showsResetCredits == true ? snapshot?.nextResetExpiry(at: now) : nil
+            let fable = current && provider == .claude ? snapshot?.claudeFableWeekly?.window : nil
             return MenuBarEntry(provider: provider, session: MenuBarQuota(limit: session),
-                                weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry)
+                                weekly: quota(snapshot?.weekly.map { .limited($0) } ?? .unavailable), nextResetExpiry: expiry,
+                                fable: fable.map { quota(.limited($0)) })
         }
         var entries: [MenuBarEntry] = []
         let shown = visible
