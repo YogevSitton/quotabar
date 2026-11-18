@@ -97,7 +97,8 @@ public extension UsageParser {
         result.showsResetCredits = credits != nil
         if let credits {
             result.cooldownUntil = ClaudeValue.date(credits["cooldown_until"])
-            if ClaudeValue.bool(credits["eligible"]) == false {
+            result.claudeResetEligible = ClaudeValue.bool(credits["eligible"])
+            if result.claudeResetEligible == false {
                 result.resetNote = credits["ineligible_reason"] as? String ?? "Resets are not currently eligible for this account."
             }
             if let grants = credits["grants"] as? [[String: Any]] {
@@ -109,9 +110,7 @@ public extension UsageParser {
                     let sum = count.addingReportingOverflow(left); count = sum.partialValue
                     if sum.overflow { countKnown = false }
                     guard let id = row["id"] as? String, !id.isEmpty else { continue }
-                    let clears = row["clears"] as? [String] ?? []
                     let isFable = ClaudeValue.bool(row["gives_back_weekly"]) == true
-                        || (clears.contains("seven_day_overage_included") && !clears.contains("seven_day"))
                     let kind = isFable ? "fable" : row["type"] as? String
                     let defaultTitle = ["session": "5-hour reset", "weekly": "Weekly reset",
                         "full": "Full reset (weekly + 5-hour)", "fable": "Fable limit reset"][kind ?? ""] ?? "Usage reset"
@@ -135,22 +134,28 @@ public extension UsageParser {
             ("seven_day_omelette", "Additional weekly limit"), ("omelette_promotional", "Promotional limit")]
         result.additionalWindows = additional.compactMap { key, title in window(key).map { NamedUsageWindow(id: key, title: title, window: $0) } }
         var fableWindows: [NamedUsageWindow] = []
+        var hasRawFable = false
         for (index, row) in (root["limits"] as? [[String: Any]] ?? []).enumerated() {
-            guard row["kind"] as? String == "weekly_scoped", let percent = ClaudeValue.percent(row["percent"]) else { continue }
+            guard row["kind"] as? String == "weekly_scoped" else { continue }
             let scope = row["scope"] as? [String: Any]
             let model = (scope?["model"] as? [String: Any])?["display_name"] as? String
+            let fable = model.flatMap(fableTitle)
+            if fable != nil { hasRawFable = true }
+            guard let percent = ClaudeValue.percent(row["percent"]) else { continue }
             let surface = (scope?["surface"] as? [String: Any])?["display_name"] as? String
             let title = [model, surface].compactMap { $0 }.joined(separator: " · ")
             let window = UsageWindow(used: percent, resetsAt: ClaudeValue.date(row["resets_at"]))
             result.additionalWindows.append(NamedUsageWindow(id: "scoped-\(index)", title: title.isEmpty ? "Additional weekly limit" : "\(title) · weekly", window: window))
-            if let model, let title = fableTitle(model) {
+            if let title = fable, scope?["surface"] == nil || scope?["surface"] is NSNull {
                 fableWindows.append(NamedUsageWindow(id: "claude-fable", title: title, window: window))
             }
         }
         for (index, row) in (root["model_scoped"] as? [[String: Any]] ?? []).enumerated() {
             guard let used = ClaudeValue.percent(row["utilization"]), let title = row["display_name"] as? String, !title.isEmpty else { continue }
             let window = UsageWindow(used: used, resetsAt: ClaudeValue.date(row["resets_at"]))
-            if let title = fableTitle(title) {
+            // The projection drops surface scope. Prefer the raw Fable rows
+            // even when all of them are surface-specific or malformed.
+            if !hasRawFable, let title = fableTitle(title) {
                 fableWindows.append(NamedUsageWindow(id: "claude-fable", title: title, window: window))
             }
             if !result.additionalWindows.contains(where: { ($0.title == title || $0.title == "\(title) · weekly") && $0.window == window }) {

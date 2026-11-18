@@ -142,6 +142,29 @@ final class ClaudeOAuthTests: XCTestCase {
         XCTAssertNil(invalid.claudeFableWeekly)
     }
 
+    func testFablePrefersModelWideRawScopeOverSurfaceAndProjection() throws {
+        let modelWide = """
+        {"kind":"weekly_scoped","scope":{"model":{"display_name":"Fable"},"surface":null},"percent":30},
+        """
+        let surfaceOnly = """
+        {"kind":"weekly_scoped","scope":{"model":{"display_name":"Fable"},"surface":{"display_name":"Code"}},"percent":80}
+        """
+        func reply(rawLimits: String) -> Data {
+            data("""
+            {"rate_limits_available":true,"rate_limits":{"seven_day":{"utilization":40},
+              "limits":[\(rawLimits)],"model_scoped":[
+                {"display_name":"Fable","utilization":80},
+                {"display_name":"Fable","utilization":30}
+              ]}}
+            """)
+        }
+        let mixed = try UsageParser.claudeCLI(reply(rawLimits: modelWide + surfaceOnly), now: now)
+        XCTAssertEqual(mixed.claudeFableWeekly?.window.remaining, 70)
+        let scoped = try UsageParser.claudeCLI(reply(rawLimits: surfaceOnly), now: now)
+        XCTAssertNil(scoped.claudeFableWeekly)
+        XCTAssertEqual(scoped.weekly?.remaining, 60)
+    }
+
     func testFableResetGrantKeepsExpiryAndHandsOffToClaude() throws {
         let result = try UsageParser.claudeCLI(data("""
         {"rate_limits_available":true,"rate_limits":{"seven_day":{"utilization":25},
@@ -158,6 +181,16 @@ final class ClaudeOAuthTests: XCTestCase {
         XCTAssertEqual(result.nextResetExpiry(at: now), expiry)
         XCTAssertTrue(result.hasReviewableClaudeReset(at: now))
         XCTAssertFalse(result.hasReviewableClaudeReset(at: expiry))
+    }
+
+    func testWeeklyResetTypeSurvivesFableWindowInClears() throws {
+        let result = try UsageParser.claudeOAuth(data("""
+        {"seven_day":{"utilization":25},"cedar_ember":{"grants":[{"id":"weekly-grant",
+          "type":"weekly","label":"Weekly gift","resets_left":1,"paused":false,
+          "gives_back_weekly":false,"clears":["seven_day_overage_included"]}]}}
+        """), now: now)
+        XCTAssertEqual(result.offers.first?.kind, "weekly")
+        XCTAssertEqual(result.offers.first?.title, "Weekly gift")
     }
 
     func testUnusedResetHintIsAccountMatchedAndTimeLimitedWithoutAnInventory() throws {
@@ -191,6 +224,23 @@ final class ClaudeOAuthTests: XCTestCase {
         snapshot.showsResetCredits = true
         snapshot.resetCount = 0
         XCTAssertFalse(snapshot.hasReviewableClaudeReset(at: now))
+    }
+
+    func testResetHintFillsUnknownInventoryButRespectsNegativeStatus() throws {
+        func snapshot(credits: String) throws -> UsageSnapshot {
+            var result = try UsageParser.claudeOAuth(data("""
+            {"seven_day":{"utilization":25},"cedar_ember":\(credits)}
+            """), now: now)
+            result.claudeResetHintValidUntil = now.addingTimeInterval(60)
+            return result
+        }
+        let unknown = try snapshot(credits: #"{"eligible":true}"#)
+        XCTAssertTrue(unknown.showsResetCredits)
+        XCTAssertTrue(unknown.showsClaudeResetHint(at: now))
+        XCTAssertTrue(unknown.hasReviewableClaudeReset(at: now))
+        XCTAssertNil(unknown.nextResetExpiry(at: now))
+        XCTAssertFalse(try snapshot(credits: #"{"eligible":true,"grants":[]}"#).showsClaudeResetHint(at: now))
+        XCTAssertFalse(try snapshot(credits: #"{"eligible":false}"#).hasReviewableClaudeReset(at: now))
     }
 
     func testCLINoEligibleAccountOrMissingDataNeverMeansFullQuota() {

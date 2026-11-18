@@ -145,6 +145,7 @@ public struct UsageSnapshot {
     public var sourceName: String?
     public var showsResetCredits = true
     public var cooldownUntil: Date?
+    var claudeResetEligible: Bool?
     public var claudeResetHintValidUntil: Date?
     public var additionalWindows: [NamedUsageWindow] = []
     public var claudeFableWeekly: NamedUsageWindow?
@@ -175,7 +176,8 @@ public struct UsageSnapshot {
         offers.filter { $0.timeUntilExpiry(at: now) != nil }.compactMap(\.expiresAt).min()
     }
     public func showsClaudeResetHint(at now: Date) -> Bool {
-        !showsResetCredits && claudeResetHintValidUntil.map { now < $0 } == true
+        claudeResetEligible != false && resetCount == nil && offers.isEmpty
+            && claudeResetHintValidUntil.map { now < $0 } == true
     }
     public func hasReviewableClaudeReset(at now: Date) -> Bool {
         if showsClaudeResetHint(at: now) { return true }

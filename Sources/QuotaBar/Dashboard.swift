@@ -168,12 +168,13 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }
-                if provider != .claude || snapshot.showsResetCredits {
+                let showsClaudeHint = provider == .claude && snapshot.showsClaudeResetHint(at: now)
+                if provider != .claude || snapshot.showsResetCredits || showsClaudeHint {
                     Divider()
                     let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
                     let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
                     HStack {
-                        Label(urgency == .normal ? "Available resets" : "Resets - expiring soon",
+                        Label(showsClaudeHint ? "Unused reset reported" : urgency == .normal ? "Available resets" : "Resets - expiring soon",
                               systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
                             .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
                         if provider == .claude, snapshot.hasReviewableClaudeReset(at: now) {
@@ -207,21 +208,13 @@ private struct CompactProviderCard: View {
                         }
                         .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
                     }
-                    if snapshot.offers.isEmpty {
+                    if snapshot.offers.isEmpty && !showsClaudeHint {
                         Text(snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
                              ?? "Reset availability not reported")
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                     } else if snapshot.offers.count > resetRowLimit {
                         Button("View all \(snapshot.offers.count) reset offers…", action: details)
                             .font(.system(size: 10)).buttonStyle(.link)
-                    }
-                } else if snapshot.showsClaudeResetHint(at: now) {
-                    Divider()
-                    HStack {
-                        Label("Unused reset reported", systemImage: "arrow.counterclockwise.circle")
-                            .foregroundStyle(color).font(.system(size: 11, weight: .semibold))
-                        Spacer()
-                        claudeResetLink(open)
                     }
                 }
             } else {
@@ -375,21 +368,18 @@ struct ProviderCard: View {
         }
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        if provider != .claude || snapshot.showsResetCredits {
-            resets
-        } else if !historical, snapshot.showsClaudeResetHint(at: now) {
-            Divider()
-            Label("Unused reset reported", systemImage: "arrow.counterclockwise.circle")
-                .font(.system(size: 12, weight: .semibold))
-            claudeResetLink(open)
+        let showsClaudeHint = provider == .claude && !historical && snapshot.showsClaudeResetHint(at: now)
+        if provider != .claude || snapshot.showsResetCredits || showsClaudeHint {
+            resets(showingClaudeHint: showsClaudeHint)
         }
     }
-    @ViewBuilder private var resets: some View {
+    private func resets(showingClaudeHint: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
             HStack {
                 Image(systemName: "arrow.counterclockwise.circle").foregroundStyle(color)
-                Text(isCurrent ? "Available resets" : "Resets reported then").font(.system(size: 12, weight: .semibold))
+                Text(showingClaudeHint ? "Unused reset reported" : isCurrent ? "Available resets" : "Resets reported then")
+                    .font(.system(size: 12, weight: .semibold))
                 Spacer()
             }
             if let snapshot {
