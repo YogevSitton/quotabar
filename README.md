@@ -84,7 +84,7 @@ To start QuotaBar automatically, open the popup's **More** (ellipsis) menu and e
 
 ## Usage
 
-Each connected provider has its transparent logo followed by `5h%/weekly%`, such as `93%/91%`. These are **remaining** percentages. A supported reading with no five-hour limit shows `∞` in the first position, such as `∞/61%`; the weekly limit still applies. When five-hour usage is exhausted, its reset countdown replaces the percentage, such as `2h13m/45%`. When the weekly window is exhausted, only its weekly countdown appears. Percentages gradually turn red between 50% and 10% remaining; infinity and countdowns stay uncolored. A dash means a current value is unavailable.
+Each connected provider has its transparent logo followed by `5h%/weekly%`, such as `93%/91%`. These are **remaining** percentages. A supported reading with no five-hour limit shows `∞` in the first position, such as `∞/61%`; the weekly limit still applies. When five-hour usage is exhausted, its reset countdown replaces the percentage, such as `2h13m/45%`. When the weekly window is exhausted, only its weekly countdown appears. Percentages gradually turn red between 50% and 10% remaining; infinity and countdowns stay uncolored. A dash means a current value is unavailable. Claude adds a reported Fable weekly balance such as `80%/34% F42%`. Fable's reset countdown replaces its exhausted percentage when available.
 
 When a reported manual reset expires within 3 days, a small countdown chip follows that provider's percentages: orange with the days left (`2d`), then hours or minutes left (`18h`, `45m`) in its last 24 hours. The existing yellow-orange color gradually blends toward red from 24 hours left, reaching full red at 12 hours and staying red until expiry. The time is rounded down, so it never overstates how long you have. Hover over the menu bar item to see the total hours and minutes until each provider's usage resets and next manual reset expiry, such as `35h 20m`.
 
@@ -155,7 +155,7 @@ The exporter is never installed automatically. Configuring it changes `~/.claude
 
 An uncertain result blocks new requests. **Review saved reset request** requires a new confirmation and reuses only the original account, credit and key. Restarting never replays it. An unreadable recovery record disables redemption. The private recovery record is `~/Library/Application Support/QuotaBar/pending-codex-reset.json` (directory 0700, file 0600). Stale readings, expired credits and unsupported reset types cannot start a reset. Count-only and unsupported inventories use the official Usage page.
 
-**Claude:** **Review on Claude** opens the official Usage page for your own selection and confirmation. When Claude Code reports only that it found an unused reset, QuotaBar shows that status and leaves the count and expiry to Claude's Usage page.
+**Claude:** **Review on Claude** opens the official Usage page for your own selection and confirmation. When Claude Code reports only that it found an unused reset, QuotaBar shows that status. When availability is unknown, **Check resets on Claude** opens the same page to check your actual offers and expiry dates.
 
 **Actual reset redemption has not been verified. No reset action or confirmation was exercised and no reset credit was spent during development verification.** Optional Claude reset-credit fields are undocumented and have not been verified against a live account.
 

@@ -172,52 +172,7 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }
-                let showsClaudeHint = provider == .claude && snapshot.showsClaudeResetHint(at: now)
-                if provider != .claude || snapshot.showsResetCredits || showsClaudeHint {
-                    Divider()
-                    let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
-                    let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
-                    HStack {
-                        Label(showsClaudeHint ? "Unused reset reported" : urgency == .normal ? "Available resets" : "Resets - expiring soon",
-                              systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
-                        if provider == .claude, snapshot.hasReviewableClaudeReset(at: now) {
-                            Spacer()
-                            claudeResetLink(open)
-                        }
-                    }
-                    ForEach(snapshot.orderedResetOffers(at: now)) { offer in
-                        let urgency = offer.expiryUrgency(at: now)
-                        let tint = expiryColor(offer.timeUntilExpiry(at: now))
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                if urgency != .normal {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .font(.system(size: 10)).foregroundStyle(tint)
-                                        .accessibilityLabel(urgency == .imminent ? "Reset expires within 24 hours" : "Reset expires within 3 days")
-                                }
-                                Text(offer.title).font(.system(size: 11, weight: .medium))
-                                    .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                if provider == .codex, offer.supportsDirectRedemption, let useReset {
-                                    Button("Use reset…") { useReset(offer) }
-                                        .font(.system(size: 10)).controlSize(.small)
-                                        .disabled(canReset?(offer) != true)
-                                }
-                            }
-                            Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(countdown($0, now: now, style: .short)))" : "" } ?? ""))
-                                .font(.system(size: 10, weight: urgency == .normal ? .regular : .semibold))
-                                .foregroundStyle(tint)
-                                .lineLimit(1).help(expiryHelp(offer))
-                        }
-                        .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
-                    }
-                    if snapshot.offers.isEmpty && !showsClaudeHint {
-                        Text(snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
-                             ?? "Reset availability not reported")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
-                }
+                resetSection(snapshot)
             } else {
                 Label("Live usage unavailable", systemImage: "wifi.exclamationmark")
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.orange)
@@ -237,6 +192,7 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 if let retry { Button("Retry usage", action: retry).font(.system(size: 11)).buttonStyle(.link) }
+                if provider == .claude { claudeResetLink(open, reported: false) }
             }
             if let resetNotice {
                 Button(resetNotice, action: details).font(.system(size: 10)).buttonStyle(.link).lineLimit(1)
@@ -249,6 +205,53 @@ private struct CompactProviderCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.06)))
+    }
+    @ViewBuilder private func resetSection(_ snapshot: UsageSnapshot) -> some View {
+        let showsClaudeHint = provider == .claude && snapshot.showsClaudeResetHint(at: now)
+        let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
+        let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
+        let title = provider == .claude ? "Limit resets" : "Available resets"
+        Divider()
+        HStack {
+            Label(showsClaudeHint ? "Unused reset reported" : urgency == .normal ? title : "Resets - expiring soon",
+                  systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
+                .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
+            if provider == .claude {
+                Spacer()
+                claudeResetLink(open, reported: snapshot.hasReviewableClaudeReset(at: now))
+            }
+        }
+        ForEach(snapshot.orderedResetOffers(at: now)) { offer in
+            let urgency = offer.expiryUrgency(at: now)
+            let tint = expiryColor(offer.timeUntilExpiry(at: now))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    if urgency != .normal {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10)).foregroundStyle(tint)
+                            .accessibilityLabel(urgency == .imminent ? "Reset expires within 24 hours" : "Reset expires within 3 days")
+                    }
+                    Text(offer.title).font(.system(size: 11, weight: .medium))
+                        .lineLimit(1).help([offer.title, offer.detail].compactMap { $0 }.joined(separator: "\n"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if provider == .codex, offer.supportsDirectRedemption, let useReset {
+                        Button("Use reset…") { useReset(offer) }
+                            .font(.system(size: 10)).controlSize(.small)
+                            .disabled(canReset?(offer) != true)
+                    }
+                }
+                Text(expiry(offer) + (offer.expiresAt.map { $0 > now ? " (\(countdown($0, now: now, style: .short)))" : "" } ?? ""))
+                    .font(.system(size: 10, weight: urgency == .normal ? .regular : .semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1).help(expiryHelp(offer))
+            }
+            .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
+        }
+        if snapshot.offers.isEmpty && !showsClaudeHint {
+            let message = snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
+            Text(snapshot.claudeResetEligible == false ? "This account is ineligible for resets" : message ?? "Reset availability not reported")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+        }
     }
     private func expiry(_ offer: ResetOffer) -> String {
         let count = provider == .claude ? offer.remainingCount.map { "\($0) left · " } ?? "" : ""
@@ -458,10 +461,10 @@ struct ProviderCard: View {
     }
 }
 
-private func claudeResetLink(_ open: @escaping () -> Void) -> some View {
-    Button("Review on Claude ↗", action: open)
+private func claudeResetLink(_ open: @escaping () -> Void, reported: Bool = true) -> some View {
+    Button(reported ? "Review on Claude ↗" : "Check resets on Claude ↗", action: open)
         .font(.system(size: 10)).buttonStyle(.link)
-        .help("Open Claude Usage to check the reset and confirm it there.")
+        .help("Open Claude Usage to check available resets and their expiry dates.")
 }
 
 private struct FableWeeklyRow: View {

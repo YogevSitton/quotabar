@@ -83,9 +83,16 @@ struct MenuBarEntry {
     let weekly: MenuBarQuota
     var nextResetExpiry: Date? = nil
     var quotaGroup: String? = nil
+    var fable: MenuBarQuota? = nil
+    private func currentFable(at now: Date) -> MenuBarQuota? {
+        guard let fable, fable.limit.window?.awaitingReset(at: now) == false else { return nil }
+        return fable
+    }
     func description(at now: Date) -> String {
-        ([name] + [quotaGroup].compactMap { $0 } + [session.descriptionLine("5-hour window", at: now),
-                                                     weekly.descriptionLine("Weekly window", at: now)]).joined(separator: "; ")
+        var lines = [name] + [quotaGroup].compactMap { $0 }
+        lines += [session.descriptionLine("5-hour window", at: now), weekly.descriptionLine("Weekly window", at: now)]
+        if let fable = currentFable(at: now) { lines.append(fable.descriptionLine("Fable weekly window", at: now)) }
+        return lines.joined(separator: "; ")
     }
     /// Usage left in a current window that resets automatically soon.
     func leftoverReset(at now: Date) -> LeftoverReset? {
@@ -106,7 +113,11 @@ struct MenuBarEntry {
             let countdown = MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true)
             return window == .fiveHour ? [countdown, value] : [value, countdown]
         }
-        return segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
+        var values = segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
+        if let fable = currentFable(at: now) {
+            values += [MenuBarSegment(text: " F", remaining: nil), MenuBarSegment(text: fable.menuValue(at: now), remaining: fable.remaining)]
+        }
+        return values
     }
     func leftoverAnnouncement(at now: Date) -> String? {
         leftoverReset(at: now).map {
@@ -166,11 +177,9 @@ struct MenuBarEntry {
     }
     static func image(entries: [MenuBarEntry], segments: [[MenuBarSegment]], chips: [MenuBarResetChip?],
                       appearance: NSAppearance) -> NSImage {
-        // Keep the bar to one logo and 5h%/weekly% per connected provider.
-        // Fit the content with no reserved space. Digits are monospaced, so
+        // Fit the logo and percentages with no reserved space. Digits are monospaced, so
         // ordinary percentage changes keep the width; a different digit count,
-        // countdown, no-limit marker, unavailable reading, leftover countdown
-        // or chip changes it.
+        // countdown, availability change, leftover countdown or chip changes it.
         let labelWidths = segments.map { ceil(attributedLabel($0).size().width) }
         let widths: [CGFloat] = zip(labelWidths, chips).map { label, chip in
             label + (chip.map { chipGap + chipWidth($0) } ?? 0)
