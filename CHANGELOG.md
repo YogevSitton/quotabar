@@ -17,6 +17,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- Show every reported reset offer from the current reading in the main popup. The popup grows with the list and scrolls there only when it reaches the display height.
 - **Quit QuotaBar** moved from the popup's power button into the More (ellipsis) menu. Command-Q still quits while the popup is open.
 - Set the source version to 0.4.0 for the upcoming release.
 - The menu bar item now fits its content, removing the empty space after each provider's usage, with a tighter 10-point gap between providers instead of 18 points. Ordinary percentage changes keep its width; reaching or leaving 100%, dropping below 10%, a countdown, `∞` or a reset chip appearing can change it, and such changes wait until the popup closes.
