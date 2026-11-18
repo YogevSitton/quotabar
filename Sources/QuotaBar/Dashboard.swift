@@ -164,18 +164,28 @@ private struct CompactProviderCard: View {
                 UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: false,
                          duration: 7 * 86400, observedAt: snapshot.observedAt, compact: true,
                          leftover: leftover?.window == .weekly ? leftover : nil)
+                if let fable = snapshot.claudeFableWeekly {
+                    FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: false, compact: true)
+                }
                 if provider != .claude {
                     Text("Updated \(snapshot.observedAt.formatted(date: .omitted, time: .shortened))")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .help(snapshot.observedAt.formatted(.dateTime.day().month().year().hour().minute().timeZone()))
                 }
-                if provider != .claude || snapshot.showsResetCredits {
+                let showsClaudeHint = provider == .claude && snapshot.showsClaudeResetHint(at: now)
+                if provider != .claude || snapshot.showsResetCredits || showsClaudeHint {
                     Divider()
                     let timeLeft = snapshot.nextResetExpiry(at: now)?.timeIntervalSince(now)
                     let urgency = timeLeft.map(ResetExpiryUrgency.init(timeLeft:)) ?? .normal
-                    Label(urgency == .normal ? "Available resets" : "Resets - expiring soon",
-                          systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
+                    HStack {
+                        Label(showsClaudeHint ? "Unused reset reported" : urgency == .normal ? "Available resets" : "Resets - expiring soon",
+                              systemImage: urgency == .normal ? "arrow.counterclockwise.circle" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(expiryColor(timeLeft, fallback: color)).font(.system(size: 11, weight: .semibold))
+                        if provider == .claude, snapshot.hasReviewableClaudeReset(at: now) {
+                            Spacer()
+                            claudeResetLink(open)
+                        }
+                    }
                     ForEach(snapshot.orderedResetOffers(at: now)) { offer in
                         let urgency = offer.expiryUrgency(at: now)
                         let tint = expiryColor(offer.timeUntilExpiry(at: now))
@@ -202,8 +212,9 @@ private struct CompactProviderCard: View {
                         }
                         .background(tint.opacity(urgency == .normal ? 0 : 0.08), in: RoundedRectangle(cornerRadius: 4))
                     }
-                    if snapshot.offers.isEmpty {
-                        Text(snapshot.resetCount == 0 ? "No resets available" : "Expiry details not reported")
+                    if snapshot.offers.isEmpty && !showsClaudeHint {
+                        Text(snapshot.resetCount.map { $0 == 0 ? "No resets available" : "\($0) available · expiry not reported" }
+                             ?? "Reset availability not reported")
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }
@@ -217,6 +228,9 @@ private struct CompactProviderCard: View {
                         .font(.system(size: 10, weight: .medium)).foregroundStyle(.orange)
                     UsageRow(title: "5-hour window", window: snapshot.session, color: color, now: now, stale: true, compact: true)
                     UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: true, compact: true)
+                    if let fable = snapshot.claudeFableWeekly {
+                        FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: true, compact: true)
+                    }
                 }
                 if let nextRetry, nextRetry > now {
                     Text("Retrying automatically in \(countdown(nextRetry, now: now))")
@@ -350,16 +364,23 @@ struct ProviderCard: View {
         UsageRow(title: "Weekly window", window: snapshot.weekly, color: color, now: now, stale: historical,
                  duration: 7 * 86400, observedAt: snapshot.observedAt,
                  leftover: leftover?.window == .weekly ? leftover : nil)
+        if let fable = snapshot.claudeFableWeekly {
+            FableWeeklyRow(reading: fable, observedAt: snapshot.observedAt, now: now, stale: historical, compact: false)
+        }
     }
     @ViewBuilder private func details(_ snapshot: UsageSnapshot, historical: Bool) -> some View {
-        if provider != .claude || snapshot.showsResetCredits { resets }
+        let showsClaudeHint = provider == .claude && !historical && snapshot.showsClaudeResetHint(at: now)
+        if provider != .claude || snapshot.showsResetCredits || showsClaudeHint {
+            resets(showingClaudeHint: showsClaudeHint)
+        }
     }
-    @ViewBuilder private var resets: some View {
+    private func resets(showingClaudeHint: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
             HStack {
                 Image(systemName: "arrow.counterclockwise.circle").foregroundStyle(color)
-                Text(isCurrent ? "Available resets" : "Resets reported then").font(.system(size: 12, weight: .semibold))
+                Text(showingClaudeHint ? "Unused reset reported" : isCurrent ? "Available resets" : "Resets reported then")
+                    .font(.system(size: 12, weight: .semibold))
                 Spacer()
             }
             if let snapshot {
@@ -377,13 +398,11 @@ struct ProviderCard: View {
                 } else if let count = snapshot.resetCount {
                     Text("\(count) available · expiry details not reported").font(.caption).foregroundStyle(.secondary)
                 }
-                if isCurrent && (snapshot.resetCount ?? 0) > 0 {
-                    if provider == .claude {
-                        Button("Use a reset on Claude ↗", action: open)
-                            .help("Open Claude Usage, then select and confirm a reset there.")
-                    } else if snapshot.offers.isEmpty || snapshot.offers.contains(where: { !$0.supportsDirectRedemption }) {
-                        Button("Manage resets on ChatGPT ↗", action: open)
-                    }
+                if isCurrent, provider == .claude, snapshot.hasReviewableClaudeReset(at: now) {
+                    claudeResetLink(open)
+                } else if isCurrent, provider == .codex, (snapshot.resetCount ?? 0) > 0,
+                          snapshot.offers.isEmpty || snapshot.offers.contains(where: { !$0.supportsDirectRedemption }) {
+                    Button("Manage resets on ChatGPT ↗", action: open)
                 }
                 if let note = snapshot.resetNote {
                     Text(note).font(.caption).foregroundStyle(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
@@ -436,6 +455,25 @@ struct ProviderCard: View {
                     .padding(.top, 4)
             }
         }.font(.caption).textSelection(.enabled)
+    }
+}
+
+private func claudeResetLink(_ open: @escaping () -> Void) -> some View {
+    Button("Review on Claude ↗", action: open)
+        .font(.system(size: 10)).buttonStyle(.link)
+        .help("Open Claude Usage to check the reset and confirm it there.")
+}
+
+private struct FableWeeklyRow: View {
+    let reading: NamedUsageWindow
+    let observedAt: Date
+    let now: Date
+    let stale: Bool
+    let compact: Bool
+
+    var body: some View {
+        UsageRow(title: "\(reading.title) weekly", window: reading.window, color: .orange, now: now, stale: stale,
+                 duration: 7 * 86400, observedAt: observedAt, compact: compact)
     }
 }
 
