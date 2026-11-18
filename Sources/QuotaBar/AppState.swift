@@ -300,11 +300,14 @@ import Combine
         do {
             let attempt = try CodexResetAttempt(snapshot: snapshot, offer: offer)
             let expiry = offer.expiresAt.map { $0.formatted(.dateTime.day().month().year().hour().minute().timeZone()) } ?? "Not reported"
-            let session = snapshot.sessionLimit == .noLimit ? "No 5-hour limit"
-                : snapshot.session.map { "\($0.remaining)% remaining" } ?? "Unknown"
             let weekly = snapshot.weekly.map { "\($0.remaining)% remaining" } ?? "Unknown"
+            var usage = "Weekly usage: \(weekly)"
+            if snapshot.sessionLimit != .noLimit {
+                let session = snapshot.session.map { "\($0.remaining)% remaining" } ?? "Unknown"
+                usage = "5-hour usage: \(session)\n" + usage
+            }
             guard confirmReset(title: "Use 1 saved Codex reset?",
-                message: "\(offer.title)\nExpires: \(expiry)\n\n5-hour usage: \(session)\nWeekly usage: \(weekly)\n\nIf accepted by Codex, this permanently consumes one saved reset. It cannot be undone. Only this selected credit will be requested.",
+                message: "\(offer.title)\nExpires: \(expiry)\n\n\(usage)\n\nIf accepted by Codex, this permanently consumes one saved reset. It cannot be undone. Only this selected credit will be requested.",
                 action: "Use 1 reset") else { return }
             beginCodexReset(attempt, retrying: false)
         } catch { codexResetError = error.localizedDescription }

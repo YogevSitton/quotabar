@@ -89,9 +89,12 @@ public extension UsageParser {
         guard session != nil || weekly != nil else {
             throw UsageError.message("Claude did not report valid subscription windows. The usage format or account access may have changed.")
         }
-        // An explicit five_hour null stays unavailable, never no limit: its
-        // meaning is undocumented and Claude Code renders it as a missing window.
         var result = UsageSnapshot(session: session, weekly: weekly, observedAt: now)
+        if root["five_hour"] is NSNull, let weekly,
+           weekly.resetsAt != nil || (root["seven_day"] as? [String: Any])?["resets_at"] is NSNull,
+           reportsOnlyWeeklyMeters(root["limits"], weekly: weekly) {
+            result.sessionLimit = .noLimit
+        }
         result.sourceName = "Claude Code sign-in"
         let credits = root["cedar_ember"] as? [String: Any]
         result.showsResetCredits = credits != nil
@@ -176,6 +179,26 @@ public extension UsageParser {
                 currency: extra["currency"] as? String)
         }
         return result
+    }
+
+    /// The server lists the applicable meters. A null legacy window alone can
+    /// also result from missing data. Require a corroborating all-model week.
+    private static func reportsOnlyWeeklyMeters(_ value: Any?, weekly: UsageWindow) -> Bool {
+        guard let rows = value as? [[String: Any]] else { return false }
+        var foundWeek = false
+        for row in rows {
+            let resetsAt = ClaudeValue.date(row["resets_at"])
+            guard row["group"] as? String == "weekly", let used = ClaudeValue.percent(row["percent"]),
+                  row["resets_at"] is NSNull || resetsAt != nil else { return false }
+            switch row["kind"] as? String {
+            case "weekly_all":
+                guard !foundWeek, used == weekly.used, resetsAt == weekly.resetsAt else { return false }
+                foundWeek = true
+            case "weekly_scoped": continue
+            default: return false
+            }
+        }
+        return foundWeek
     }
 
     private static func fableTitle(_ name: String) -> String? {

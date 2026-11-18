@@ -15,11 +15,29 @@ final class MenuBarEntryTests: XCTestCase {
         }
     }
 
-    func testNoLimitAndUnavailableSlotsKeepTheirLabels() {
-        let entry = MenuBarEntry(provider: .codex,
-            session: MenuBarQuota(limit: .noLimit), weekly: MenuBarQuota(limit: .unavailable))
+    func testWeeklyOnlyReadingOmitsFiveHourSlotAndSpokenDescription() {
+        for provider in [Provider.codex, .claude] {
+            let entry = MenuBarEntry(provider: provider, session: MenuBarQuota(limit: .noLimit),
+                weekly: MenuBarQuota(remaining: 61, resetsAt: nil))
 
-        XCTAssertEqual(entry.menuLabel(at: now), "h∞/w-")
+            XCTAssertEqual(entry.menuLabel(at: now), "w61%")
+            XCTAssertEqual(entry.description(at: now), "\(provider.rawValue); Weekly window: 61% left · reset not reported")
+        }
+    }
+
+    func testUnavailableFiveHourWindowKeepsItsSlot() {
+        let entry = MenuBarEntry(provider: .claude, session: MenuBarQuota(limit: .unavailable),
+            weekly: MenuBarQuota(remaining: 61, resetsAt: nil))
+        XCTAssertEqual(entry.menuLabel(at: now), "h-/w61%")
+        XCTAssertTrue(entry.description(at: now).contains("5-hour window: Unavailable"))
+    }
+
+    func testWeeklyOnlyReadingKeepsWeeklyCountdownFableAndExpiryChip() {
+        let entry = MenuBarEntry(provider: .claude, session: MenuBarQuota(limit: .noLimit),
+            weekly: MenuBarQuota(remaining: 61, resetsAt: now.addingTimeInterval(7200)),
+            nextResetExpiry: now.addingTimeInterval(2 * 86400), fable: MenuBarQuota(remaining: 42, resetsAt: nil))
+        XCTAssertEqual(entry.menuLabel(at: now), "w61%2h/F42% 2d")
+        XCTAssertEqual(entry.menuSegments(at: now).filter(\.isLeftover).map(\.text), ["2h"])
     }
 
     func testFableAppearsBesideStandardClaudePercentages() {

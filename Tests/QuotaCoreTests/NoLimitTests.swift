@@ -104,11 +104,50 @@ final class NoLimitTests: XCTestCase {
             XCTAssertNil(snapshot.session)
             XCTAssertEqual(snapshot.weekly?.remaining, 61)
         }
-        // A matching cache or a meter list without a session row does not establish no limit either.
+        // A partial meter does not corroborate the legacy window.
         let weeklyMeter: [String: Any] = ["kind": "weekly_all", "group": "weekly", "percent": 39]
         let cache = try UsageParser.claudeOAuth(data(["five_hour": NSNull(), "seven_day": claudeWeek, "limits": [weeklyMeter]]), now: now)
         XCTAssertEqual(cache.sessionLimit, .unavailable)
         XCTAssertTrue(try claude(session: NSNull(), weekly: claudeWeek).hasMatchingUsage(in: cache))
+    }
+
+    func testClaudeWeeklyOnlyServerMetersMatchInCLIAndCache() throws {
+        let reset = "2026-11-20T12:00:00Z"
+        let week: [String: Any] = ["utilization": 39, "resets_at": reset]
+        let all: [String: Any] = ["kind": "weekly_all", "group": "weekly", "percent": 39, "resets_at": reset]
+        let fable: [String: Any] = ["kind": "weekly_scoped", "group": "weekly", "percent": 58, "resets_at": reset,
+                                   "scope": ["model": ["display_name": "Fable"]]]
+        let limits: [String: Any] = ["five_hour": NSNull(), "seven_day": week, "limits": [fable, all]]
+        let live = try UsageParser.claudeCLI(data(["subscription_type": "max", "rate_limits_available": true,
+                                                  "rate_limits": limits]), now: now)
+        let cached = try UsageParser.claudeOAuth(data(limits), now: now)
+        XCTAssertEqual(live.sessionLimit, .noLimit)
+        XCTAssertEqual(live.weekly?.remaining, 61)
+        XCTAssertEqual(live.claudeFableWeekly?.window.remaining, 42)
+        XCTAssertTrue(live.hasMatchingUsage(in: cached))
+        XCTAssertFalse(live.hasMatchingUsage(in: try claude(session: NSNull(), weekly: week)))
+    }
+
+    func testClaudeRequiresConsistentWeeklyOnlyEvidence() throws {
+        let week: [String: Any] = ["kind": "weekly_all", "group": "weekly", "percent": 39, "resets_at": 1_793_000_000]
+        func reading(_ rows: [Any], session: Any?) throws -> UsageSnapshot {
+            var limits: [String: Any] = ["seven_day": claudeWeek, "limits": rows]
+            limits["five_hour"] = session
+            return try UsageParser.claudeCLI(data(["subscription_type": "ultra", "rate_limits_available": true,
+                                                   "rate_limits": limits]), now: now)
+        }
+        let contradictoryMeters: [[Any]] = [
+            [], [week, week], [week, NSNull()], [week, ["kind": "session", "group": "session"]],
+            [week, ["kind": "new_meter", "group": "weekly", "percent": 0, "resets_at": NSNull()]],
+            [week.merging(["percent": 40]) { _, new in new }],
+            [week.merging(["resets_at": NSNull()]) { _, new in new }]
+        ]
+        for rows in contradictoryMeters {
+            XCTAssertEqual(try reading(rows, session: NSNull()).sessionLimit, .unavailable)
+        }
+        XCTAssertEqual(try reading([week], session: nil).sessionLimit, .unavailable)
+        XCTAssertEqual(try reading([week], session: ["utilization": false]).sessionLimit, .unavailable)
+        XCTAssertEqual(try reading([week], session: ["utilization": 100]).session?.remaining, 0)
     }
 
     func testClaudeRejectsUnavailableRateLimitsAndAllUnknownWindows() throws {
