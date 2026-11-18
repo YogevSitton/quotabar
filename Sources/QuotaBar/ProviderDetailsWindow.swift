@@ -1,8 +1,7 @@
 import AppKit
 import SwiftUI
 
-// Long descriptions and arbitrary inventories belong in a resizable window;
-// the menu popup itself never scrolls or expands its disclosure sections.
+// Long descriptions, saved readings and reset recovery belong in a resizable window.
 @MainActor final class ProviderDetailsWindow {
     private let state: AppState
     private var window: NSWindow?
