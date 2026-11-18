@@ -98,8 +98,8 @@ struct MenuBarEntry {
     func leftoverReset(at now: Date) -> LeftoverReset? {
         LeftoverReset.soonest(fiveHour: session.limit.window, weekly: weekly.limit.window, at: now)
     }
-    /// 5h%/weekly%, with a countdown for an exhausted 5h window. An exhausted
-    /// weekly window blocks both, so it shows only the weekly countdown.
+    /// 5h and w label the standard slots. An exhausted 5h slot shows a countdown.
+    /// An exhausted weekly window shows only its countdown.
     /// Leftover usage that resets soon adds its countdown on the outer side of
     /// that window's %: before the 5h % and after the weekly %.
     func menuSegments(at now: Date) -> [MenuBarSegment] {
@@ -108,14 +108,15 @@ struct MenuBarEntry {
         }
         let leftover = leftoverReset(at: now)
         func segments(_ quota: MenuBarQuota, _ window: LeftoverReset.Window) -> [MenuBarSegment] {
+            let prefix = MenuBarSegment(text: window == .fiveHour ? "5h" : "w", remaining: nil)
             let value = MenuBarSegment(text: quota.menuValue(at: now), remaining: quota.remaining)
-            guard let leftover, leftover.window == window else { return [value] }
+            guard let leftover, leftover.window == window else { return [prefix, value] }
             let countdown = MenuBarSegment(text: leftover.countdown(at: now).text, remaining: nil, isLeftover: true)
-            return window == .fiveHour ? [countdown, value] : [value, countdown]
+            return window == .fiveHour ? [countdown, prefix, value] : [prefix, value, countdown]
         }
         var values = segments(session, .fiveHour) + [MenuBarSegment(text: "/", remaining: nil)] + segments(weekly, .weekly)
         if let fable = currentFable(at: now) {
-            values += [MenuBarSegment(text: " F", remaining: nil), MenuBarSegment(text: fable.menuValue(at: now), remaining: fable.remaining)]
+            values += [MenuBarSegment(text: "/F", remaining: nil), MenuBarSegment(text: fable.menuValue(at: now), remaining: fable.remaining)]
         }
         return values
     }
