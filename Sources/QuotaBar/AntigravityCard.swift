@@ -124,7 +124,7 @@ private struct AntigravityConnectionSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if model.busy {
+            if model.busy && !model.needsCode {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text(model.status).font(.caption).lineLimit(2).help(model.status)

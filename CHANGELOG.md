@@ -33,6 +33,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- Antigravity shows browser sign-in instructions and a code field only when its CLI asks for an authorization code. Reconnecting with a saved sign-in shows usage-check progress.
 - The Updates window now sizes itself to fit its full content instead of scrolling.
 - Successful Codex resets no longer show "Reset request needs attention". The notice is reserved for errors, unavailable credits and unresolved requests.
 - Clicking the menu bar item again closes the popup instead of briefly closing and reopening it.
