@@ -112,6 +112,8 @@ No Antigravity provider request, inference, browser sign-in, credential read, re
 
 The related Claude installation-discovery fix counts QuotaBar's managed helper without requiring Desktop or a standalone CLI. Independent static review confirmed that discovery reads only bounded non-secret release metadata and file attributes, while execution retains checksum verification. Three synthetic regression cases cover managed-only installations, missing/stale/non-executable files, directories, malformed or unsafe manifests and oversized metadata. The app and test targets compile, source app/helper signatures verify, and public-tree, workflow-trust and release-documentation checks pass. Tests were not executed and the detection change was not exercised in a running app.
 
+Antigravity retry feedback (24 November 2026). The popup shows the saved retry countdown during a wait and an activity indicator while a usage check runs. Static review traced both manual and automatic checks through the existing deadline guard and shared request reservation. The app and test targets compiled. The popup behavior was reviewed in source only.
+
 ## Not yet verified
 
 - Antigravity saving and reusing its sign-in in the login keychain through the profile's keychain link, with no prompt across hourly token refreshes, first quota-value accuracy, automatic refresh, rate limits, and actual Gemini 4 quota labels. Its new-session process/PTY behavior and cancellation have been compiled and statically reviewed, not exercised against the official helper. The implementation remains experimental.
@@ -125,6 +127,7 @@ The related Claude installation-discovery fix counts QuotaBar's managed helper w
 - Comparing both usage windows, reset times and any reported reset grants against the provider account pages after a fresh sign-in.
 - Actual reset redemption behavior for either provider.
 - Developer ID signing and notarization.
+- Per-merge Preview publication when multiple `main` CI runs overlap or finish out of order. The queue and release selection changes were reviewed statically.
 - The first updater-enabled Stable promotion becoming GitHub Latest, and account billing confirmation of free standard-runner usage. Preview publication and feed deployment are recorded above.
 - Update qualification on isolated Macs or accounts without provider CLIs: manual migration from pre-updater releases through 0.3.0; check, download, install and relaunch; App Management denial and approval; launch at login across an update; Gatekeeper behavior; interrupted replacement and recovery; channel switching; and missing-feed behavior.
 - Builds and behavior on Intel Macs.

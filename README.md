@@ -12,7 +12,7 @@ The current source version is **0.5.0**. The latest public Stable release is **0
 
 This README describes the current `main` branch, including any [Unreleased changes](CHANGELOG.md#unreleased). For the packaged 0.3.0 release, see [its README](https://github.com/YogevSitton/quotabar/blob/v0.3.0/README.md).
 
-The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Preview builds are published automatically from eligible merges to `main`; installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
+The current source includes an in-app updater with a default **Stable** channel and an opt-in **Preview** channel. Each pull request merged into `main` gets its own Preview build after CI passes. Installation and recovery have not yet been qualified on real Macs. The published 0.3.0 app predates this updater. See [Releases and in-app updates](docs/UPDATES.md).
 
 Requires an Apple Silicon Mac running macOS 14 or later. Codex and Claude live usage have been checked locally. Claude's usage interface is experimental; optional Claude reset credits and actual reset redemption remain unverified. Downloaded builds are ad-hoc signed and are not notarized by Apple. See [verification status](docs/VERIFICATION.md).
 
@@ -39,7 +39,7 @@ Published versions through 0.3.0 predate the updater. To move to the first updat
 
 In an updater-enabled release, **More > Updates...** opens a separate Updates window:
 
-- Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after the activation boundary.
+- Choose Stable (the default) or Preview on each Mac. Preview offers the highest published Preview build number.
 - The window shows the installed version and the latest Stable and Preview versions, regardless of the selected channel.
 - Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
 - Nothing installs until you click **Install and Relaunch** for the exact build shown. Switching from Preview to Stable never downgrades.
