@@ -48,9 +48,7 @@ struct AntigravityCard: View {
                 // Connect cannot repair the private profile. Retry rechecks it
                 // and still respects the saved request schedule.
                 if let error = state.antigravityError { compactError(error) }
-                Button("Retry", action: state.retryAntigravity)
-                    .font(.system(size: 12)).controlSize(.small)
-                    .disabled(state.refreshingAntigravity)
+                retryControl("Retry")
             } else {
                 if let snapshot = state.antigravity, snapshot.groups.count > 1 {
                     Picker("Quota group", selection: Binding(
@@ -97,11 +95,7 @@ struct AntigravityCard: View {
                     Text("No quota groups reported.").font(.caption).foregroundStyle(.secondary)
                 }
                 if !current {
-                    if let next = state.antigravityNextRequestAt, next > now {
-                        Text("Retrying automatically in \(countdown(next, now: now))")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
-                    Button("Retry usage", action: state.retryAntigravity).font(.system(size: 11)).buttonStyle(.link)
+                    retryControl("Retry usage")
                     if state.antigravity != nil {
                         Button("Last saved reading...", action: { state.showDetails(for: .antigravity) })
                             .font(.system(size: 11)).buttonStyle(.link)
@@ -112,6 +106,18 @@ struct AntigravityCard: View {
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.06)))
+    }
+
+    @ViewBuilder private func retryControl(_ title: LocalizedStringKey) -> some View {
+        if state.refreshingAntigravity {
+            ProgressView("Checking Antigravity usage...")
+                .controlSize(.small).font(.caption).foregroundStyle(.secondary)
+        } else if let next = state.antigravityNextRequestAt, next > now {
+            Text("Retrying automatically in \(countdown(next, now: now))")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+        } else {
+            Button(title, action: state.retryAntigravity).font(.system(size: 11)).buttonStyle(.link)
+        }
     }
 
     private func compactError(_ error: String) -> some View {
