@@ -65,6 +65,7 @@ import QuotaUpdateSupport
     }
     @Published private(set) var note: String?
     @Published private(set) var lastCheck: Date?
+    @Published private(set) var channelReleases: [UpdateChannel: UpdateFeedResult] = [:]
     @Published private(set) var nextCheck: Date?
     @Published private(set) var recovery: [UpdateInstallation.JobSummary] = []
     @Published private(set) var transactionNotice: String?
@@ -148,6 +149,11 @@ import QuotaUpdateSupport
 
     // MARK: Checking
 
+    func checkOnOpen() {
+        guard automaticChecks, lastAttempt == nil, !installed.publicKey.isEmpty else { return }
+        Task { await check(manual: false) }
+    }
+
     func checkNow() { Task { await check(manual: true) } }
 
     func check(manual: Bool) async {
@@ -165,37 +171,50 @@ import QuotaUpdateSupport
         var failures: [UpdateFetchFailure] = []
         let stableFetch = await client.feed(.stable)
         if case .failed(let failure) = stableFetch { failures.append(failure) }
-        // A failed Stable request, above all a rate limit, ends this check before
-        // any further request to the same host.
-        let previewFetch: UpdateFeedClient.FeedFetch = selected == .preview
-            && retry.allowsNextFeed(afterCycleFailures: failures, at: Date()) ? await client.feed(.preview) : .absent
-        if case .failed(let failure) = previewFetch { failures.append(failure) }
+        // Both versions are shown even on Stable. A failed Stable request still
+        // ends feed fetching before any further request to the same host.
+        let previewFetch = retry.allowsNextFeed(afterCycleFailures: failures, at: Date()) ? await client.feed(.preview) : nil
+        if case .failed(let failure)? = previewFetch { failures.append(failure) }
         lastCheck = Date()
 
-        if let delay = retry.record(failures, now: Date(), random: .random(in: 0...1)) {
-            if failures.contains(where: { if case .rateLimited = $0 { return true }; return false }) {
-                note = "GitHub asked QuotaBar to wait before checking again. Your installed app is unchanged."
-            } else { note = "Could not reach the update feed. QuotaBar will retry; your installed app is unchanged." }
-            status = previous == .checking ? .idle : previous
-            scheduleNext(after: delay)
-            return
+        let feedDelay = retry.record(failures, now: Date(), random: .random(in: 0...1))
+        let failureNote = feedDelay.map { _ in
+            retry.allowsRequest(at: Date())
+                ? "Could not check every update feed."
+                : "GitHub asked QuotaBar to wait before checking again."
         }
-        note = nil
 
         let stable = verify(stableFetch, channel: .stable)
-        let preview = verify(previewFetch, channel: .preview)
-        // A verified manifest that conflicts with an earlier signed reading of the
-        // same build, on either channel, stops here.
-        for case .verified(let manifest) in [stable, preview] {
-            if highWater.conflicts(with: manifest) {
-                status = .failed("The \(manifest.channel.rawValue) feed changed the contents of build \(manifest.build). Nothing will be installed.")
-                scheduleNext(after: UpdateSchedule.regularDelay(random: .random(in: 0...1)))
-                return
-            }
+        let preview = previewFetch.map { verify($0, channel: .preview) } ?? .invalid
+        let releases: [UpdateChannel: UpdateFeedResult] = [
+            .stable: releaseForDisplay(stable, channel: .stable),
+            .preview: releaseForDisplay(preview, channel: .preview)
+        ]
+        let previewSelection = UpdateSelection.select(channel: .preview, stable: stable, preview: preview)
+        channelReleases = previewSelection == .conflictingIdentity ? [.stable: .invalid, .preview: .invalid] : releases
+        note = failureNote
+
+        for case .verified(let manifest) in [stable, preview] where highWater.conflicts(with: manifest) {
+            status = .failed("The \(manifest.channel.rawValue) feed changed the contents of build \(manifest.build). Nothing will be installed.")
+            scheduleNext(after: feedDelay ?? UpdateSchedule.regularDelay(random: .random(in: 0...1)))
+            return
         }
+
+        let selection = selected == .stable && previewSelection != .conflictingIdentity
+            ? UpdateSelection.select(channel: .stable, stable: stable, preview: preview)
+            : previewSelection
         let priorHighWater = highWater
-        for case .verified(let manifest) in [stable, preview] { highWater = highWater.recording(manifest) }
-        saveHighWater()
+        if selection != .conflictingIdentity {
+            for case .verified(let manifest) in [stable, preview] { highWater = highWater.recording(manifest) }
+            if feedDelay == nil || highWater != priorHighWater { saveHighWater() }
+        }
+
+        // Preview failures leave Stable usable when its own feed was fetched.
+        if let feedDelay, selected == .preview || previewFetch == nil {
+            status = previous
+            scheduleNext(after: feedDelay)
+            return
+        }
         let invalidNote: (([UpdateChannel]) -> String?) = { invalid in
             invalid.isEmpty ? nil : "The \(invalid.map(\.rawValue).joined(separator: " and ")) feed could not be verified and was ignored."
         }
@@ -203,24 +222,34 @@ import QuotaUpdateSupport
         // The cycle's outcome sets the next check: a download failure keeps its
         // own rate-limit deadline or transient backoff instead of the hourly delay.
         var downloadDelay: TimeInterval?
-        switch UpdateSelection.select(channel: selected, stable: stable, preview: preview) {
+        switch selection {
         case .conflictingIdentity:
             status = .failed("The Stable and Preview feeds disagree about the same build. Nothing will be installed.")
         case .unavailable(let invalid):
-            status = .unavailable(selected == .stable ? "No Stable release with in-app updates is published yet. Earlier releases are on the Releases page." : "No updates are published for this channel yet.")
-            note = invalidNote(invalid)
+            if !invalid.isEmpty {
+                status = .unavailable("No verified update is available.")
+            } else if selected == .stable && releases[.stable] == .absent {
+                status = .unavailable("No Stable release with in-app updates is published yet. Earlier releases are on the Releases page.")
+            } else {
+                status = .unavailable("No update is available for this channel.")
+            }
+            note = failureNote ?? invalidNote(invalid)
         case .candidate(let manifest, let invalid):
-            note = invalidNote(invalid)
+            note = failureNote ?? invalidNote(invalid)
             switch UpdateDecision.evaluate(manifest, publicKey: installed.publicKey, installedBuild: installed.build, highWater: priorHighWater) {
             case .newer(let candidate):
+                let fetch = candidate.channel == .stable ? stableFetch : previewFetch
+                if case .bytes(let data)? = fetch { envelopes[candidate.channel] = data }
                 if case .ready(let staged) = previous, staged == candidate { status = previous }
                 else {
                     status = .available(candidate)
-                    if canDownloadAndInstall && automaticDownloads { downloadDelay = await download(candidate) }
+                    if canDownloadAndInstall && automaticDownloads && retry.allowsRequest(at: Date()) {
+                        downloadDelay = await download(candidate)
+                    }
                 }
             case .upToDate:
                 status = .upToDate
-                if selected == .stable && manifest.build < installed.build {
+                if note == nil && selected == .stable && manifest.build < installed.build {
                     note = "This Mac runs Preview build \(installed.build). Stable updates resume once a Stable build newer than that is published."
                 }
             case .conflictingIdentity:
@@ -229,7 +258,7 @@ import QuotaUpdateSupport
                 status = .failed("The update metadata does not match this app. Nothing will be installed.")
             }
         }
-        if let downloadDelay { scheduleNext(after: downloadDelay); return }
+        if let delay = downloadDelay ?? feedDelay { scheduleNext(after: delay); return }
         retry.recordSuccess()
         scheduleNext(after: UpdateSchedule.regularDelay(random: .random(in: 0...1)))
     }
@@ -241,13 +270,22 @@ import QuotaUpdateSupport
 
     private func verify(_ fetch: UpdateFeedClient.FeedFetch, channel: UpdateChannel) -> UpdateFeedResult {
         switch fetch {
-        case .absent, .failed: return .absent
+        case .absent: return .absent
+        case .failed: return .invalid
         case .bytes(let data):
             guard let manifest = try? UpdateSignature.verify(data, publicKey: installed.publicKey), manifest.channel == channel else {
                 return .invalid
             }
-            envelopes[channel] = data
             return .verified(manifest)
+        }
+    }
+
+    private func releaseForDisplay(_ result: UpdateFeedResult, channel: UpdateChannel) -> UpdateFeedResult {
+        let seen = highWater.identity(for: channel)
+        switch result {
+        case .absent where seen != nil: return .invalid
+        case .verified(let manifest) where manifest.build < (seen?.build ?? 0) || highWater.conflicts(with: manifest): return .invalid
+        default: return result
         }
     }
 

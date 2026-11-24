@@ -23,6 +23,7 @@ import QuotaCore
         window?.contentView?.layoutSubtreeIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        coordinator.checkOnOpen()
     }
 }
 
@@ -32,7 +33,7 @@ private struct UpdatesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("QuotaBar \(coordinator.installed.displayVersion) (build \(coordinator.installed.build))")
+                Text("Installed \(coordinator.installed.displayVersion) (build \(coordinator.installed.build))")
                     .font(.headline)
                 Text(coordinator.installed.releaseMode ? "Downloaded release" : "Built from source")
                     .font(.caption).foregroundStyle(.secondary)
@@ -42,6 +43,7 @@ private struct UpdatesView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Open Releases") { coordinator.openReleases() }
             } else {
+                channelVersions
                 Picker("Channel", selection: $coordinator.channel) {
                     Text("Stable").tag(UpdateChannel.stable)
                     Text("Preview").tag(UpdateChannel.preview)
@@ -80,6 +82,34 @@ private struct UpdatesView: View {
         }.padding(16).frame(width: 460, alignment: .leading).fixedSize(horizontal: false, vertical: true)
     }
 
+    private var channelVersions: some View {
+        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+            GridRow {
+                Text("Stable")
+                releaseVersion(.stable)
+            }
+            GridRow {
+                Text("Preview")
+                releaseVersion(.preview)
+            }
+        }
+    }
+
+    @ViewBuilder private func releaseVersion(_ channel: UpdateChannel) -> some View {
+        switch coordinator.channelReleases[channel] {
+        case .verified(let release):
+            Text("\(release.displayVersion) (build \(release.build))").monospacedDigit()
+        case .absent where channel == .stable:
+            Text("0.3.0 (manual download)")
+        case .absent:
+            Text("No release published").foregroundStyle(.secondary)
+        case .invalid:
+            Text("Version unavailable").foregroundStyle(.secondary)
+        case nil:
+            Text(coordinator.status == .checking ? "Checking..." : "Not checked").foregroundStyle(.secondary)
+        }
+    }
+
     private var isBusy: Bool {
         switch coordinator.status {
         case .checking, .downloading, .installing: return true
@@ -90,7 +120,9 @@ private struct UpdatesView: View {
     @ViewBuilder private var statusSection: some View {
         switch coordinator.status {
         case .notConfigured, .idle:
-            Text("No check has run yet.").foregroundStyle(.secondary)
+            if coordinator.lastCheck == nil {
+                Text("No check has run yet.").foregroundStyle(.secondary)
+            }
         case .checking:
             HStack { ProgressView().controlSize(.small); Text("Checking...") }
         case .upToDate:

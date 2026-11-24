@@ -51,7 +51,8 @@ The checksum detects corruption. It is not a substitute for Developer ID signing
 
 - **More > Updates...** opens a separate Updates window. The compact popup is unchanged, and there is no Settings window.
 - **Channel:** Stable by default. Choose Preview on each Mac that should follow `main`.
-- **Automatic checks and downloads** are both on by default and can be turned off. The first check runs 2-10 minutes after launch, then about hourly (plus or minus five minutes) while QuotaBar runs, and after waking from sleep when the last check is more than an hour old. **Check for Updates** checks immediately.
+- **Versions:** the window shows the installed version and the latest verified version and build from each channel. While the Stable feed is unpublished, it lists the last pre-updater release, 0.3.0, as a manual download.
+- **Automatic checks and downloads** are both on by default and can be turned off. The first check runs 2-10 minutes after launch or when you first open the Updates window, whichever comes first. Later checks run about hourly (plus or minus five minutes) while QuotaBar runs, and after waking from sleep when the last check is more than an hour old. **Check for Updates** checks immediately. Checks read both signed feeds; the selected channel determines which builds can be offered.
 - **Installing always needs your click.** When a newer build has been downloaded and verified, the window shows its version, build and channel, with **Install and Relaunch**. Only that click installs that exact build.
   - Quitting, restarting, waking, switching channels, granting a permission or reading saved state never installs anything.
   - There is no install-on-quit.

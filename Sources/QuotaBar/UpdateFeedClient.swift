@@ -59,6 +59,10 @@ struct UpdateFeedClient: Sendable {
             let headers = Dictionary(response.allHeaderFields.map { (String(describing: $0.key), String(describing: $0.value)) },
                                      uniquingKeysWith: { first, _ in first })
             if let failure = UpdateFetchFailure.classify(status: response.statusCode, headers: headers, now: Date()) {
+                // A rejected feed request is not evidence that its channel is unpublished.
+                if output == nil, failure == .unavailable, response.statusCode != 404 {
+                    return .failure(DownloadFailure(failure: .invalid))
+                }
                 return .failure(DownloadFailure(failure: failure))
             }
             guard response.expectedContentLength <= Int64(maximumBytes) else { return .failure(DownloadFailure(failure: .invalid)) }

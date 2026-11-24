@@ -40,6 +40,7 @@ Published versions through 0.3.0 predate the updater. To move to the first updat
 In an updater-enabled release, **More > Updates...** opens a separate Updates window:
 
 - Choose Stable (the default) or Preview on each Mac. Preview follows eligible successful merges to `main` after the activation boundary.
+- The window shows the installed version and the latest Stable and Preview versions, regardless of the selected channel.
 - Checks run about hourly and downloads happen automatically by default; you can turn either off and use **Check for Updates**.
 - Nothing installs until you click **Install and Relaunch** for the exact build shown. Switching from Preview to Stable never downgrades.
 
