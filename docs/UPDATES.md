@@ -17,7 +17,7 @@ Source, pull requests, issues and every download live in the public [YogevSitton
 | | Stable | Preview |
 | --- | --- | --- |
 | Default on a Mac | Yes | No; opt in on each Mac in the Updates window |
-| What it contains | A build the maintainer explicitly promotes | Eligible successful builds of changes merged into `main` |
+| What it contains | A build the maintainer explicitly promotes | A build for each pull request merged into `main` that passes CI after the activation boundary |
 | Who can download it | Everyone (public) | Everyone (public) |
 | GitHub release | Full release, marked Latest | Prerelease, never Latest |
 | Tag | `v<version>`, such as `v0.2.0` | `preview-<build>`, such as `preview-41` |
@@ -28,11 +28,11 @@ Stable is a curated update channel, not a claim of 1.0 maturity. Stable releases
 
 1. The CI workflow ran for a push to `main` in this repository and succeeded, and publication uses that exact commit.
 2. The commit was merged after the owner's activation boundary (`QUOTABAR_PREVIEW_SINCE`, below).
-3. Its build number is higher than the newest published Preview.
+3. Its exact `preview-<build>` tag has yet to be published.
 
 Pull requests, forks and other branches never publish. A failed or unverified build never advances either channel.
 
-**Latest wins.** Publications run one at a time. When several merges land quickly, a newer pending publication replaces an older pending one, so not every intermediate commit gets its own Preview build.
+**Publication order.** Preview runs publish one at a time. GitHub Actions can hold up to 100 pending runs in the Preview queue. CI can finish out of merge order, so an older build can publish after a newer one. Both are available on GitHub Releases, and the in-app Preview feed selects the highest published build number. For a transient CI failure, rerun that commit's CI. For a publication failure, rerun the failed Release jobs while the staged artifact is available, or rerun the whole Release run to rebuild it.
 
 **Stable promotion** reuses the exact bytes of an already published, verified Preview. Nothing is rebuilt; only the release tag, the asset name and the signed metadata change. A merge, a version bump or a Preview publication never promotes Stable on its own.
 
@@ -228,6 +228,6 @@ Record the results in [Verification status](VERIFICATION.md) through a pull requ
 ## Normal release operations
 
 - Every change reaches `main` through a Conventional Commit-titled pull request, squash-merged, with an Unreleased changelog entry for user-visible changes. See [CONTRIBUTING.md](../CONTRIBUTING.md).
-- After activation, eligible merges become Preview builds automatically.
+- After activation, each pull request merged into `main` gets its own Preview build once its CI passes.
 - To ship Stable: open the `chore(release)` pull request, merge it, promote its Preview build, then approve.
 - Never move or reuse a tag, re-upload an asset, mark a Preview as Latest, or rebuild during promotion.

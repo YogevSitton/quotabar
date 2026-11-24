@@ -23,17 +23,15 @@ on:
 
 permissions: {}
 
-# Preview publications are serialized together and Stable promotions together:
-# GitHub keeps one pending run per group and supersedes older pending ones
-# (latest-wins). A running publication is never cancelled mid-write. Every other
-# CI completion (pull requests, other branches) gets its own group, so it can
-# never displace a pending publication. Feed deployment is serialized separately.
+# Queue Preview publications so each successful main CI run keeps its place.
+# Stable promotions use a separate queue. Other events get their own group.
 concurrency:
   group: >-
     ${{ github.event_name == 'workflow_dispatch' && 'quotabar-stable' ||
-        (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') && 'quotabar-preview' ||
+        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) && 'quotabar-preview' ||
         format('quotabar-unrelated-{0}', github.run_id) }}
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   build-preview:
@@ -83,10 +81,12 @@ jobs:
             exit 0
           fi
           build="$(/bin/zsh scripts/build-identity.sh | sed -n 's/^build=//p')"
-          newest="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq '[.[] | select(.draft == false) | .tag_name | select(test("^preview-[0-9]+$")) | ltrimstr("preview-") | tonumber] | max // 0')"
-          if (( build <= newest )); then
-            echo "::notice::Build $build is not newer than published Preview $newest (latest-wins); nothing is published."
+          [[ "$build" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid Preview build number."; exit 1; }
+          tag="preview-$build"
+          published="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.draft == false and .tag_name == \"$tag\") | .tag_name")"
+          if [[ "$published" == "$tag" ]]; then
+            echo "::notice::$tag is already published."
             echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -175,7 +175,7 @@ jobs:
           set -euo pipefail
           tag="preview-$BUILD"
           archive="QuotaBar-preview-$BUILD.zip"
-          existing="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq "[.[] | select(.tag_name == \"$tag\")] | map(.draft) | @csv")"
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .draft")"
           if [[ "$existing" == *false* ]]; then echo "::error::$tag is already published; releases are never replaced."; exit 1; fi
           # A draft left by an earlier failed run of the same tag is never published; remove only that.
           if [[ "$existing" == *true* ]]; then gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes; fi
@@ -183,7 +183,7 @@ jobs:
             --title "QuotaBar Preview build $BUILD" --notes-file notes.txt
           gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$archive" "$archive.sha256" QuotaBar-update.json
           expected="sha256:$(shasum -a 256 "$archive" | cut -d' ' -f1)"
-          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .assets[] | select(.name == \"$archive\") | .digest")"
+          actual="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$tag\") | .assets[] | select(.name == \"$archive\") | .digest")"
           [[ "$actual" == "$expected" ]] || { echo "::error::Uploaded archive digest does not match; the draft stays unpublished."; exit 1; }
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
 
@@ -403,10 +403,12 @@ jobs:
           else
             echo "::error::Could not read the Latest release (HTTP $latest_status); feeds are not changed."; exit 1
           fi
-          releases="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
-          preview_tag="$(jq -r '[.[] | select(.draft == false and (.tag_name | test("^preview-[0-9]+$")))] | max_by(.tag_name | ltrimstr("preview-") | tonumber) | .tag_name // empty' <<<"$releases")"
-          if [[ -n "$preview_tag" ]]; then
-            publish_channel preview "$preview_tag" "$(jq --arg tag "$preview_tag" '.[] | select(.tag_name == $tag)' <<<"$releases")"
+          # CI can finish out of merge order. Use the highest build across all pages.
+          preview_release="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == false and (.tag_name | test("^preview-[0-9]+$")))' | \
+            jq -sc 'max_by(.tag_name | ltrimstr("preview-") | tonumber) // empty')"
+          if [[ -n "$preview_release" ]]; then
+            publish_channel preview "$(jq -r '.tag_name' <<<"$preview_release")" "$preview_release"
           else
             echo "::notice::No Preview release yet; preview.json stays absent."
           fi

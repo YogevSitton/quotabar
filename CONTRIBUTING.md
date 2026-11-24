@@ -128,7 +128,7 @@ QuotaBar uses [Semantic Versioning](https://semver.org/). While the version is `
 
 Releases come from this public repository on two channels. [docs/UPDATES.md](docs/UPDATES.md) is the full policy and owner runbook.
 
-- **Preview** (opt-in on each Mac): publishing is active, so every eligible successful merge to `main` is built and published automatically as a `preview-<build>` prerelease. It is never marked Latest.
+- **Preview** (opt-in on each Mac) publishes a `preview-<build>` prerelease for each pull request merged into `main` after the activation boundary, once its CI passes. Each release has its own build number and is never marked Latest.
 - **Stable** (the default): only the maintainer promotes an existing Preview build to Stable, reusing its exact bytes as the `v0.x.y` release marked Latest.
 
 To prepare a Stable release:

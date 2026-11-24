@@ -123,6 +123,7 @@ The related Claude installation-discovery fix counts QuotaBar's managed helper w
 - Comparing both usage windows, reset times and any reported reset grants against the provider account pages after a fresh sign-in.
 - Actual reset redemption behavior for either provider.
 - Developer ID signing and notarization.
+- Per-merge Preview publication when multiple `main` CI runs overlap or finish out of order. The queue and release selection changes were reviewed statically.
 - The first updater-enabled Stable promotion becoming GitHub Latest, and account billing confirmation of free standard-runner usage. Preview publication and feed deployment are recorded above.
 - Update qualification on isolated Macs or accounts without provider CLIs: manual migration from pre-updater releases through 0.3.0; check, download, install and relaunch; App Management denial and approval; launch at login across an update; Gatekeeper behavior; interrupted replacement and recovery; channel switching; and missing-feed behavior.
 - Builds and behavior on Intel Macs.
