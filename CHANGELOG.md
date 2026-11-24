@@ -18,6 +18,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Changed
 
+- Each pull request merged into `main` gets a separate Preview prerelease after CI passes, even when several merges land close together.
 - Hide the five-hour slot in the menu bar and the five-hour row in the popup when Codex or Claude reports weekly-only limits. The menu bar shows the weekly balance directly, such as `w61%`.
 - Compact menu bar labels identify five-hour (`h`), weekly (`w`) and reported Fable (`F`) balances, such as `h80%/w34%/F42%`.
 
