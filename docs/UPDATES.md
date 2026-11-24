@@ -40,7 +40,7 @@ Pull requests, forks and other branches never publish. A failed or unverified bu
 
 1. Open the repository's [Releases](https://github.com/YogevSitton/quotabar/releases).
    - For Stable, use the release marked **Latest**. Currently that is the pre-updater v0.3.0 release. To get the updater, wait for the first updater-enabled Stable release or deliberately choose Preview.
-   - For Preview, use the newest `preview-<build>` prerelease.
+   - For Preview, use the `preview-<build>` prerelease with the highest build number.
 2. Download the zip and extract it in Finder. For optional Terminal checksum verification, also download its `.sha256` and run `shasum -a 256 -c <zip name>.sha256` in the download folder; if you perform this check, continue only if it prints `OK`.
 3. Quit any running QuotaBar, extract the zip, and move `QuotaBar.app` into `/Applications` (or `~/Applications`), replacing the old copy.
 4. Open it. macOS will likely block this first ad-hoc signed download. If you decide to allow it, use **System Settings > Privacy & Security > Open Anyway**. See [Apple's guidance](https://support.apple.com/en-us/102445).
