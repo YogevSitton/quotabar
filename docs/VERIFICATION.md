@@ -18,6 +18,8 @@ This file records what has been checked against live provider accounts, what has
 
 ## Compilation, static review and synthetic renders
 
+- **Stable and Preview versions in Updates (24 November 2026).** The source app and synthetic test targets compiled, and strict signature verification passed. Static review covered checks for both signed feeds, the manual-download label for Stable 0.3.0, missing or unverified feeds, and update selection for each channel. Verification was limited to compilation and static review.
+
 - **Weekly-only display (18 November 2026).** Static inspection of the checksum- and signature-verified Claude Code 2.1.327 artifact confirmed how the control reply handles the server's meter list on successful and fallback reads. The app and synthetic test targets compiled. Fixtures cover weekly-only readings, missing and conflicting meters, a measured session, cache matching and menu bar text with Fable and reset countdowns. The app signature and repository checks passed. The app and tests were not run. Live weekly-only presentation remains unverified.
 
 - **Claude reset tracking and shorter menu bar label (18 November 2026).** The app and synthetic test targets compiled, and the app signature verified. The fixtures cover the `h` menu bar label, reminder persistence, account and organization isolation, expiry and removal. Static review checked that tracked reminders stay separate from provider offers and reset actions. The app and tests were not run, and editor presentation remains unverified.
