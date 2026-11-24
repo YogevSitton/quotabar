@@ -33,6 +33,7 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 
 ### Fixed
 
+- The Antigravity card shows the automatic retry countdown during its waiting period and progress while it checks usage. The Retry button appears when a manual check is available.
 - Antigravity shows browser sign-in instructions and a code field only when its CLI asks for an authorization code. Reconnecting with a saved sign-in shows usage-check progress.
 - The Updates window now sizes itself to fit its full content instead of scrolling.
 - Successful Codex resets no longer show "Reset request needs attention". The notice is reserved for errors, unavailable credits and unresolved requests.
