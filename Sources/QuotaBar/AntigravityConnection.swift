@@ -34,10 +34,15 @@ import QuotaCore
                 DiagnosticLog.shared.record(DiagnosticEvent(area: .antigravity, kind: .helperReady,
                     version: AntigravityHelper.version))
                 try Task.checkCancellation()
-                let input = try AntigravityProcess.LoginInput()
+                let input = try AntigravityProcess.LoginInput { [weak self] in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.cancellation === cancellation, !cancellation.isCancelled else { return }
+                        self.status = "Finish sign-in in your browser. If it shows a code, paste it below."
+                        self.needsCode = true
+                    }
+                }
                 self.input = input
-                status = "Finish sign-in in your browser. If Antigravity gives you a code, paste it below."
-                needsCode = true
+                status = "Checking Antigravity usage..."
                 let result = await withCheckedContinuation { continuation in
                     DispatchQueue.global(qos: .userInitiated).async {
                         continuation.resume(returning: AntigravityProvider.read(loginInput: input, cancellation: cancellation))

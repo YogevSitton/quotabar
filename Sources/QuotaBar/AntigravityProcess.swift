@@ -31,14 +31,34 @@ enum AntigravityProcess {
         }
     }
 
+    struct CodePrompt {
+        // The pinned CLI's interactive print-mode path prints this line just
+        // before starting its stdin reader. Its preamble includes a private URL.
+        private static let line = Data("Or, paste the authorization code here and press Enter:".utf8)
+        private var nextLineStart = 0
+        private var reported = false
+
+        /// Inspect complete lines in the growing stderr buffer, once per attempt.
+        mutating func detect(in stderr: Data) -> Bool {
+            let newline = UInt8(ascii: "\n")
+            guard !reported, let lastNewline = stderr[nextLineStart...].lastIndex(of: newline) else { return false }
+            let lines = stderr[nextLineStart...lastNewline].split(separator: newline)
+            nextLineStart = lastNewline + 1
+            reported = lines.contains(Self.line)
+            return reported
+        }
+    }
+
     /// Construct only for an explicit Connect action. This changes stdin's file
     /// type without granting a controlling terminal or using a shell/Terminal.
     final class LoginInput: @unchecked Sendable {
         private let lock = NSLock()
         private var master: Int32 = -1
         private var slave: Int32 = -1
+        fileprivate let onCodePrompt: @Sendable () -> Void
 
-        init() throws {
+        init(onCodePrompt: @escaping @Sendable () -> Void) throws {
+            self.onCodePrompt = onCodePrompt
             guard openpty(&master, &slave, nil, nil, nil) == 0 else { throw ProcessError.inputUnavailable }
             do {
                 try setCloseOnExec(master)
@@ -159,10 +179,12 @@ enum AntigravityProcess {
 
         let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(timeout * 1_000_000_000)
         var stdout = Data(), stderr = Data()
+        var codePrompt = CodePrompt()
         while true {
             if cancel?.isCancelled == true { throw ProcessError.cancelled }
             guard DispatchTime.now().uptimeNanoseconds < deadline else { throw ProcessError.timedOut }
             try drain(&output[0], into: &stdout, limit: 2_000_000)
+            let previousErrorSize = stderr.count
             try drain(&error[0], into: &stderr, limit: 128_000)
 
             var info = siginfo_t()
@@ -179,6 +201,9 @@ enum AntigravityProcess {
                 reaped = true
                 let exitCode: Int32 = (childStatus & 0x7f) == 0 ? (childStatus >> 8) & 0xff : 128 + (childStatus & 0x7f)
                 return Result(stdout: stdout, stderr: stderr, exitCode: exitCode)
+            }
+            if let loginInput, stderr.count > previousErrorSize, codePrompt.detect(in: stderr) {
+                loginInput.onCodePrompt()
             }
             var descriptors = [pollfd(fd: output[0], events: Int16(POLLIN), revents: 0),
                                pollfd(fd: error[0], events: Int16(POLLIN), revents: 0)]

@@ -11,6 +11,23 @@ final class AntigravityProviderTests: XCTestCase {
         AntigravityProvider.finalJSONObject(in: Data(text.utf8)).map { String(decoding: $0, as: UTF8.self) }
     }
 
+    func testCodeEntryWaitsForTheCompleteInteractivePrompt() {
+        let prompt = "Or, paste the authorization code here and press Enter:"
+        var detector = AntigravityProcess.CodePrompt()
+        var stderr = Data("Authentication required.\nSynthetic message containing \(prompt)\n".utf8)
+        XCTAssertFalse(detector.detect(in: stderr))
+
+        stderr.append(contentsOf: prompt.utf8.prefix(20))
+        XCTAssertFalse(detector.detect(in: stderr))
+        stderr.append(contentsOf: prompt.utf8.dropFirst(20))
+        XCTAssertFalse(detector.detect(in: stderr))
+        stderr.append(UInt8(ascii: "\n"))
+        XCTAssertTrue(detector.detect(in: stderr))
+
+        stderr.append(contentsOf: "\(prompt)\n".utf8)
+        XCTAssertFalse(detector.detect(in: stderr))
+    }
+
     func testSignInPreambleBeforeSingleLineReport() {
         XCTAssertEqual(extract("Synthetic sign-in notice\n{\"synthetic\":true}\n\(report)\n\n"), report)
         XCTAssertEqual(extract(report), report)
