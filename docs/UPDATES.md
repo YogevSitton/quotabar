@@ -100,7 +100,7 @@ QuotaBar is ad-hoc signed and not notarized, because that needs a paid Apple Dev
 ### How an install works
 
 1. Your click creates a private transaction folder under `~/Library/Application Support/QuotaBar/Updates/Jobs/` with the verified archive, its metadata and a copy of the bundled helper (`QuotaUpdater.app`).
-2. The helper checks that it was started by this running QuotaBar for this exact request, which can only be used once. It re-verifies everything, then waits for QuotaBar to quit.
+2. The helper checks that it was started by this running QuotaBar for this exact request, which can only be used once. It re-verifies everything, then waits up to a minute for QuotaBar to quit. While QuotaBar is closing, a moment when its process cannot be read counts as still running, never as quit. If anything fails after QuotaBar quits but before the first change, the helper records that the update did not start and reopens the unchanged app.
 3. The first change it makes is to move the intact installed app into the transaction folder as `Previous.quotabar-backup`. If macOS refuses this step, nothing has changed. QuotaBar reopens and explains how to allow it, and you click Install again. Nothing retries automatically.
 4. The verified new app is moved into place and opened. When it starts, it confirms the transaction.
 
@@ -158,7 +158,7 @@ QuotaBar is ad-hoc signed and not notarized, because that needs a paid Apple Dev
 | `sign-and-publish-preview` | After `build-preview` | `release-signing` | Signs, verifies, creates a draft prerelease with `--latest=false`, checks the uploaded digest, publishes |
 | `approve-stable` | Owner dispatch on `main` | `stable-approval` (owner approval) | Verifies the chosen Preview, its digest, its commit on `main`, the unused tag, newer than current Stable, and the changelog section |
 | `sign-and-publish-stable` | After `approve-stable` | `release-signing` | Signs Stable metadata, publishes the same bytes as `v<version>`, marked Latest |
-| `deploy-feeds` | After either publish job | `github-pages` | Rebuilds `stable.json` and `preview.json` from published, verified releases and deploys Pages |
+| `deploy-feeds` | After either publish job | `github-pages` | Rebuilds `stable.json` and `preview.json` from published, verified releases and deploys Pages, retrying the deployment once after a minute if GitHub reports an error |
 
 **Feeds are rebuilt per channel:**
 

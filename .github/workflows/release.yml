@@ -352,7 +352,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry-deployment.outputs.page_url }}
     permissions:
       contents: read
       pages: write
@@ -420,7 +420,17 @@ jobs:
         with:
           path: ${{ steps.feeds.outputs.site }}
           retention-days: 1
+      # GitHub occasionally fails to find the artifact just uploaded. Without a
+      # retry the feeds stay on the previous build until the next merge.
       - name: Deploy the feed site
         id: deployment
         if: steps.feeds.outputs.deploy == 'true'
+        continue-on-error: true
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Wait before retrying the deployment
+        if: steps.feeds.outputs.deploy == 'true' && steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - name: Retry the feed site deployment
+        id: retry-deployment
+        if: steps.feeds.outputs.deploy == 'true' && steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

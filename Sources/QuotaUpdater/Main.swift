@@ -98,7 +98,10 @@ import QuotaUpdateSupport
         if cancelled() { try record(.cancelled); return }
         try record(.waitingForExit)
         let deadline = ProcessInfo.processInfo.systemUptime + 60
-        while try request.parent.isRunning() {
+        // While the app exits, its process can briefly be unreadable although it
+        // still exists. Unknown is never treated as exited: keep waiting, within
+        // the same deadline, instead of abandoning an app that is about to quit.
+        while (try? request.parent.isRunning()) ?? true {
             if cancelled() { try record(.cancelled); return }
             guard ProcessInfo.processInfo.systemUptime < deadline else { try record(.refused); return }
             usleep(50_000)
@@ -109,10 +112,12 @@ import QuotaUpdateSupport
         guard !cancelled(), (try? JSONDecoder().decode(UUID.self, from: UpdateFiles.read(handoff, maximumBytes: 128))) == request.nonce else {
             try record(.cancelled); return
         }
-        try UpdateInstallation.renameExclusive(handoff, job.appendingPathComponent(UpdateInstallation.consumedHandoffName))
-
-        // Fresh checks immediately before the first protected change.
+        // The app has quit. Until the first protected change below, any failure
+        // leaves the original intact, so it is recorded and reopened rather than
+        // leaving the user without QuotaBar.
         do {
+            try UpdateInstallation.renameExclusive(handoff, job.appendingPathComponent(UpdateInstallation.consumedHandoffName))
+            // Fresh checks immediately before the first protected change.
             try UpdateInstallation.destination(destination)
             let current = try UpdateInstallation.fileIdentity(destination)
             guard current.device == original.device, current.inode == original.inode,

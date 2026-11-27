@@ -38,6 +38,8 @@ Add an entry under **Unreleased** in the same pull request as the change. Use th
 - The Antigravity card shows the automatic retry countdown during its waiting period and progress while it checks usage. The Retry button appears when a manual check is available.
 - Antigravity shows browser sign-in instructions and a code field only when its CLI asks for an authorization code. Reconnecting with a saved sign-in shows usage-check progress.
 - The Updates window now sizes itself to fit its full content instead of scrolling.
+- Clicking Install and Relaunch no longer occasionally quits QuotaBar without installing or reopening it. The update helper keeps waiting while QuotaBar is still closing, and reopens the unchanged app if the install cannot start after it quits.
+- A temporary GitHub Pages error no longer leaves the update feeds on an older build until the next merge: the feed deployment is retried once.
 - Successful Codex resets no longer show "Reset request needs attention". The notice is reserved for errors, unavailable credits and unresolved requests.
 - Clicking the menu bar item again closes the popup instead of briefly closing and reopening it.
 - Keep Claude visible when QuotaBar's managed Claude Code helper is installed, even without Claude Desktop or a standalone CLI. Empty or incomplete helper installations do not count.
